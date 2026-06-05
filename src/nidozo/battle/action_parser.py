@@ -1,13 +1,18 @@
 """
 ActionParser — extracts a BattleOrder from an LLM response.
 
-Expected format at end of response:
-    ACTION: move <1-based slot>
-    ACTION: switch <1-based slot>
+Accepts all of these formats (case-insensitive, last match wins):
 
-If parsing fails for any reason (bad format, out-of-range slot, no legal
-moves matching the slot), returns None. The caller is responsible for
-falling back to a safe default (typically a random legal move).
+    ACTION: move 2              — 1-based slot number  (preferred)
+    ACTION: move thunderbolt    — move name
+    ACTION: switch 3            — 1-based slot number  (preferred)
+    ACTION: switch masquerain   — Pokémon species name
+    ACTION: thunderbolt         — bare move name (no keyword)
+
+Multiple ACTION lines are allowed; the last valid one is used so models
+can reason "...my best option is X, but actually Y is better: ACTION: Y".
+
+Returns None on complete parse failure; caller falls back to random.
 """
 
 from __future__ import annotations
@@ -22,10 +27,86 @@ from poke_env.player.player import Player
 
 logger = logging.getLogger(__name__)
 
-# Matches the last occurrence of ACTION: move N or ACTION: switch N
+# Matches "ACTION: move/switch <slot_or_name>"
 _ACTION_RE = re.compile(
-    r"ACTION:\s*(move|switch)\s+(\d+)", re.IGNORECASE
+    r"ACTION:\s*(move|switch)\s+(\S+)", re.IGNORECASE
 )
+
+# Matches "ACTION: <bare_name>" with no move/switch keyword
+_BARE_ACTION_RE = re.compile(
+    r"ACTION:\s*([A-Za-z][\w]*)", re.IGNORECASE
+)
+
+_KEYWORDS = {"move", "switch"}
+
+
+def _normalize(s: str) -> str:
+    """Lowercase, strip non-alphanumeric for fuzzy name comparison."""
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+def _resolve_move(
+    identifier: str,
+    battle: AbstractBattle,
+    player: Player,
+) -> Optional[BattleOrder]:
+    """Resolve a move identifier (slot number or name) to a BattleOrder."""
+    moves = battle.available_moves
+    if not moves:
+        logger.warning("ACTION: move requested but no moves available")
+        return None
+
+    # Try numeric slot first
+    try:
+        slot = int(identifier)
+        idx = slot - 1
+        if 0 <= idx < len(moves):
+            return player.create_order(moves[idx])
+        logger.warning("ACTION: move slot %d out of range (have %d)", slot, len(moves))
+        return None
+    except ValueError:
+        pass
+
+    # Try move name match (normalized)
+    norm = _normalize(identifier)
+    for move in moves:
+        if _normalize(move.id) == norm:
+            return player.create_order(move)
+
+    logger.debug("ACTION: move name %r not found in available moves", identifier)
+    return None
+
+
+def _resolve_switch(
+    identifier: str,
+    battle: AbstractBattle,
+    player: Player,
+) -> Optional[BattleOrder]:
+    """Resolve a switch identifier (slot number or species name) to a BattleOrder."""
+    switches = battle.available_switches
+    if not switches:
+        logger.warning("ACTION: switch requested but no switches available")
+        return None
+
+    # Try numeric slot first
+    try:
+        slot = int(identifier)
+        idx = slot - 1
+        if 0 <= idx < len(switches):
+            return player.create_order(switches[idx])
+        logger.warning("ACTION: switch slot %d out of range (have %d)", slot, len(switches))
+        return None
+    except ValueError:
+        pass
+
+    # Try species name match (normalized)
+    norm = _normalize(identifier)
+    for mon in switches:
+        if _normalize(mon.species) == norm:
+            return player.create_order(mon)
+
+    logger.debug("ACTION: switch name %r not found in available switches", identifier)
+    return None
 
 
 def parse_action(
@@ -33,42 +114,34 @@ def parse_action(
     battle: AbstractBattle,
     player: Player,
 ) -> Optional[BattleOrder]:
-    """Return a BattleOrder from the LLM response, or None on failure."""
-    matches = _ACTION_RE.findall(response)
-    if not matches:
-        logger.warning("No ACTION line found in LLM response")
+    """Return a BattleOrder from the LLM response, or None on failure.
+
+    Tries each match from last to first so a model that self-corrects
+    mid-response ("actually, ACTION: move 3") gets the right answer.
+    """
+    if not response:
         return None
 
-    # Take the last match in case the model repeated itself mid-reasoning
-    action_type, slot_str = matches[-1]
-    slot = int(slot_str)
+    # Pass 1: ACTION: move/switch <identifier>
+    matches = _ACTION_RE.findall(response)
+    for action_type, identifier in reversed(matches):
+        at = action_type.lower()
+        if at == "move":
+            order = _resolve_move(identifier, battle, player)
+        else:
+            order = _resolve_switch(identifier, battle, player)
+        if order is not None:
+            return order
 
-    if action_type.lower() == "move":
-        moves = battle.available_moves
-        if not moves:
-            logger.warning("ACTION: move requested but no moves available")
-            return None
-        idx = slot - 1
-        if idx < 0 or idx >= len(moves):
-            logger.warning(
-                "ACTION: move slot %d out of range (have %d moves)", slot, len(moves)
-            )
-            return None
-        return player.create_order(moves[idx])
+    # Pass 2: ACTION: <bare_name> (no move/switch keyword) — try as move name
+    bare_matches = _BARE_ACTION_RE.findall(response)
+    for name in reversed(bare_matches):
+        if name.lower() in _KEYWORDS:
+            continue
+        order = _resolve_move(name, battle, player)
+        if order is not None:
+            logger.debug("Resolved bare ACTION: %r as move", name)
+            return order
 
-    if action_type.lower() == "switch":
-        switches = battle.available_switches
-        if not switches:
-            logger.warning("ACTION: switch requested but no switches available")
-            return None
-        idx = slot - 1
-        if idx < 0 or idx >= len(switches):
-            logger.warning(
-                "ACTION: switch slot %d out of range (have %d switches)",
-                slot,
-                len(switches),
-            )
-            return None
-        return player.create_order(switches[idx])
-
+    logger.warning("No parseable ACTION line found in LLM response")
     return None
