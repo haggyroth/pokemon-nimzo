@@ -80,8 +80,11 @@ uv run python scripts/run_battle.py
 This starts two `RandomBot` players, runs one Gen 3 random singles battle, and prints the result:
 
 ```
-RandomPlayer 1: 1W / 0L / 0T
-RandomPlayer 2: 0W / 1L / 0T
+Starting battle: RandomBot 1 vs RandomBot 2
+  RandomBot 1: 1W / 0L / 0T  (finished: 1)
+  RandomBot 2: 0W / 1L / 0T  (finished: 1)
+
+Winner: RandomBot 1
 ```
 
 ---
