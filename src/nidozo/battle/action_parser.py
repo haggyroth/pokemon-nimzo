@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from difflib import get_close_matches
 
 from poke_env.battle import AbstractBattle
 from poke_env.player.battle_order import BattleOrder
@@ -101,11 +102,22 @@ def _resolve_switch(
         logger.warning("ACTION: switch slot %d out of range (have %d)", slot, len(switches))
         return None
 
-    # Try species name match (normalized)
+    # Try species name match (normalized — exact first, then fuzzy)
     norm = _normalize(identifier)
-    for mon in switches:
-        if _normalize(mon.species) == norm:
-            return player.create_order(mon)
+    norm_to_mon = {_normalize(mon.species): mon for mon in switches}
+
+    if norm in norm_to_mon:
+        return player.create_order(norm_to_mon[norm])
+
+    # Fuzzy fallback: tolerate typos like "agron" → "aggron", "deoxysspeed" → "deoxyssp"
+    # cutoff=0.82 accepts 1-char errors on 5-char names and up, rejects wild guesses
+    close = get_close_matches(norm, norm_to_mon.keys(), n=1, cutoff=0.82)
+    if close:
+        matched_species = norm_to_mon[close[0]].species
+        logger.debug(
+            "ACTION: fuzzy-matched switch %r → %r", identifier, matched_species
+        )
+        return player.create_order(norm_to_mon[close[0]])
 
     logger.debug("ACTION: switch name %r not found in available switches", identifier)
     return None
