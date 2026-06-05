@@ -82,3 +82,22 @@ You must switch — your active Pokémon fainted or was forced out.
 {% for species in available_switches %}
   switch {{ loop.index }}: {{ species | title }}
 {% endfor %}
+
+--- HEURISTIC ADVISORY (context for your reasoning — not binding) ---
+{% if heuristics.move_scores %}
+Move analysis:
+{% for ms in heuristics.move_scores %}
+  move {{ loop.index }} ({{ ms.move_id | replace("_", " ") | title }}): {{ ms.effectiveness_label }}{% if ms.estimated_damage_pct %}, est. {{ ms.estimated_damage_pct }} damage{% endif %}{% if ms.priority and ms.priority > 0 %}, priority +{{ ms.priority }}{% endif %}{% if ms.is_status %} [status move]{% endif %}
+
+{% if ms.notes %}
+    Notes: {{ ms.notes | join(" | ") }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if heuristics.switch_scores %}
+Switch analysis:
+{% for ss in heuristics.switch_scores %}
+  switch {{ loop.index }} ({{ ss.species | title }}, HP {{ (ss.hp_fraction * 100) | round(1) }}%):{% if ss.notes %} {{ ss.notes | join(" | ") }}{% else %} no notable matchup info{% endif %}
+
+{% endfor %}
+{% endif %}

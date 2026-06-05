@@ -194,11 +194,15 @@ def test_serialize_battle_structure() -> None:
     battle.fields = {}
     battle.side_conditions = {}
     battle.opponent_side_conditions = {}
-    battle.active_pokemon = _mock_own_pokemon()
-    battle.opponent_active_pokemon = _mock_opponent_pokemon()
+    own = _mock_own_pokemon()
+    opp = _mock_opponent_pokemon()
+    opp.damage_multiplier.return_value = 1.0
+    own.damage_multiplier.return_value = 1.0
+    battle.active_pokemon = own
+    battle.opponent_active_pokemon = opp
     battle.team = {"pikachu": _mock_own_pokemon()}
     battle.opponent_team = {"charmander": _mock_opponent_pokemon()}
-    battle.available_moves = [_mock_move("thunderbolt")]
+    battle.available_moves = []
     battle.available_switches = []
     battle.force_switch = False
 
@@ -210,6 +214,7 @@ def test_serialize_battle_structure() -> None:
         "my_active", "my_team",
         "opponent_active", "opponent_team",
         "available_moves", "available_switches", "force_switch",
+        "heuristics",
     }
     assert expected_keys == set(result.keys())
     assert result["turn"] == 3
