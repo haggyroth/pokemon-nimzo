@@ -62,6 +62,20 @@ _MINIMAL_STATE: dict = {
     ],
     "available_switches": [],
     "force_switch": False,
+    "heuristics": {
+        "move_scores": [
+            {
+                "move_id": "thunderbolt",
+                "type_multiplier": 1.0,
+                "effectiveness_label": "neutral (1×)",
+                "estimated_damage_pct": "~30%",
+                "priority": 0,
+                "is_status": False,
+                "notes": ["STAB"],
+            }
+        ],
+        "switch_scores": [],
+    },
 }
 
 
@@ -140,6 +154,13 @@ def test_build_messages_returns_two_messages() -> None:
 def test_unknown_version_raises() -> None:
     with pytest.raises(ValueError, match="not found"):
         PromptBuilder(version="v99")
+
+
+def test_heuristic_advisory_section_rendered() -> None:
+    builder = PromptBuilder()
+    content = builder.build_turn(_MINIMAL_STATE)["content"]
+    assert "HEURISTIC ADVISORY" in content
+    assert "neutral (1×)" in content
 
 
 def test_force_switch_text_appears() -> None:

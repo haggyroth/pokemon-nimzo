@@ -13,9 +13,9 @@
 - [x] Versioned prompts — correlate prompt changes with ELO shifts
 - [x] `LLMPlayer` wiring the full loop: state → prompt → backend → action parser → `BattleOrder`
 
-## v0.3 — Heuristic Engine
-- [ ] Heuristic scorer: type effectiveness, expected damage, speed comparison, stat stages, status value, switch value
-- [ ] Scores surfaced to LLM as advisory context (not a hard filter)
+## v0.3 — Heuristic Engine ✓
+- [x] Heuristic scorer: type effectiveness, estimated damage %, stat stages, priority, status annotation, switch matchup analysis
+- [x] Scores surfaced to LLM as advisory context in the "HEURISTIC ADVISORY" section of the turn prompt (not a hard filter)
 
 ## v0.4 — ELO & Persistence
 - [ ] SQLite schema: matches, turns, ELO history, team logs, prompt versions

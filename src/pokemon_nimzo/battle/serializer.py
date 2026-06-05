@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from poke_env.battle import AbstractBattle, Pokemon, Move
+from pokemon_nimzo.battle.heuristics import score_actions
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +54,7 @@ def serialize_battle(battle: AbstractBattle) -> dict[str, Any]:
         "available_moves": [_serialize_move(m) for m in battle.available_moves],
         "available_switches": [p.species for p in battle.available_switches],
         "force_switch": battle.force_switch,
+        "heuristics": score_actions(battle),
     }
 
 
