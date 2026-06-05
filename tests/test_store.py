@@ -2,8 +2,8 @@
 
 import pytest
 
-from nidozo.db.store import BattleStore
 from nidozo.db.elo import DEFAULT_RATING
+from nidozo.db.store import BattleStore
 
 
 @pytest.fixture

@@ -7,8 +7,8 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Optional
 
+import httpx
 from fastapi import BackgroundTasks, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -30,10 +30,10 @@ _FRONTEND_DIST = Path(__file__).parent.parent.parent.parent / "frontend" / "dist
 class StartBattleRequest(BaseModel):
     p1_provider: str = "random"
     p2_provider: str = "random"
-    p1_model: Optional[str] = None   # overrides per-player; falls back to shared `model`
-    p2_model: Optional[str] = None
-    model: Optional[str] = None      # legacy shared override (used if p1_model/p2_model absent)
-    prompt_version: str = "v1"
+    p1_model: str | None = None   # overrides per-player; falls back to shared `model`
+    p2_model: str | None = None
+    model: str | None = None      # legacy shared override (used if p1_model/p2_model absent)
+    prompt_version: str = "v2"       # v2 = JSON structured output (default); v1 = legacy text
     n_battles: int = 1
 
 
@@ -69,6 +69,27 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     @app.get("/api/battles")
     def get_battles(limit: int = 20) -> list[dict]:
         return store.recent_battles(limit=limit)
+
+    @app.get("/api/lmstudio/models")
+    async def get_lmstudio_models() -> list[str]:
+        """Proxy to LM Studio's /v1/models — returns model id strings.
+
+        Returns an empty list (not an error) if LM Studio is unreachable,
+        so the UI degrades gracefully to manual text entry.
+        """
+        base_url = os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(
+                    f"{base_url}/models",
+                    headers={"Authorization": "Bearer lm-studio"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return [m["id"] for m in data.get("data", [])]
+        except Exception as exc:
+            logger.debug("LM Studio not reachable at %s: %s", base_url, exc)
+            return []
 
     @app.get("/api/battles/{battle_id}/turns")
     def get_turns(battle_id: int) -> list[dict]:
@@ -127,9 +148,13 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         q = bus.subscribe()
         try:
             while True:
-                event = await asyncio.wait_for(q.get(), timeout=30.0)
-                await ws.send_text(json.dumps(event))
-        except (WebSocketDisconnect, asyncio.TimeoutError):
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=25.0)
+                    await ws.send_text(json.dumps(event))
+                except TimeoutError:
+                    # Send a keepalive ping so the client doesn't reconnect
+                    await ws.send_text(json.dumps({"type": "ping"}))
+        except WebSocketDisconnect:
             pass
         finally:
             bus.unsubscribe(q)
@@ -155,8 +180,7 @@ async def _run_battles(
     bus: EventBus,
 ) -> None:
     from poke_env import LocalhostServerConfiguration
-    from nidozo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
-    from nidozo.llm import AnthropicBackend, OpenAIBackend
+
 
     _FORMAT = "gen3randombattle"
     cfg = LocalhostServerConfiguration
@@ -229,6 +253,10 @@ def _build_streaming_player(
             server_configuration=cfg,
         )
 
+    # json_mode: enabled for lmstudio/openai when using v2 prompt; Anthropic follows JSON
+    # instructions natively without needing the API-level response_format parameter.
+    use_json_mode = prompt_version == "v2" and provider in ("lmstudio", "openai")
+
     if provider == "anthropic":
         backend = AnthropicBackend(
             model=model or "claude-sonnet-4-6",
@@ -238,12 +266,14 @@ def _build_streaming_player(
         backend = OpenAIBackend(
             model=model or "gpt-4o",
             api_key=os.environ.get("OPENAI_API_KEY"),
+            json_mode=use_json_mode,
         )
     else:  # lmstudio
         backend = OpenAIBackend(
             model=model or os.environ.get("LM_STUDIO_MODEL", "local-model"),
             api_key="lm-studio",
             base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
+            json_mode=use_json_mode,
         )
 
     return StreamingLLMPlayer(

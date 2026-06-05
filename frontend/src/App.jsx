@@ -7,7 +7,7 @@ import { useBattleStream } from './hooks/useBattleStream'
 function App() {
   const [view, setView] = useState('home')
   const [dismissed, setDismissed] = useState(false)
-  const { events, isConnected, p1State, p2State, battleInfo, battleResult, reset } =
+  const { events, isConnected, p1State, p2State, battleInfo, battleResult, thinking, reset } =
     useBattleStream()
 
   const result = dismissed ? null : battleResult
@@ -51,6 +51,7 @@ function App() {
             battleInfo={battleInfo}
             battleResult={result}
             events={events}
+            thinking={thinking}
             onDismiss={() => setDismissed(true)}
           />
         )}

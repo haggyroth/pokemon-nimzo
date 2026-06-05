@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Optional
+from collections.abc import Callable, Coroutine
+from typing import TYPE_CHECKING, Any
 
 from poke_env.battle import AbstractBattle
 from poke_env.player import Player
@@ -19,6 +20,9 @@ if TYPE_CHECKING:
     from nidozo.db.store import BattleStore
 
 logger = logging.getLogger(__name__)
+
+# Callback type: async fn(event_dict) — injected by StreamingLLMPlayer
+ThinkingCallback = Callable[[dict[str, Any]], Coroutine] | None
 
 
 class LLMPlayer(Player):
@@ -37,9 +41,10 @@ class LLMPlayer(Player):
         self,
         backend: ModelBackend,
         prompt_version: str = "v1",
-        store: Optional["BattleStore"] = None,
-        battle_id: Optional[int] = None,
+        store: BattleStore | None = None,
+        battle_id: int | None = None,
         player_role: str = "p1",
+        on_thinking: ThinkingCallback = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -48,6 +53,7 @@ class LLMPlayer(Player):
         self._store = store
         self._battle_id = battle_id
         self._player_role = player_role
+        self._on_thinking = on_thinking
 
     async def choose_move(self, battle: AbstractBattle) -> BattleOrder:
         # Recharge turn (e.g. after Hyper Beam): only one forced pseudo-move, skip LLM
@@ -58,13 +64,44 @@ class LLMPlayer(Player):
         state = serialize_battle(battle)
         state_json = json.dumps(state)
         messages = self._prompt_builder.build_messages(state)
-        response: Optional[str] = None
+        response: str | None = None
 
-        try:
-            response = await self._backend.complete(messages)
-        except Exception as exc:
-            logger.error("LLM backend error on turn %d: %s", battle.turn, exc)
-            self._log_turn(battle.turn, None, False, None, state_json)
+        # Notify listeners that the model is thinking (for UI spinner)
+        if self._on_thinking is not None:
+            try:
+                await self._on_thinking({
+                    "type": "thinking",
+                    "player_role": self._player_role,
+                    "turn": battle.turn,
+                })
+            except Exception:
+                pass
+
+        # Call LLM with one retry on empty response
+        for attempt in range(2):
+            try:
+                response = await self._backend.complete(messages)
+            except Exception as exc:
+                logger.error("LLM backend error on turn %d (attempt %d): %s", battle.turn, attempt + 1, exc)
+                if attempt == 1:
+                    self._log_turn(battle.turn, None, False, None, state_json)
+                    return self.choose_random_move(battle)
+                continue
+
+            if response:
+                break
+
+            if attempt == 0:
+                logger.warning(
+                    "Empty response from LLM on turn %d — retrying once.", battle.turn
+                )
+
+        if not response:
+            logger.warning(
+                "LLM returned empty response on turn %d after retry — falling back to random.",
+                battle.turn,
+            )
+            self._log_turn(battle.turn, None, False, "", state_json)
             return self.choose_random_move(battle)
 
         order = parse_action(response, battle, self)
@@ -85,10 +122,10 @@ class LLMPlayer(Player):
     def _log_turn(
         self,
         turn_number: int,
-        action_chosen: Optional[str],
+        action_chosen: str | None,
         parse_success: bool,
-        response: Optional[str],
-        state_json: Optional[str] = None,
+        response: str | None,
+        state_json: str | None = None,
     ) -> None:
         if self._store is None or self._battle_id is None:
             return

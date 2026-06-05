@@ -110,7 +110,7 @@ Apply Kyle's git-workflow standard automatically on all repo work, without being
 - **Expanded generation support** beyond Gen 3
 - **Richer post-game analysis** — annotate RNG swings, key decision points, and blunders
 - **Tournament structures** — brackets, scheduled round-robins
-- **Final project name** — settled as **Nidozo** (Nido- from the Nido Pokémon family + -zo from Nimzo). GitHub repo rename TBD.
+- **Final project name** — **Nidozo** (Nido- from the Nido Pokémon family + -zo from Nimzo). GitHub repo: `haggyroth/nidozo`.
 
 ---
 

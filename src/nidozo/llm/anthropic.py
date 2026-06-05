@@ -20,11 +20,11 @@ class AnthropicBackend:
         system = next((m["content"] for m in messages if m["role"] == "system"), None)
         turns = [m for m in messages if m["role"] != "system"]
 
-        kwargs: dict = dict(
-            model=self._model,
-            max_tokens=self._max_tokens,
-            messages=turns,
-        )
+        kwargs: dict = {
+            "model": self._model,
+            "max_tokens": self._max_tokens,
+            "messages": turns,
+        }
         if system:
             kwargs["system"] = system
 

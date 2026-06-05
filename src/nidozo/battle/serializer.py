@@ -16,9 +16,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from poke_env.battle import AbstractBattle, Pokemon, Move
-from nidozo.battle.heuristics import score_actions
+from poke_env.battle import AbstractBattle, Move, Pokemon
 
+from nidozo.battle.heuristics import score_actions
 
 # ---------------------------------------------------------------------------
 # Public entry point

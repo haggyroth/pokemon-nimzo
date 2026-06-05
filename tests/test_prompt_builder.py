@@ -4,7 +4,6 @@ import pytest
 
 from nidozo.llm.prompt_builder import PromptBuilder
 
-
 # Minimal battle state that satisfies all template variables
 _MINIMAL_STATE: dict = {
     "turn": 1,
