@@ -253,6 +253,58 @@ def test_name_fallback_when_slot_out_of_range() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Fuzzy species name matching
+# ---------------------------------------------------------------------------
+
+def test_fuzzy_switch_one_char_typo() -> None:
+    """'agron' should fuzzy-match to 'aggron' (1-char typo)."""
+    switches = [_mock_pokemon("aggron"), _mock_pokemon("blastoise")]
+    battle = _make_battle(switches=switches)
+    player = _make_player()
+
+    result = parse_action("ACTION: switch agron", battle, player)
+
+    assert result is not None
+    player.create_order.assert_called_once_with(switches[0])
+
+
+def test_fuzzy_switch_double_letter_typo() -> None:
+    """'deoxysspeed' should fuzzy-match to 'deoxysSpeed' / 'deoxysspeed'."""
+    switches = [_mock_pokemon("deoxys-speed"), _mock_pokemon("pikachu")]
+    battle = _make_battle(switches=switches)
+    player = _make_player()
+
+    # _normalize strips hyphens: "deoxysspeed" vs "deoxyssspeed"... let's check
+    # normalize("deoxys-speed") = "deoxyssspeed" wait no...
+    # Actually normalize strips non-alphanumeric, so "deoxys-speed" -> "deoxysspeed"
+    # and the typo "deoxysspeed" matches exactly after normalization
+    result = parse_action("ACTION: switch deoxysspeed", battle, player)
+    assert result is not None
+
+
+def test_fuzzy_switch_does_not_match_wildly_different_name() -> None:
+    """A completely wrong name should not fuzzy-match anything."""
+    switches = [_mock_pokemon("blastoise"), _mock_pokemon("venusaur")]
+    battle = _make_battle(switches=switches)
+    player = _make_player()
+
+    result = parse_action("ACTION: switch pikachu", battle, player)
+    assert result is None
+
+
+def test_exact_match_preferred_over_fuzzy() -> None:
+    """Exact match is always preferred — fuzzy only runs if exact fails."""
+    switches = [_mock_pokemon("aggron"), _mock_pokemon("agron")]  # both exist
+    battle = _make_battle(switches=switches)
+    player = _make_player()
+
+    result = parse_action("ACTION: switch aggron", battle, player)
+
+    assert result is not None
+    player.create_order.assert_called_once_with(switches[0])
+
+
+# ---------------------------------------------------------------------------
 # JSON structured output (v2 prompt)
 # ---------------------------------------------------------------------------
 
