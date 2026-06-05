@@ -31,6 +31,7 @@ showdown/
 *.log
 *.sqlite
 *.db
+nimzo.db
 
 # macOS
 .DS_Store

@@ -91,10 +91,27 @@ Example output (random vs random):
 
 ```
 Starting battle: RandomBot 1 (random) vs RandomBot 2 (random)
-  RandomBot 1 [random]: 1W / 0L / 0T
-  RandomBot 2 [random]: 0W / 1L / 0T
+  RandomBot 1 [random]: 0W / 1L / 0T
+  RandomBot 2 [random]: 1W / 0L / 0T
+  Winner: RandomBot 2 (random)  |  Turns: 62
 
-Winner: RandomBot 1 [random]
+Results saved to nimzo.db
+Run `uv run python scripts/leaderboard.py` to see rankings.
+```
+
+## Leaderboard
+
+After running battles, view ELO rankings:
+
+```bash
+uv run python scripts/leaderboard.py
+
+=== LEADERBOARD ===
+
+#    Model                                    Prompt       ELO  Games     W     L     T
+---------------------------------------------------------------------------------------
+1    anthropic/claude-sonnet-4-6              v1        1048.2      5     3     2     0
+2    random/random                            v1         951.8      5     2     3     0
 ```
 
 ---
