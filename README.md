@@ -39,27 +39,22 @@ npm install
 cp config/config-example.js config/config.js
 ```
 
-#### Pin the config for local use
-
-Open `showdown/config/config.js` and set:
-```js
-exports.bindaddress = '127.0.0.1';
-exports.port = 8000;
-exports.workers = 1;
-```
-
 > **Why `--no-security`?** poke-env connects as bots with usernames like `RandomPlayer 1`. The `--no-security` flag disables the login challenge that would normally require a valid Pokémon Showdown account, so bots can connect freely to the local server.
 
 #### Start the server
 
 ```bash
-# From the repo root (not inside showdown/)
+# Option A: use the helper script (from repo root)
+./scripts/start_showdown.sh
+
+# Option B: run directly
 node showdown/pokemon-showdown start --no-security
 ```
 
-You should see output like:
+You should see output ending with:
 ```
-Starting server on port 8000
+Worker 1 now listening on 0.0.0.0:8000
+Test your server at http://localhost:8000
 ```
 
 Leave this terminal running while you play battles.
