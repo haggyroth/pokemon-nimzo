@@ -80,7 +80,20 @@ class OpenAIBackend:
             kwargs["response_format"] = _ACTION_JSON_SCHEMA
 
         response = await self._client.chat.completions.create(**kwargs)
-        content = response.choices[0].message.content or ""
+        msg = response.choices[0].message
+        content = msg.content or ""
+
+        if not content:
+            # Qwen 3 (and other thinking models) route all output through
+            # reasoning_content, leaving content empty.  When using json_schema
+            # the actual JSON lands in reasoning_content — use it as the response.
+            reasoning = getattr(msg, "reasoning_content", None)
+            if reasoning:
+                logger.debug(
+                    "content empty for %s — using reasoning_content (%d chars)",
+                    self._model, len(reasoning),
+                )
+                content = reasoning
 
         if not content:
             finish = getattr(response.choices[0], "finish_reason", "unknown")
