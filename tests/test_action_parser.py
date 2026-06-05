@@ -211,6 +211,36 @@ def test_unknown_move_name_returns_none() -> None:
     assert result is None
 
 
+def test_markdown_bold_around_action_line() -> None:
+    """'**ACTION: move 2**' — trailing ** stripped from slot."""
+    moves = [_mock_move("surf"), _mock_move("icebeam")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+    result = parse_action("**ACTION: move 2**", battle, player)
+    player.create_order.assert_called_once_with(moves[1])
+    assert result is not None
+
+
+def test_markdown_bold_around_label_only() -> None:
+    """'**ACTION:** move Thunderbolt' — ** between colon and keyword."""
+    moves = [_mock_move("thunderbolt"), _mock_move("surf")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+    result = parse_action("**ACTION:** move Thunderbolt", battle, player)
+    player.create_order.assert_called_once_with(moves[0])
+    assert result is not None
+
+
+def test_markdown_action_with_slot() -> None:
+    """'**ACTION:** switch 2' — bold label, slot number."""
+    switches = [_mock_pokemon("pikachu"), _mock_pokemon("blastoise")]
+    battle = _make_battle(switches=switches)
+    player = _make_player()
+    result = parse_action("**ACTION:** switch 2", battle, player)
+    player.create_order.assert_called_once_with(switches[1])
+    assert result is not None
+
+
 def test_name_fallback_when_slot_out_of_range() -> None:
     """If slot is out of range but a name matches, prefer the name resolution."""
     # The parser tries slot first; slot 9 is out of range, but 'thunderbolt' matches.

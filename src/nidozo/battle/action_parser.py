@@ -28,8 +28,9 @@ from poke_env.player.player import Player
 logger = logging.getLogger(__name__)
 
 # Matches "ACTION: move/switch <slot_or_name>"
+# [\s*]* handles markdown variants like "**ACTION:** move X" or "**ACTION: move X**"
 _ACTION_RE = re.compile(
-    r"ACTION:\s*(move|switch)\s+(\S+)", re.IGNORECASE
+    r"ACTION:[\s*]*(move|switch)\s+(\S+)", re.IGNORECASE
 )
 
 # Matches "ACTION: <bare_name>" with no move/switch keyword
@@ -56,18 +57,17 @@ def _resolve_move(
         logger.warning("ACTION: move requested but no moves available")
         return None
 
-    # Try numeric slot first
-    try:
-        slot = int(identifier)
+    # Try numeric slot — extract leading digits to handle trailing markdown (e.g. "2**")
+    m = re.match(r"(\d+)", identifier)
+    if m:
+        slot = int(m.group(1))
         idx = slot - 1
         if 0 <= idx < len(moves):
             return player.create_order(moves[idx])
         logger.warning("ACTION: move slot %d out of range (have %d)", slot, len(moves))
         return None
-    except ValueError:
-        pass
 
-    # Try move name match (normalized)
+    # Try move name match (normalized — strips any surrounding punctuation)
     norm = _normalize(identifier)
     for move in moves:
         if _normalize(move.id) == norm:
@@ -88,16 +88,15 @@ def _resolve_switch(
         logger.warning("ACTION: switch requested but no switches available")
         return None
 
-    # Try numeric slot first
-    try:
-        slot = int(identifier)
+    # Try numeric slot — extract leading digits to handle trailing markdown (e.g. "2**")
+    m = re.match(r"(\d+)", identifier)
+    if m:
+        slot = int(m.group(1))
         idx = slot - 1
         if 0 <= idx < len(switches):
             return player.create_order(switches[idx])
         logger.warning("ACTION: switch slot %d out of range (have %d)", slot, len(switches))
         return None
-    except ValueError:
-        pass
 
     # Try species name match (normalized)
     norm = _normalize(identifier)

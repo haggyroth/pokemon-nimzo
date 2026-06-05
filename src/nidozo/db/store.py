@@ -167,30 +167,35 @@ class BattleStore:
     # ------------------------------------------------------------------
 
     def leaderboard(self) -> list[dict]:
-        """Return all models sorted by ELO descending."""
+        """Return all models sorted by ELO descending (one row per model)."""
         cur = self._conn.execute(
             """SELECT m.provider, m.model_name, m.prompt_version,
                       e.rating, e.games,
-                      COALESCE(wins.n, 0)  AS wins,
-                      COALESCE(losses.n,0) AS losses,
-                      COALESCE(ties.n, 0)  AS ties
+                      COALESCE(wld.wins,   0) AS wins,
+                      COALESCE(wld.losses, 0) AS losses,
+                      COALESCE(wld.ties,   0) AS ties
                FROM models m
                JOIN elo_ratings e ON e.model_id = m.id
                LEFT JOIN (
-                   SELECT p1_model_id AS mid, COUNT(*) AS n FROM battles WHERE winner=1 GROUP BY 1
-                   UNION ALL
-                   SELECT p2_model_id, COUNT(*) FROM battles WHERE winner=2 GROUP BY 1
-               ) wins   ON wins.mid = m.id
-               LEFT JOIN (
-                   SELECT p1_model_id AS mid, COUNT(*) AS n FROM battles WHERE winner=2 GROUP BY 1
-                   UNION ALL
-                   SELECT p2_model_id, COUNT(*) FROM battles WHERE winner=1 GROUP BY 1
-               ) losses ON losses.mid = m.id
-               LEFT JOIN (
-                   SELECT p1_model_id AS mid, COUNT(*) AS n FROM battles WHERE winner IS NULL GROUP BY 1
-                   UNION ALL
-                   SELECT p2_model_id, COUNT(*) FROM battles WHERE winner IS NULL GROUP BY 1
-               ) ties   ON ties.mid = m.id
+                   -- Single aggregated row per model across p1+p2 perspectives
+                   SELECT model_id,
+                          SUM(CASE WHEN result='win'  THEN 1 ELSE 0 END) AS wins,
+                          SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END) AS losses,
+                          SUM(CASE WHEN result='tie'  THEN 1 ELSE 0 END) AS ties
+                   FROM (
+                       SELECT p1_model_id AS model_id,
+                              CASE WHEN winner=1 THEN 'win'
+                                   WHEN winner=2 THEN 'loss'
+                                   ELSE 'tie' END AS result
+                       FROM battles WHERE finished_at IS NOT NULL
+                       UNION ALL
+                       SELECT p2_model_id,
+                              CASE WHEN winner=2 THEN 'win'
+                                   WHEN winner=1 THEN 'loss'
+                                   ELSE 'tie' END
+                       FROM battles WHERE finished_at IS NOT NULL
+                   ) GROUP BY model_id
+               ) wld ON wld.model_id = m.id
                ORDER BY e.rating DESC""",
         )
         return [dict(r) for r in cur.fetchall()]

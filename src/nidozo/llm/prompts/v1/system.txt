@@ -38,6 +38,7 @@ IMPORTANT RULES:
 - You MUST end your response with exactly one ACTION line.
 - Only choose from the actions listed under "Available actions". Do not invent moves.
 - Do not add anything after the ACTION line.
+- Do NOT use markdown formatting (bold, italics, headers) on the ACTION line itself.
 
 Example of a correct response:
     Pikachu faces Steelix. Thunderbolt is super effective (2×) and should 2HKO.
