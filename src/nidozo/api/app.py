@@ -7,7 +7,6 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Optional
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, WebSocket, WebSocketDisconnect
@@ -31,9 +30,9 @@ _FRONTEND_DIST = Path(__file__).parent.parent.parent.parent / "frontend" / "dist
 class StartBattleRequest(BaseModel):
     p1_provider: str = "random"
     p2_provider: str = "random"
-    p1_model: Optional[str] = None   # overrides per-player; falls back to shared `model`
-    p2_model: Optional[str] = None
-    model: Optional[str] = None      # legacy shared override (used if p1_model/p2_model absent)
+    p1_model: str | None = None   # overrides per-player; falls back to shared `model`
+    p2_model: str | None = None
+    model: str | None = None      # legacy shared override (used if p1_model/p2_model absent)
     prompt_version: str = "v2"       # v2 = JSON structured output (default); v1 = legacy text
     n_battles: int = 1
 
@@ -152,7 +151,7 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
                 try:
                     event = await asyncio.wait_for(q.get(), timeout=25.0)
                     await ws.send_text(json.dumps(event))
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Send a keepalive ping so the client doesn't reconnect
                     await ws.send_text(json.dumps({"type": "ping"}))
         except WebSocketDisconnect:
@@ -181,8 +180,7 @@ async def _run_battles(
     bus: EventBus,
 ) -> None:
     from poke_env import LocalhostServerConfiguration
-    from nidozo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
-    from nidozo.llm import AnthropicBackend, OpenAIBackend
+
 
     _FORMAT = "gen3randombattle"
     cfg = LocalhostServerConfiguration
