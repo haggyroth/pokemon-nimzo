@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _DDL = """
 PRAGMA journal_mode=WAL;
@@ -52,24 +52,40 @@ CREATE TABLE IF NOT EXISTS elo_history (
     delta         REAL    NOT NULL
 );
 
--- Per-turn log: action chosen, parse outcome, raw LLM response
+-- Per-turn log: action chosen, parse outcome, raw LLM response, and full battle state
 CREATE TABLE IF NOT EXISTS turns (
     id            INTEGER PRIMARY KEY,
     battle_id     INTEGER NOT NULL REFERENCES battles(id),
     turn_number   INTEGER NOT NULL,
     player_role   TEXT    NOT NULL,   -- "p1" | "p2"
     prompt_version TEXT   NOT NULL,
-    action_chosen TEXT,               -- e.g. "move 2" or "switch 1"
+    action_chosen TEXT,               -- e.g. "move 2" or "switch pikachu"
     parse_success INTEGER NOT NULL DEFAULT 1,  -- 0=fell back to random
-    llm_response  TEXT                         -- full raw response (may be large)
+    llm_response  TEXT,                        -- full raw response (may be large)
+    state_json    TEXT                         -- serialized battle state at decision time (v2+)
 );
 """
 
 
 def migrate(conn: sqlite3.Connection) -> None:
-    """Create tables if they don't exist. Idempotent."""
+    """Create tables if they don't exist and upgrade schema version."""
     conn.executescript(_DDL)
+
     cur = conn.execute("SELECT COUNT(*) FROM schema_version")
     if cur.fetchone()[0] == 0:
+        # Fresh install — schema already includes state_json column
         conn.execute("INSERT INTO schema_version VALUES (?)", (SCHEMA_VERSION,))
+        conn.commit()
+        return
+
+    cur = conn.execute("SELECT version FROM schema_version")
+    version = cur.fetchone()[0]
+
+    if version < 2:
+        # Add state_json column to existing turns table
+        try:
+            conn.execute("ALTER TABLE turns ADD COLUMN state_json TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        conn.execute("UPDATE schema_version SET version=2")
         conn.commit()

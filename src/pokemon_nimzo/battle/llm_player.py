@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING, Optional
 
@@ -50,33 +51,30 @@ class LLMPlayer(Player):
 
     async def choose_move(self, battle: AbstractBattle) -> BattleOrder:
         state = serialize_battle(battle)
+        state_json = json.dumps(state)
         messages = self._prompt_builder.build_messages(state)
         response: Optional[str] = None
-        parse_success = True
 
         try:
             response = await self._backend.complete(messages)
         except Exception as exc:
             logger.error("LLM backend error on turn %d: %s", battle.turn, exc)
-            parse_success = False
-            self._log_turn(battle.turn, None, False, None)
+            self._log_turn(battle.turn, None, False, None, state_json)
             return self.choose_random_move(battle)
 
         order = parse_action(response, battle, self)
         if order is None:
-            parse_success = False
             logger.warning(
                 "Action parse failed on turn %d — falling back to random move.\n"
                 "Response was:\n%s",
                 battle.turn,
                 response,
             )
-            self._log_turn(battle.turn, None, False, response)
+            self._log_turn(battle.turn, None, False, response, state_json)
             return self.choose_random_move(battle)
 
-        # Extract human-readable action label from the order message
         action_label = getattr(order, "message", str(order))
-        self._log_turn(battle.turn, action_label, True, response)
+        self._log_turn(battle.turn, action_label, True, response, state_json)
         return order
 
     def _log_turn(
@@ -85,6 +83,7 @@ class LLMPlayer(Player):
         action_chosen: Optional[str],
         parse_success: bool,
         response: Optional[str],
+        state_json: Optional[str] = None,
     ) -> None:
         if self._store is None or self._battle_id is None:
             return
@@ -97,6 +96,7 @@ class LLMPlayer(Player):
                 action_chosen=action_chosen,
                 parse_success=parse_success,
                 llm_response=response,
+                state_json=state_json,
             )
         except Exception as exc:
             logger.warning("Failed to log turn: %s", exc)

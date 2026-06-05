@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
+import BattleAnalysis from './BattleAnalysis'
 
 const PROVIDERS = ['random', 'anthropic', 'openai', 'lmstudio']
 
 export default function Leaderboard({ onBattleStarted }) {
-  const [rows, setRows]       = useState([])
-  const [battles, setBattles] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [form, setForm]       = useState({
+  const [rows, setRows]         = useState([])
+  const [battles, setBattles]   = useState([])
+  const [loading, setLoading]   = useState(false)
+  const [analyzing, setAnalyzing] = useState(null) // battle id being analyzed
+  const [form, setForm]         = useState({
     p1_provider: 'random', p2_provider: 'anthropic',
     model: '', n_battles: 1,
   })
@@ -104,17 +106,27 @@ export default function Leaderboard({ onBattleStarted }) {
             battles.map((b, i) => {
               const winnerCls = b.winner === 1 ? 'winner-p1' : b.winner === 2 ? 'winner-p2' : 'winner-tie'
               const winnerLabel = b.winner === 1 ? 'p1 wins' : b.winner === 2 ? 'p2 wins' : 'tie'
+              const isOpen = analyzing === b.id
               return (
-                <div key={i} className="battle-entry">
-                  <div className="battle-matchup">
-                    <span>{b.p1}</span>
-                    <span className="battle-vs">vs</span>
-                    <span>{b.p2}</span>
+                <div key={i} className="battle-entry-wrap">
+                  <div className="battle-entry">
+                    <div className="battle-matchup">
+                      <span>{b.p1}</span>
+                      <span className="battle-vs">vs</span>
+                      <span>{b.p2}</span>
+                    </div>
+                    <div className="battle-meta">
+                      <div className={winnerCls}>{winnerLabel}</div>
+                      <div>{b.total_turns ?? '?'} turns</div>
+                      <button
+                        className={`btn-analyze ${isOpen ? 'active' : ''}`}
+                        onClick={() => setAnalyzing(isOpen ? null : b.id)}
+                      >
+                        {isOpen ? '▲ HIDE' : '▼ ANALYZE'}
+                      </button>
+                    </div>
                   </div>
-                  <div className="battle-meta">
-                    <div className={winnerCls}>{winnerLabel}</div>
-                    <div>{b.total_turns ?? '?'} turns</div>
-                  </div>
+                  {isOpen && <BattleAnalysis battleId={b.id} />}
                 </div>
               )
             })

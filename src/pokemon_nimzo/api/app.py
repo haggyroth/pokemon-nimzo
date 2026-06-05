@@ -48,7 +48,7 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     bus = EventBus()
     store = BattleStore(db_path)
 
-    app = FastAPI(title="Pokémon Nimzo", version="0.5.0")
+    app = FastAPI(title="Pokémon Nimzo", version="0.6.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -77,6 +77,12 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
             (battle_id,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    @app.get("/api/battles/{battle_id}/analysis")
+    def get_analysis(battle_id: int) -> dict:
+        from pokemon_nimzo.analysis import analyze_battle
+        turns = store.get_turns_with_state(battle_id)
+        return analyze_battle(turns)
 
     # -----------------------------------------------------------------------
     # REST: Start a battle (runs in background, streams via WS)
@@ -225,14 +231,15 @@ def _build_streaming_player(
             api_key=os.environ.get("ANTHROPIC_API_KEY"),
         )
     elif provider == "openai":
-        backend = AnthropicBackend(
+        backend = OpenAIBackend(
             model=model or "gpt-4o",
             api_key=os.environ.get("OPENAI_API_KEY"),
         )
-    else:
-        backend = AnthropicBackend(
-            model=os.environ.get("LM_STUDIO_MODEL", "local-model"),
+    else:  # lmstudio
+        backend = OpenAIBackend(
+            model=model or os.environ.get("LM_STUDIO_MODEL", "local-model"),
             api_key="lm-studio",
+            base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
         )
 
     return StreamingLLMPlayer(

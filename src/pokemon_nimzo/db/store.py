@@ -137,18 +137,30 @@ class BattleStore:
         action_chosen: Optional[str],
         parse_success: bool,
         llm_response: Optional[str] = None,
+        state_json: Optional[str] = None,
     ) -> None:
         self._conn.execute(
             """INSERT INTO turns
                (battle_id, turn_number, player_role, prompt_version,
-                action_chosen, parse_success, llm_response)
-               VALUES (?,?,?,?,?,?,?)""",
+                action_chosen, parse_success, llm_response, state_json)
+               VALUES (?,?,?,?,?,?,?,?)""",
             (
                 battle_id, turn_number, player_role, prompt_version,
-                action_chosen, int(parse_success), llm_response,
+                action_chosen, int(parse_success), llm_response, state_json,
             ),
         )
         self._conn.commit()
+
+    def get_turns_with_state(self, battle_id: int) -> list[dict]:
+        """Return all turns for a battle including state_json, ordered by turn then player."""
+        cur = self._conn.execute(
+            """SELECT turn_number, player_role, prompt_version,
+                      action_chosen, parse_success, llm_response, state_json
+               FROM turns WHERE battle_id=?
+               ORDER BY turn_number, player_role""",
+            (battle_id,),
+        )
+        return [dict(r) for r in cur.fetchall()]
 
     # ------------------------------------------------------------------
     # Leaderboard queries
@@ -185,7 +197,7 @@ class BattleStore:
 
     def recent_battles(self, limit: int = 10) -> list[dict]:
         cur = self._conn.execute(
-            """SELECT b.battle_tag, b.format, b.total_turns, b.winner, b.finished_at,
+            """SELECT b.id, b.battle_tag, b.format, b.total_turns, b.winner, b.finished_at,
                       p1.provider||'/'||p1.model_name AS p1,
                       p2.provider||'/'||p2.model_name AS p2
                FROM battles b
