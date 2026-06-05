@@ -37,11 +37,11 @@ class OpenAIBackend:
         self._json_mode = json_mode
 
     async def complete(self, messages: list[Message]) -> str:
-        kwargs: dict = dict(
-            model=self._model,
-            max_tokens=self._max_tokens,
-            messages=messages,  # type: ignore[arg-type]
-        )
+        kwargs: dict = {
+            "model": self._model,
+            "max_tokens": self._max_tokens,
+            "messages": messages,  # type: ignore[arg-type]
+        }
         if self._json_mode:
             kwargs["response_format"] = {"type": "json_object"}
 

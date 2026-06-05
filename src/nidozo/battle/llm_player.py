@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Coroutine, Optional
+from collections.abc import Callable, Coroutine
+from typing import TYPE_CHECKING, Any
 
 from poke_env.battle import AbstractBattle
 from poke_env.player import Player
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Callback type: async fn(event_dict) — injected by StreamingLLMPlayer
-ThinkingCallback = Optional[Callable[[dict[str, Any]], Coroutine]]
+ThinkingCallback = Callable[[dict[str, Any]], Coroutine] | None
 
 
 class LLMPlayer(Player):
@@ -40,8 +41,8 @@ class LLMPlayer(Player):
         self,
         backend: ModelBackend,
         prompt_version: str = "v1",
-        store: Optional["BattleStore"] = None,
-        battle_id: Optional[int] = None,
+        store: BattleStore | None = None,
+        battle_id: int | None = None,
         player_role: str = "p1",
         on_thinking: ThinkingCallback = None,
         **kwargs,
@@ -63,7 +64,7 @@ class LLMPlayer(Player):
         state = serialize_battle(battle)
         state_json = json.dumps(state)
         messages = self._prompt_builder.build_messages(state)
-        response: Optional[str] = None
+        response: str | None = None
 
         # Notify listeners that the model is thinking (for UI spinner)
         if self._on_thinking is not None:
@@ -121,10 +122,10 @@ class LLMPlayer(Player):
     def _log_turn(
         self,
         turn_number: int,
-        action_chosen: Optional[str],
+        action_chosen: str | None,
         parse_success: bool,
-        response: Optional[str],
-        state_json: Optional[str] = None,
+        response: str | None,
+        state_json: str | None = None,
     ) -> None:
         if self._store is None or self._battle_id is None:
             return

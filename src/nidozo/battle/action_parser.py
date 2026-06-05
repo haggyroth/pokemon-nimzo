@@ -23,7 +23,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Optional
 
 from poke_env.battle import AbstractBattle
 from poke_env.player.battle_order import BattleOrder
@@ -54,7 +53,7 @@ def _resolve_move(
     identifier: str,
     battle: AbstractBattle,
     player: Player,
-) -> Optional[BattleOrder]:
+) -> BattleOrder | None:
     """Resolve a move identifier (slot number or name) to a BattleOrder."""
     moves = battle.available_moves
     if not moves:
@@ -85,7 +84,7 @@ def _resolve_switch(
     identifier: str,
     battle: AbstractBattle,
     player: Player,
-) -> Optional[BattleOrder]:
+) -> BattleOrder | None:
     """Resolve a switch identifier (slot number or species name) to a BattleOrder."""
     switches = battle.available_switches
     if not switches:
@@ -116,7 +115,7 @@ def _parse_json_action(
     response: str,
     battle: AbstractBattle,
     player: Player,
-) -> Optional[BattleOrder]:
+) -> BattleOrder | None:
     """Try to parse response as a JSON action object (v2 prompt format).
 
     Expected shape: {"action_type": "move"|"switch", "identifier": "...", "reasoning": "..."}
@@ -167,7 +166,7 @@ def parse_action(
     response: str,
     battle: AbstractBattle,
     player: Player,
-) -> Optional[BattleOrder]:
+) -> BattleOrder | None:
     """Return a BattleOrder from the LLM response, or None on failure.
 
     Tries JSON parsing first (v2 prompt), then falls back to the legacy

@@ -2,10 +2,7 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from nidozo.battle.action_parser import parse_action
-
 
 # ---------------------------------------------------------------------------
 # Helpers

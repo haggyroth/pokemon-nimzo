@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from poke_env.battle import AbstractBattle
 from poke_env.player.battle_order import BattleOrder
@@ -10,7 +10,6 @@ from poke_env.player.battle_order import BattleOrder
 from nidozo.battle.bots import RandomBot
 from nidozo.battle.llm_player import LLMPlayer
 from nidozo.battle.serializer import serialize_battle
-from nidozo.llm.backend import ModelBackend
 
 
 def _battle_event(battle: AbstractBattle, action: str, player_role: str) -> dict[str, Any]:
