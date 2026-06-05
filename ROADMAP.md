@@ -5,13 +5,13 @@
 - [x] Local Pokémon Showdown server wired up with poke-env
 - [x] Two RandomBots complete a Gen 3 random singles battle end to end
 
-## v0.2 — LLM Decision Layer
-- [ ] Pluggable model backend: Anthropic + OpenAI cloud APIs
-- [ ] Local model support via LM Studio (OpenAI-compatible API)
-- [ ] Battle state serializer with hidden-information enforcement (correctness requirement)
-- [ ] System prompt v1: battle state format, legal actions, tagged-action output schema (`ACTION: move 3`)
-- [ ] Versioned prompts — correlate prompt changes with ELO shifts
-- [ ] `LLMPlayer` wiring the full loop: state → prompt → backend → action parser → `BattleOrder`
+## v0.2 — LLM Decision Layer ✓
+- [x] Pluggable model backend: Anthropic + OpenAI cloud APIs
+- [x] Local model support via LM Studio (OpenAI-compatible API)
+- [x] Battle state serializer with hidden-information enforcement (correctness requirement)
+- [x] System prompt v1: battle state format, legal actions, tagged-action output schema (`ACTION: move 3`)
+- [x] Versioned prompts — correlate prompt changes with ELO shifts
+- [x] `LLMPlayer` wiring the full loop: state → prompt → backend → action parser → `BattleOrder`
 
 ## v0.3 — Heuristic Engine
 - [ ] Heuristic scorer: type effectiveness, expected damage, speed comparison, stat stages, status value, switch value
