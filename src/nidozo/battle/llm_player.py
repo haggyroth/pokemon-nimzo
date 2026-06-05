@@ -50,6 +50,11 @@ class LLMPlayer(Player):
         self._player_role = player_role
 
     async def choose_move(self, battle: AbstractBattle) -> BattleOrder:
+        # Recharge turn (e.g. after Hyper Beam): only one forced pseudo-move, skip LLM
+        moves = battle.available_moves
+        if len(moves) == 1 and moves[0].id == "recharge":
+            return self.create_order(moves[0])
+
         state = serialize_battle(battle)
         state_json = json.dumps(state)
         messages = self._prompt_builder.build_messages(state)

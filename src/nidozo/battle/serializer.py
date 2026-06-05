@@ -113,29 +113,54 @@ def _serialize_opponent_pokemon(mon: Pokemon | None) -> dict[str, Any] | None:
 # Moves
 # ---------------------------------------------------------------------------
 
+def _safe_priority(move: Move) -> int:
+    """Return move priority, defaulting to 0 for pseudo-moves like 'recharge'."""
+    try:
+        return move.priority
+    except KeyError:
+        return 0
+
+
 def _serialize_move(move: Move) -> dict[str, Any]:
-    return {
-        "id": move.id,
-        "type": move.type.name,
-        "category": move.category.name,
-        "base_power": move.base_power,
-        "accuracy": move.accuracy,
-        "pp": move.current_pp,
-        "max_pp": move.max_pp,
-        "priority": move.priority,
-    }
+    try:
+        return {
+            "id": move.id,
+            "type": move.type.name,
+            "category": move.category.name,
+            "base_power": move.base_power,
+            "accuracy": move.accuracy,
+            "pp": move.current_pp,
+            "max_pp": move.max_pp,
+            "priority": _safe_priority(move),
+        }
+    except (KeyError, AttributeError):
+        # Fallback for pseudo-moves (e.g. 'recharge') that lack full data
+        return {
+            "id": move.id,
+            "type": "NORMAL",
+            "category": "STATUS",
+            "base_power": 0,
+            "accuracy": True,
+            "pp": 1,
+            "max_pp": 1,
+            "priority": 0,
+        }
 
 
 def _serialize_move_basic(move: Move) -> dict[str, Any]:
     """Opponent moves: omit PP (we don't track it for opponents)."""
-    return {
-        "id": move.id,
-        "type": move.type.name,
-        "category": move.category.name,
-        "base_power": move.base_power,
-        "accuracy": move.accuracy,
-        "priority": move.priority,
-    }
+    try:
+        return {
+            "id": move.id,
+            "type": move.type.name,
+            "category": move.category.name,
+            "base_power": move.base_power,
+            "accuracy": move.accuracy,
+            "priority": _safe_priority(move),
+        }
+    except (KeyError, AttributeError):
+        return {"id": move.id, "type": "NORMAL", "category": "STATUS",
+                "base_power": 0, "accuracy": True, "priority": 0}
 
 
 # ---------------------------------------------------------------------------
