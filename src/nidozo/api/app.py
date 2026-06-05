@@ -33,7 +33,7 @@ class StartBattleRequest(BaseModel):
     p1_model: Optional[str] = None   # overrides per-player; falls back to shared `model`
     p2_model: Optional[str] = None
     model: Optional[str] = None      # legacy shared override (used if p1_model/p2_model absent)
-    prompt_version: str = "v1"
+    prompt_version: str = "v2"       # v2 = JSON structured output (default); v1 = legacy text
     n_battles: int = 1
 
 
@@ -127,9 +127,13 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         q = bus.subscribe()
         try:
             while True:
-                event = await asyncio.wait_for(q.get(), timeout=30.0)
-                await ws.send_text(json.dumps(event))
-        except (WebSocketDisconnect, asyncio.TimeoutError):
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=25.0)
+                    await ws.send_text(json.dumps(event))
+                except asyncio.TimeoutError:
+                    # Send a keepalive ping so the client doesn't reconnect
+                    await ws.send_text(json.dumps({"type": "ping"}))
+        except WebSocketDisconnect:
             pass
         finally:
             bus.unsubscribe(q)
@@ -229,6 +233,10 @@ def _build_streaming_player(
             server_configuration=cfg,
         )
 
+    # json_mode: enabled for lmstudio/openai when using v2 prompt; Anthropic follows JSON
+    # instructions natively without needing the API-level response_format parameter.
+    use_json_mode = prompt_version == "v2" and provider in ("lmstudio", "openai")
+
     if provider == "anthropic":
         backend = AnthropicBackend(
             model=model or "claude-sonnet-4-6",
@@ -238,12 +246,14 @@ def _build_streaming_player(
         backend = OpenAIBackend(
             model=model or "gpt-4o",
             api_key=os.environ.get("OPENAI_API_KEY"),
+            json_mode=use_json_mode,
         )
     else:  # lmstudio
         backend = OpenAIBackend(
             model=model or os.environ.get("LM_STUDIO_MODEL", "local-model"),
             api_key="lm-studio",
             base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
+            json_mode=use_json_mode,
         )
 
     return StreamingLLMPlayer(

@@ -65,6 +65,8 @@ def _build_player(provider: str, model: str, role: str, store: BattleStore,
             battle_format=fmt, server_configuration=cfg,
         )
 
+    use_json_mode = prompt_version == "v2" and provider in ("lmstudio", "openai")
+
     if provider == "anthropic":
         backend = AnthropicBackend(
             model=model, api_key=os.environ.get("ANTHROPIC_API_KEY"),
@@ -72,12 +74,14 @@ def _build_player(provider: str, model: str, role: str, store: BattleStore,
     elif provider == "openai":
         backend = OpenAIBackend(
             model=model, api_key=os.environ.get("OPENAI_API_KEY"),
+            json_mode=use_json_mode,
         )
     else:  # lmstudio
         backend = OpenAIBackend(
             model=model,
             api_key="lm-studio",
             base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
+            json_mode=use_json_mode,
         )
 
     return StreamingLLMPlayer(
@@ -95,7 +99,7 @@ async def run_one_battle(
     p1_provider: str, p1_model: str,
     p2_provider: str, p2_model: str,
     store: BattleStore,
-    prompt_version: str = "v1",
+    prompt_version: str = "v2",
     fmt: str = "gen3randombattle",
 ) -> dict:
     """Run one battle, persist results, return summary dict."""
@@ -226,8 +230,8 @@ def main() -> None:
         help="Number of rounds per matchup (each pair plays both sides). Default: 1",
     )
     parser.add_argument(
-        "--prompt-version", default="v1",
-        help="Prompt template version. Default: v1",
+        "--prompt-version", default="v2",
+        help="Prompt template version (v1=text, v2=JSON output). Default: v2",
     )
     parser.add_argument(
         "--db", default=None,

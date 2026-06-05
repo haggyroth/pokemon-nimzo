@@ -1,22 +1,26 @@
 """
 ActionParser — extracts a BattleOrder from an LLM response.
 
-Accepts all of these formats (case-insensitive, last match wins):
+Supports two response formats:
 
-    ACTION: move 2              — 1-based slot number  (preferred)
+1. JSON (v2 prompt) — tried first:
+   {"reasoning": "...", "action_type": "move", "identifier": "thunderbolt"}
+   {"reasoning": "...", "action_type": "switch", "identifier": "masquerain"}
+
+2. Text (v1 prompt) — fallback regex parser:
+    ACTION: move 2              — 1-based slot number
     ACTION: move thunderbolt    — move name
-    ACTION: switch 3            — 1-based slot number  (preferred)
+    ACTION: switch 3            — 1-based slot number
     ACTION: switch masquerain   — Pokémon species name
     ACTION: thunderbolt         — bare move name (no keyword)
 
-Multiple ACTION lines are allowed; the last valid one is used so models
-can reason "...my best option is X, but actually Y is better: ACTION: Y".
-
+Multiple ACTION lines are allowed in text mode; the last valid one is used.
 Returns None on complete parse failure; caller falls back to random.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Optional
@@ -108,6 +112,57 @@ def _resolve_switch(
     return None
 
 
+def _parse_json_action(
+    response: str,
+    battle: AbstractBattle,
+    player: Player,
+) -> Optional[BattleOrder]:
+    """Try to parse response as a JSON action object (v2 prompt format).
+
+    Expected shape: {"action_type": "move"|"switch", "identifier": "...", "reasoning": "..."}
+    The 'reasoning' key is logged for context but not required for parsing.
+    """
+    text = response.strip()
+
+    # Strip markdown code fences first (e.g. ```json ... ``` or ``` ... ```)
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.DOTALL).strip()
+
+    if not text.startswith("{"):
+        return None
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    action_type = str(data.get("action_type", "")).lower().strip()
+    identifier = str(data.get("identifier", "")).strip()
+
+    if not action_type or not identifier:
+        logger.debug("JSON action missing action_type or identifier: %s", data)
+        return None
+
+    if action_type == "move":
+        order = _resolve_move(identifier, battle, player)
+        if order is None:
+            logger.debug("JSON: move %r not resolved — available: %s",
+                         identifier, [m.id for m in battle.available_moves])
+        return order
+    elif action_type == "switch":
+        order = _resolve_switch(identifier, battle, player)
+        if order is None:
+            logger.debug("JSON: switch %r not resolved — available: %s",
+                         identifier, [m.species for m in battle.available_switches])
+        return order
+    else:
+        logger.debug("JSON: unknown action_type %r", action_type)
+        return None
+
+
 def parse_action(
     response: str,
     battle: AbstractBattle,
@@ -115,11 +170,17 @@ def parse_action(
 ) -> Optional[BattleOrder]:
     """Return a BattleOrder from the LLM response, or None on failure.
 
-    Tries each match from last to first so a model that self-corrects
-    mid-response ("actually, ACTION: move 3") gets the right answer.
+    Tries JSON parsing first (v2 prompt), then falls back to the legacy
+    regex-based text parser (v1 prompt). Using the last valid ACTION line
+    so a model that self-corrects mid-response gets the right answer.
     """
     if not response:
         return None
+
+    # Pass 0: JSON structured output (v2 prompt)
+    order = _parse_json_action(response, battle, player)
+    if order is not None:
+        return order
 
     # Pass 1: ACTION: move/switch <identifier>
     matches = _ACTION_RE.findall(response)
@@ -142,5 +203,5 @@ def parse_action(
             logger.debug("Resolved bare ACTION: %r as move", name)
             return order
 
-    logger.warning("No parseable ACTION line found in LLM response")
+    logger.warning("No parseable action found in LLM response")
     return None

@@ -253,3 +253,89 @@ def test_name_fallback_when_slot_out_of_range() -> None:
     result = parse_action("ACTION: move thunderbolt", battle, player)
     assert result is not None
     player.create_order.assert_called_once_with(moves[0])
+
+
+# ---------------------------------------------------------------------------
+# JSON structured output (v2 prompt)
+# ---------------------------------------------------------------------------
+
+def test_json_move_by_name() -> None:
+    """v2 JSON response with move name resolves correctly."""
+    moves = [_mock_move("thunderbolt"), _mock_move("surf")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    result = parse_action(
+        '{"reasoning":"Thunderbolt is 2x effective.","action_type":"move","identifier":"thunderbolt"}',
+        battle, player,
+    )
+    player.create_order.assert_called_once_with(moves[0])
+    assert result is not None
+
+
+def test_json_switch_by_name() -> None:
+    """v2 JSON response with switch species name resolves correctly."""
+    switches = [_mock_pokemon("blastoise"), _mock_pokemon("venusaur")]
+    battle = _make_battle(switches=switches)
+    player = _make_player()
+
+    result = parse_action(
+        '{"reasoning":"Switch to Blastoise for better matchup.","action_type":"switch","identifier":"venusaur"}',
+        battle, player,
+    )
+    player.create_order.assert_called_once_with(switches[1])
+    assert result is not None
+
+
+def test_json_move_by_slot() -> None:
+    """v2 JSON response with numeric slot identifier."""
+    moves = [_mock_move("surf"), _mock_move("icebeam")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    result = parse_action(
+        '{"action_type":"move","identifier":"2"}',
+        battle, player,
+    )
+    player.create_order.assert_called_once_with(moves[1])
+    assert result is not None
+
+
+def test_json_unknown_move_falls_back_to_regex() -> None:
+    """JSON with unresolvable identifier falls back to text ACTION: parsing."""
+    moves = [_mock_move("thunderbolt")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    # JSON identifier won't resolve; falls through to text parser which finds ACTION line
+    result = parse_action(
+        '{"action_type":"move","identifier":"fakemove"}\nACTION: move 1',
+        battle, player,
+    )
+    assert result is not None
+    player.create_order.assert_called_once_with(moves[0])
+
+
+def test_json_with_markdown_fence() -> None:
+    """JSON wrapped in code fences is still parsed."""
+    moves = [_mock_move("flamethrower")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    result = parse_action(
+        '```json\n{"action_type":"move","identifier":"flamethrower"}\n```',
+        battle, player,
+    )
+    assert result is not None
+    player.create_order.assert_called_once_with(moves[0])
+
+
+def test_json_invalid_falls_back_to_regex() -> None:
+    """Malformed JSON does not crash — falls through to regex parser."""
+    moves = [_mock_move("tackle")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    result = parse_action('{broken json}\nACTION: move 1', battle, player)
+    assert result is not None
+    player.create_order.assert_called_once_with(moves[0])

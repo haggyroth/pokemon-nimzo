@@ -26,12 +26,19 @@ def _battle_event(battle: AbstractBattle, action: str, player_role: str) -> dict
 
 
 class StreamingLLMPlayer(LLMPlayer):
-    """LLMPlayer that additionally pushes a turn event to the EventBus after each move."""
+    """LLMPlayer that additionally pushes turn/thinking events to the EventBus."""
 
     def __init__(self, event_bus, player_role: str = "p1", **kwargs) -> None:
-        super().__init__(player_role=player_role, **kwargs)
+        super().__init__(
+            player_role=player_role,
+            on_thinking=self._emit_thinking,
+            **kwargs,
+        )
         self._bus = event_bus
         self._player_role = player_role
+
+    async def _emit_thinking(self, event: dict) -> None:
+        await self._bus.publish(event)
 
     async def choose_move(self, battle: AbstractBattle) -> BattleOrder:
         order = await super().choose_move(battle)
