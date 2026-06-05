@@ -33,6 +33,10 @@ showdown/
 *.db
 nimzo.db
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
 # macOS
 .DS_Store
 .AppleDouble

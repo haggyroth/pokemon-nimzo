@@ -99,7 +99,30 @@ Results saved to nimzo.db
 Run `uv run python scripts/leaderboard.py` to see rankings.
 ```
 
-## Leaderboard
+## Live visualizer
+
+Run the full stack to watch battles in real time:
+
+```bash
+# Terminal 1 — Showdown server
+./scripts/start_showdown.sh
+
+# Terminal 2 — API server (port 5000)
+uv run python scripts/serve.py
+
+# Terminal 3 — React frontend (port 5173)
+cd frontend && npm run dev
+```
+
+Open `http://localhost:5173`, pick providers, click **▶ START BATTLE**, then switch to **LIVE** to watch.
+
+For a production build (served by FastAPI directly):
+```bash
+cd frontend && npm run build
+uv run python scripts/serve.py   # now serves frontend/dist/ at /
+```
+
+## CLI leaderboard
 
 After running battles, view ELO rankings:
 
