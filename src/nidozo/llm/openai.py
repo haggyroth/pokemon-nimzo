@@ -8,6 +8,39 @@ from nidozo.llm.backend import Message
 
 logger = logging.getLogger(__name__)
 
+# JSON Schema for the v2 structured action output.
+# LM Studio (and OpenAI) grammar-sample against this to guarantee valid JSON
+# that exactly matches our expected shape.
+_ACTION_JSON_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "battle_action",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "reasoning": {
+                    "type": "string",
+                    "description": "2-4 sentence analysis: type matchups, speed, HP, status.",
+                },
+                "action_type": {
+                    "type": "string",
+                    "enum": ["move", "switch"],
+                },
+                "identifier": {
+                    "type": "string",
+                    "description": (
+                        "Move name, Pokémon species name, or 1-based slot number "
+                        "(e.g. 'thunderbolt', 'masquerain', '2')."
+                    ),
+                },
+            },
+            "required": ["reasoning", "action_type", "identifier"],
+            "additionalProperties": False,
+        },
+    },
+}
+
 
 class OpenAIBackend:
     """OpenAI-compatible chat backend.
@@ -17,9 +50,10 @@ class OpenAIBackend:
         max_tokens: Maximum tokens to generate.
         api_key: API key (use any non-empty string for LM Studio, e.g. "lm-studio").
         base_url: Override base URL — set to "http://localhost:1234/v1" for LM Studio.
-        json_mode: If True, pass response_format={"type":"json_object"} so the
-                   model is grammar-sampled to produce valid JSON. Supported by
-                   LM Studio and OpenAI. Do NOT use with Anthropic backends.
+        json_mode: If True, send response_format=json_schema so the model is
+                   grammar-sampled to produce output matching _ACTION_JSON_SCHEMA.
+                   Supported by LM Studio ≥0.3.6 and OpenAI.
+                   Do NOT use with Anthropic backends.
     """
 
     def __init__(
@@ -43,7 +77,7 @@ class OpenAIBackend:
             "messages": messages,  # type: ignore[arg-type]
         }
         if self._json_mode:
-            kwargs["response_format"] = {"type": "json_object"}
+            kwargs["response_format"] = _ACTION_JSON_SCHEMA
 
         response = await self._client.chat.completions.create(**kwargs)
         content = response.choices[0].message.content or ""
