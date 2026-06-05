@@ -2,7 +2,7 @@
 
 import anthropic
 
-from pokemon_nimzo.llm.backend import Message
+from nidozo.llm.backend import Message
 
 
 class AnthropicBackend:

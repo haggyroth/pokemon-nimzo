@@ -1,7 +1,7 @@
 """
 PromptBuilder — loads versioned prompt templates and renders turn messages.
 
-Templates live at src/pokemon_nimzo/llm/prompts/<version>/:
+Templates live at src/nidozo/llm/prompts/<version>/:
   system.txt        — static system prompt (loaded once)
   turn.txt.jinja    — Jinja2 template rendered each turn with the battle state dict
 
@@ -16,7 +16,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from pokemon_nimzo.llm.backend import Message
+from nidozo.llm.backend import Message
 
 _PROMPTS_ROOT = Path(__file__).parent / "prompts"
 

@@ -14,8 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from pokemon_nimzo.api.events import EventBus
-from pokemon_nimzo.db.store import BattleStore
+from nidozo.api.events import EventBus
+from nidozo.db.store import BattleStore
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     bus = EventBus()
     store = BattleStore(db_path)
 
-    app = FastAPI(title="Pokémon Nimzo", version="0.6.0")
+    app = FastAPI(title="Nidozo", version="0.6.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -80,7 +80,7 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
 
     @app.get("/api/battles/{battle_id}/analysis")
     def get_analysis(battle_id: int) -> dict:
-        from pokemon_nimzo.analysis import analyze_battle
+        from nidozo.analysis import analyze_battle
         turns = store.get_turns_with_state(battle_id)
         return analyze_battle(turns)
 
@@ -153,8 +153,8 @@ async def _run_battles(
     bus: EventBus,
 ) -> None:
     from poke_env import LocalhostServerConfiguration
-    from pokemon_nimzo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
-    from pokemon_nimzo.llm import AnthropicBackend, OpenAIBackend
+    from nidozo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
+    from nidozo.llm import AnthropicBackend, OpenAIBackend
 
     _FORMAT = "gen3randombattle"
     cfg = LocalhostServerConfiguration
@@ -214,8 +214,8 @@ def _build_streaming_player(
     cfg,
     fmt: str,
 ):
-    from pokemon_nimzo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
-    from pokemon_nimzo.llm import AnthropicBackend, OpenAIBackend
+    from nidozo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
+    from nidozo.llm import AnthropicBackend, OpenAIBackend
 
     if provider == "random":
         return StreamingRandomBot(

@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from poke_env.battle import AbstractBattle, Pokemon, Move
-from pokemon_nimzo.battle.heuristics import score_actions
+from nidozo.battle.heuristics import score_actions
 
 
 # ---------------------------------------------------------------------------

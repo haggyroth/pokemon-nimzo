@@ -31,10 +31,10 @@ from pathlib import Path
 from poke_env import LocalhostServerConfiguration
 from poke_env.player import Player
 
-from pokemon_nimzo.battle.bots import RandomBot
-from pokemon_nimzo.battle.llm_player import LLMPlayer
-from pokemon_nimzo.db.store import BattleStore
-from pokemon_nimzo.llm import AnthropicBackend, OpenAIBackend
+from nidozo.battle.bots import RandomBot
+from nidozo.battle.llm_player import LLMPlayer
+from nidozo.db.store import BattleStore
+from nidozo.llm import AnthropicBackend, OpenAIBackend
 
 logging.basicConfig(level=logging.WARNING)
 

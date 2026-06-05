@@ -2,7 +2,7 @@
 
 import pytest
 
-from pokemon_nimzo.db.elo import expected_score, updated_ratings, DEFAULT_RATING, K_FACTOR
+from nidozo.db.elo import expected_score, updated_ratings, DEFAULT_RATING, K_FACTOR
 
 
 def test_equal_ratings_expect_half() -> None:

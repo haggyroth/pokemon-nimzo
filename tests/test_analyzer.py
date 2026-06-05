@@ -3,7 +3,7 @@
 import json
 import pytest
 
-from pokemon_nimzo.analysis.analyzer import (
+from nidozo.analysis.analyzer import (
     _composite_score,
     _rank_moves,
     _parse_move_slot,

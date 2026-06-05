@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from pokemon_nimzo.battle.action_parser import parse_action
+from nidozo.battle.action_parser import parse_action
 
 
 # ---------------------------------------------------------------------------

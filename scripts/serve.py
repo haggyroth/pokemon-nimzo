@@ -15,7 +15,7 @@ from pathlib import Path
 
 import uvicorn
 
-from pokemon_nimzo.api.app import create_app
+from nidozo.api.app import create_app
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Start the Nimzo API server")

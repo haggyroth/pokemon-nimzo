@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 
-from pokemon_nimzo.battle.serializer import (
+from nidozo.battle.serializer import (
     serialize_battle,
     _serialize_own_pokemon,
     _serialize_opponent_pokemon,
