@@ -17,10 +17,11 @@
 - [x] Heuristic scorer: type effectiveness, estimated damage %, stat stages, priority, status annotation, switch matchup analysis
 - [x] Scores surfaced to LLM as advisory context in the "HEURISTIC ADVISORY" section of the turn prompt (not a hard filter)
 
-## v0.4 — ELO & Persistence
-- [ ] SQLite schema: matches, turns, ELO history, team logs, prompt versions
-- [ ] ELO calculation and update after each battle
-- [ ] Per-model stats and leaderboard CLI output
+## v0.4 — ELO & Persistence ✓
+- [x] SQLite schema: battles, turns, elo_ratings, elo_history, models, prompt versions
+- [x] ELO calculation (K=32, zero-sum) updated after each battle
+- [x] Per-model stats and leaderboard CLI (`scripts/leaderboard.py`)
+- [x] Turn logging in LLMPlayer (action, parse success, raw response)
 
 ## v0.5 — API & Visualizer
 - [ ] FastAPI backend with WebSocket live-battle feed
