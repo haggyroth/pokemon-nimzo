@@ -22,7 +22,7 @@ function App() {
     <div className="app-shell">
       <header className="app-header">
         <div className="app-logo">
-          NIMZO
+          NIDOZO
           <span>LLM POKÉMON BATTLE ARENA</span>
         </div>
         <nav className="app-nav">
