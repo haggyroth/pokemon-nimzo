@@ -1,0 +1,255 @@
+"""
+Nidozo tournament runner — round-robin battles between a set of models.
+
+Each model pair plays --rounds battles (alternating who goes first).
+Results are persisted to the DB and ELO is updated after each battle.
+Prints a summary table at the end.
+
+Usage:
+    # Two LM Studio models, 3 rounds each matchup
+    uv run python scripts/tournament.py \\
+        --player lmstudio:ibm/granite-4-h-tiny \\
+        --player lmstudio:mistralai/ministral-3b-instruct \\
+        --rounds 3
+
+    # Random vs LM Studio (useful for baseline)
+    uv run python scripts/tournament.py \\
+        --player random:random \\
+        --player lmstudio:ibm/granite-4-h-tiny \\
+        --rounds 5
+
+    # Override DB path
+    uv run python scripts/tournament.py --player ... --db path/to/nidozo.db
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import itertools
+import os
+import sys
+import time
+from pathlib import Path
+
+# Ensure src/ is on the path when run directly
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from nidozo.db.store import BattleStore
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _parse_player(spec: str) -> tuple[str, str]:
+    """Parse 'provider:model_name' → (provider, model_name)."""
+    if ":" not in spec:
+        raise ValueError(
+            f"Player spec must be 'provider:model_name', got: {spec!r}\n"
+            f"Examples: lmstudio:ibm/granite-4-h-tiny  random:random  anthropic:claude-sonnet-4-6"
+        )
+    provider, model = spec.split(":", 1)
+    return provider.strip(), model.strip()
+
+
+def _build_player(provider: str, model: str, role: str, store: BattleStore,
+                  battle_id: int, bus, cfg, fmt: str, prompt_version: str):
+    """Build a streaming player for the given provider/model."""
+    from nidozo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
+    from nidozo.llm import AnthropicBackend, OpenAIBackend
+
+    if provider == "random":
+        return StreamingRandomBot(
+            event_bus=bus, player_role=role,
+            battle_format=fmt, server_configuration=cfg,
+        )
+
+    if provider == "anthropic":
+        backend = AnthropicBackend(
+            model=model, api_key=os.environ.get("ANTHROPIC_API_KEY"),
+        )
+    elif provider == "openai":
+        backend = OpenAIBackend(
+            model=model, api_key=os.environ.get("OPENAI_API_KEY"),
+        )
+    else:  # lmstudio
+        backend = OpenAIBackend(
+            model=model,
+            api_key="lm-studio",
+            base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
+        )
+
+    return StreamingLLMPlayer(
+        backend=backend, event_bus=bus, player_role=role,
+        prompt_version=prompt_version, store=store, battle_id=battle_id,
+        battle_format=fmt, server_configuration=cfg,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Single battle
+# ---------------------------------------------------------------------------
+
+async def run_one_battle(
+    p1_provider: str, p1_model: str,
+    p2_provider: str, p2_model: str,
+    store: BattleStore,
+    prompt_version: str = "v1",
+    fmt: str = "gen3randombattle",
+) -> dict:
+    """Run one battle, persist results, return summary dict."""
+    from poke_env import LocalhostServerConfiguration
+    from nidozo.api.events import EventBus
+
+    cfg = LocalhostServerConfiguration
+    bus = EventBus()
+
+    p1_id = store.get_or_create_model(p1_provider, p1_model, prompt_version)
+    p2_id = store.get_or_create_model(p2_provider, p2_model, prompt_version)
+    battle_id = store.create_battle(
+        f"tournament-{p1_provider}-{p1_model}-vs-{p2_provider}-{p2_model}-{int(time.time())}",
+        fmt, p1_id, p2_id,
+    )
+
+    p1 = _build_player(p1_provider, p1_model, "p1", store, battle_id, bus, cfg, fmt, prompt_version)
+    p2 = _build_player(p2_provider, p2_model, "p2", store, battle_id, bus, cfg, fmt, prompt_version)
+
+    await p1.battle_against(p2, n_battles=1)
+
+    winner = 1 if p1.n_won_battles > 0 else (2 if p2.n_won_battles > 0 else None)
+    real_tag = next(iter(p1.battles), f"battle-{battle_id}")
+    battle_obj = p1.battles.get(real_tag)
+    total_turns = battle_obj.turn if battle_obj else 0
+
+    store._conn.execute("UPDATE battles SET battle_tag=? WHERE id=?", (real_tag, battle_id))
+    store.finish_battle(battle_id, winner, total_turns)
+
+    winner_label = (
+        f"{p1_provider}/{p1_model}" if winner == 1
+        else f"{p2_provider}/{p2_model}" if winner == 2
+        else "tie"
+    )
+    return {
+        "battle_id": battle_id,
+        "p1": f"{p1_provider}/{p1_model}",
+        "p2": f"{p2_provider}/{p2_model}",
+        "winner": winner_label,
+        "turns": total_turns,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tournament
+# ---------------------------------------------------------------------------
+
+async def run_tournament(
+    players: list[tuple[str, str]],
+    rounds: int,
+    store: BattleStore,
+    prompt_version: str = "v1",
+) -> None:
+    pairs = list(itertools.combinations(players, 2))
+    total = len(pairs) * rounds * 2  # each pair plays both ways each round
+    done = 0
+
+    print(f"\n{'─' * 60}")
+    print(f"  NIDOZO TOURNAMENT  —  {len(players)} players, {rounds} round(s)")
+    print(f"  {total} battles total")
+    print(f"{'─' * 60}\n")
+
+    results = []
+    for (p1_prov, p1_mod), (p2_prov, p2_mod) in pairs:
+        for rnd in range(1, rounds + 1):
+            for flip in [False, True]:
+                a_prov, a_mod = (p2_prov, p2_mod) if flip else (p1_prov, p1_mod)
+                b_prov, b_mod = (p1_prov, p1_mod) if flip else (p2_prov, p2_mod)
+
+                done += 1
+                label = f"[{done:>2}/{total}] {a_mod} vs {b_mod} (round {rnd})"
+                print(f"  ▶ {label}", flush=True)
+
+                try:
+                    result = await run_one_battle(
+                        a_prov, a_mod, b_prov, b_mod,
+                        store, prompt_version,
+                    )
+                    results.append(result)
+                    print(f"      winner: {result['winner']}  ({result['turns']} turns)\n")
+                except Exception as exc:
+                    print(f"      ERROR: {exc}\n")
+
+    # Final leaderboard
+    _print_leaderboard(store)
+
+
+def _print_leaderboard(store: BattleStore) -> None:
+    rows = store.leaderboard()
+    if not rows:
+        print("No results recorded.")
+        return
+
+    print(f"\n{'═' * 60}")
+    print(f"  FINAL LEADERBOARD")
+    print(f"{'═' * 60}")
+    print(f"  {'#':<3} {'MODEL':<35} {'ELO':>7}  {'W':>3}{'L':>3}{'T':>3}")
+    print(f"  {'─' * 56}")
+
+    medals = {0: "🥇", 1: "🥈", 2: "🥉"}
+    for i, r in enumerate(rows):
+        medal = medals.get(i, f" {i+1}")
+        name = f"{r['provider']}/{r['model_name']}"
+        print(
+            f"  {medal:<3} {name:<35} {r['rating']:>7.1f}"
+            f"  {r['wins']:>3}{r['losses']:>3}{r['ties']:>3}"
+        )
+    print(f"{'═' * 60}\n")
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Run a round-robin tournament between LLM models.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    parser.add_argument(
+        "--player", action="append", dest="players", required=True,
+        metavar="PROVIDER:MODEL",
+        help="Add a player (e.g. lmstudio:ibm/granite-4-h-tiny). Repeat for each model.",
+    )
+    parser.add_argument(
+        "--rounds", type=int, default=1,
+        help="Number of rounds per matchup (each pair plays both sides). Default: 1",
+    )
+    parser.add_argument(
+        "--prompt-version", default="v1",
+        help="Prompt template version. Default: v1",
+    )
+    parser.add_argument(
+        "--db", default=None,
+        help="Path to SQLite DB. Defaults to NIDOZO_DB env var or nidozo.db",
+    )
+    args = parser.parse_args()
+
+    if len(args.players) < 2:
+        parser.error("Need at least two --player arguments.")
+
+    players = [_parse_player(p) for p in args.players]
+    db_path = Path(args.db) if args.db else Path(os.environ.get("NIDOZO_DB", "nidozo.db"))
+    store = BattleStore(db_path)
+
+    try:
+        asyncio.run(run_tournament(players, args.rounds, store, args.prompt_version))
+    except KeyboardInterrupt:
+        print("\nTournament interrupted. Results so far saved to DB.")
+        _print_leaderboard(store)
+    finally:
+        store.close()
+
+
+if __name__ == "__main__":
+    main()

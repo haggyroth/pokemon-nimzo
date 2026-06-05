@@ -2,7 +2,7 @@
 
 import pytest
 
-from pokemon_nimzo.llm.prompt_builder import PromptBuilder
+from nidozo.llm.prompt_builder import PromptBuilder
 
 
 # Minimal battle state that satisfies all template variables

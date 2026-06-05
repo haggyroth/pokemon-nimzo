@@ -9,8 +9,9 @@ export default function Leaderboard({ onBattleStarted }) {
   const [loading, setLoading]   = useState(false)
   const [analyzing, setAnalyzing] = useState(null) // battle id being analyzed
   const [form, setForm]         = useState({
-    p1_provider: 'random', p2_provider: 'anthropic',
-    model: '', n_battles: 1,
+    p1_provider: 'random', p2_provider: 'lmstudio',
+    p1_model: '', p2_model: '',
+    n_battles: 1,
   })
 
   async function fetchData() {
@@ -31,7 +32,8 @@ export default function Leaderboard({ onBattleStarted }) {
     setLoading(true)
     try {
       const body = { ...form, n_battles: Number(form.n_battles) }
-      if (!body.model) delete body.model
+      if (!body.p1_model) delete body.p1_model
+      if (!body.p2_model) delete body.p2_model
       const res = await fetch('/api/battles/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -161,14 +163,25 @@ export default function Leaderboard({ onBattleStarted }) {
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Model override (optional)</label>
-            <input
-              className="form-input"
-              placeholder="e.g. claude-opus-4-8"
-              value={form.model}
-              onChange={e => setForm(f => ({ ...f, model: e.target.value }))}
-            />
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">P1 Model (optional)</label>
+              <input
+                className="form-input"
+                placeholder="e.g. ibm/granite-4-h-tiny"
+                value={form.p1_model}
+                onChange={e => setForm(f => ({ ...f, p1_model: e.target.value }))}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">P2 Model (optional)</label>
+              <input
+                className="form-input"
+                placeholder="e.g. mistralai/ministral-3b"
+                value={form.p2_model}
+                onChange={e => setForm(f => ({ ...f, p2_model: e.target.value }))}
+              />
+            </div>
           </div>
 
           <div className="form-group">

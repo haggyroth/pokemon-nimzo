@@ -14,8 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from pokemon_nimzo.api.events import EventBus
-from pokemon_nimzo.db.store import BattleStore
+from nidozo.api.events import EventBus
+from nidozo.db.store import BattleStore
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,9 @@ _FRONTEND_DIST = Path(__file__).parent.parent.parent.parent / "frontend" / "dist
 class StartBattleRequest(BaseModel):
     p1_provider: str = "random"
     p2_provider: str = "random"
-    model: Optional[str] = None
+    p1_model: Optional[str] = None   # overrides per-player; falls back to shared `model`
+    p2_model: Optional[str] = None
+    model: Optional[str] = None      # legacy shared override (used if p1_model/p2_model absent)
     prompt_version: str = "v1"
     n_battles: int = 1
 
@@ -48,7 +50,7 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     bus = EventBus()
     store = BattleStore(db_path)
 
-    app = FastAPI(title="Pokémon Nimzo", version="0.6.0")
+    app = FastAPI(title="Nidozo", version="0.7.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -80,7 +82,7 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
 
     @app.get("/api/battles/{battle_id}/analysis")
     def get_analysis(battle_id: int) -> dict:
-        from pokemon_nimzo.analysis import analyze_battle
+        from nidozo.analysis import analyze_battle
         turns = store.get_turns_with_state(battle_id)
         return analyze_battle(turns)
 
@@ -95,10 +97,10 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     ) -> StartBattleResponse:
         battle_ids = []
         for i in range(req.n_battles):
-            p1_model = _model_name(req.p1_provider, req.model)
-            p2_model = _model_name(req.p2_provider, req.model)
-            p1_id = store.get_or_create_model(req.p1_provider, p1_model, req.prompt_version)
-            p2_id = store.get_or_create_model(req.p2_provider, p2_model, req.prompt_version)
+            p1_model_name = _model_name(req.p1_provider, req.p1_model or req.model)
+            p2_model_name = _model_name(req.p2_provider, req.p2_model or req.model)
+            p1_id = store.get_or_create_model(req.p1_provider, p1_model_name, req.prompt_version)
+            p2_id = store.get_or_create_model(req.p2_provider, p2_model_name, req.prompt_version)
             bid = store.create_battle(
                 f"pending-{req.p1_provider}-{req.p2_provider}-{i}",
                 "gen3randombattle",
@@ -153,28 +155,30 @@ async def _run_battles(
     bus: EventBus,
 ) -> None:
     from poke_env import LocalhostServerConfiguration
-    from pokemon_nimzo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
-    from pokemon_nimzo.llm import AnthropicBackend, OpenAIBackend
+    from nidozo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
+    from nidozo.llm import AnthropicBackend, OpenAIBackend
 
     _FORMAT = "gen3randombattle"
     cfg = LocalhostServerConfiguration
 
     for battle_id in battle_ids:
         try:
+            p1_model = req.p1_model or req.model
+            p2_model = req.p2_model or req.model
             p1 = _build_streaming_player(
-                req.p1_provider, req.model, "p1",
+                req.p1_provider, p1_model, "p1",
                 req.prompt_version, store, battle_id, bus, cfg, _FORMAT,
             )
             p2 = _build_streaming_player(
-                req.p2_provider, req.model, "p2",
+                req.p2_provider, p2_model, "p2",
                 req.prompt_version, store, battle_id, bus, cfg, _FORMAT,
             )
 
             await bus.publish({
                 "type": "battle_start",
                 "battle_id": battle_id,
-                "p1": f"{req.p1_provider}/{_model_name(req.p1_provider, req.model)}",
-                "p2": f"{req.p2_provider}/{_model_name(req.p2_provider, req.model)}",
+                "p1": f"{req.p1_provider}/{_model_name(req.p1_provider, p1_model)}",
+                "p2": f"{req.p2_provider}/{_model_name(req.p2_provider, p2_model)}",
                 "format": _FORMAT,
             })
 
@@ -214,8 +218,8 @@ def _build_streaming_player(
     cfg,
     fmt: str,
 ):
-    from pokemon_nimzo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
-    from pokemon_nimzo.llm import AnthropicBackend, OpenAIBackend
+    from nidozo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
+    from nidozo.llm import AnthropicBackend, OpenAIBackend
 
     if provider == "random":
         return StreamingRandomBot(

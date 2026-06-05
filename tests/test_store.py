@@ -2,8 +2,8 @@
 
 import pytest
 
-from pokemon_nimzo.db.store import BattleStore
-from pokemon_nimzo.db.elo import DEFAULT_RATING
+from nidozo.db.store import BattleStore
+from nidozo.db.elo import DEFAULT_RATING
 
 
 @pytest.fixture

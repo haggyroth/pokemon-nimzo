@@ -1,4 +1,4 @@
-# Pokémon Nimzo
+# Nidozo
 
 An arena where two LLMs compete in Pokémon battles. The battle engine is [Pokémon Showdown](https://github.com/smogon/pokemon-showdown), accessed via [poke-env](https://github.com/hsahovic/poke-env). Models reason over legal actions each turn and pick their move; an ELO system tracks skill over time.
 
@@ -21,8 +21,8 @@ Sibling project to [Nimzo](https://github.com/haggyroth/nimzo) (the LLM chess ar
 ### 1. Clone the repo and install Python dependencies
 
 ```bash
-git clone https://github.com/haggyroth/pokemon-nimzo.git
-cd pokemon-nimzo
+git clone https://github.com/haggyroth/nidozo.git
+cd nidozo
 uv venv --python 3.12
 uv pip install -e ".[dev]"
 ```
@@ -142,8 +142,8 @@ uv run python scripts/leaderboard.py
 ## Project structure
 
 ```
-pokemon-nimzo/
-├── src/pokemon_nimzo/
+nidozo/
+├── src/nidozo/
 │   └── battle/
 │       └── bots.py          # RandomBot (baseline) — LLM bots added in v0.2
 ├── scripts/

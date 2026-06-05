@@ -10,7 +10,7 @@ import argparse
 import os
 from pathlib import Path
 
-from pokemon_nimzo.db.store import BattleStore
+from nidozo.db.store import BattleStore
 
 
 def main(db_path: Path) -> None:

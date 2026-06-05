@@ -2,7 +2,7 @@
 
 import pytest
 
-from pokemon_nimzo.llm.backend import Message, ModelBackend
+from nidozo.llm.backend import Message, ModelBackend
 
 
 class _EchoBackend:

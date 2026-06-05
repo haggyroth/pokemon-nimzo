@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to Pokémon Nimzo.
+Thanks for your interest in contributing to Nidozo.
 
 ## Getting started
 
@@ -26,7 +26,7 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`. Keep the sub
 
 - Python 3.12+, formatted with `ruff` (run `uv run ruff format .` before committing).
 - No secrets, `.env` files, or credentials committed.
-- The battle engine layer (`src/pokemon_nimzo/battle/`) must remain correct with respect to Showdown mechanics — bugs there corrupt every downstream result.
+- The battle engine layer (`src/nidozo/battle/`) must remain correct with respect to Showdown mechanics — bugs there corrupt every downstream result.
 
 ## Hidden information
 

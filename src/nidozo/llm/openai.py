@@ -2,7 +2,7 @@
 
 import openai
 
-from pokemon_nimzo.llm.backend import Message
+from nidozo.llm.backend import Message
 
 
 class OpenAIBackend:

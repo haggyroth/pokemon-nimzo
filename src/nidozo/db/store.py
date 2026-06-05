@@ -6,8 +6,8 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
-from pokemon_nimzo.db.schema import migrate
-from pokemon_nimzo.db.elo import DEFAULT_RATING, updated_ratings
+from nidozo.db.schema import migrate
+from nidozo.db.elo import DEFAULT_RATING, updated_ratings
 
 _DEFAULT_DB = Path(__file__).parent.parent.parent.parent / "nimzo.db"
 

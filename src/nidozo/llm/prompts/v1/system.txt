@@ -22,18 +22,24 @@ You have partial information about your opponent's team:
 - Status: Burn halves physical attack. Paralysis drops speed by 75% and has a 25% chance to prevent moving. Sleep lasts 1–7 turns. Poison deals 1/8 HP per turn; Toxic poison deals escalating damage.
 
 ## How to respond
-Reason through the situation — consider type matchups, speed, HP, status, and any revealed information about the opponent. You may think out loud.
+Reason through the situation — consider type matchups, speed, HP, status, and any revealed information about the opponent. Think out loud if helpful.
 
-After your reasoning, output your chosen action on its own line in exactly this format:
+Then, on its own line at the end of your response, output your chosen action in EXACTLY this format:
 
-ACTION: move <slot>
-  or
-ACTION: switch <slot>
+    ACTION: move <slot>       e.g.  ACTION: move 1
+    ACTION: switch <slot>     e.g.  ACTION: switch 2
 
-Where <slot> is the 1-based index of the move or switch target listed in "Available actions". Use the number that appears before the action in the list.
+<slot> is the NUMBER that appears before the action in the "Available actions" list.
+You may also use the move or Pokémon name instead of a number:
+    ACTION: move Thunderbolt
+    ACTION: switch Masquerain
 
-Examples:
-  ACTION: move 2
-  ACTION: switch 3
+IMPORTANT RULES:
+- You MUST end your response with exactly one ACTION line.
+- Only choose from the actions listed under "Available actions". Do not invent moves.
+- Do not add anything after the ACTION line.
 
-Output exactly one ACTION line. Do not output anything after it.
+Example of a correct response:
+    Pikachu faces Steelix. Thunderbolt is super effective (2×) and should 2HKO.
+    I'll use Thunderbolt.
+    ACTION: move 1

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> Project instruction + architecture reference for **Pokémon Nimzo** *(working name — still being workshopped)*.
+> Project instruction + architecture reference for **Nidozo**.
 > This file tells Claude how to work in this repo and documents the system's design. Keep it current as the project evolves.
 
 ---
@@ -110,7 +110,7 @@ Apply Kyle's git-workflow standard automatically on all repo work, without being
 - **Expanded generation support** beyond Gen 3
 - **Richer post-game analysis** — annotate RNG swings, key decision points, and blunders
 - **Tournament structures** — brackets, scheduled round-robins
-- **Final project name** — settle the working name. Follow the Nimzo → Nimzowitsch pattern (named after a notable competitive Pokémon figure or community), or pick something more personal.
+- **Final project name** — settled as **Nidozo** (Nido- from the Nido Pokémon family + -zo from Nimzo). GitHub repo rename TBD.
 
 ---
 

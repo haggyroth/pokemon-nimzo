@@ -10,13 +10,13 @@ from poke_env.battle import AbstractBattle
 from poke_env.player import Player
 from poke_env.player.battle_order import BattleOrder
 
-from pokemon_nimzo.battle.action_parser import parse_action
-from pokemon_nimzo.battle.serializer import serialize_battle
-from pokemon_nimzo.llm.backend import ModelBackend
-from pokemon_nimzo.llm.prompt_builder import PromptBuilder
+from nidozo.battle.action_parser import parse_action
+from nidozo.battle.serializer import serialize_battle
+from nidozo.llm.backend import ModelBackend
+from nidozo.llm.prompt_builder import PromptBuilder
 
 if TYPE_CHECKING:
-    from pokemon_nimzo.db.store import BattleStore
+    from nidozo.db.store import BattleStore
 
 logger = logging.getLogger(__name__)
 
