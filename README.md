@@ -74,17 +74,27 @@ You should get an HTML response from the Showdown lobby.
 With the Showdown server running in a separate terminal:
 
 ```bash
+# Two random bots (no API key needed)
 uv run python scripts/run_battle.py
+
+# LLM (Claude) vs random bot
+ANTHROPIC_API_KEY=sk-... uv run python scripts/run_battle.py --p1 anthropic
+
+# LLM vs LLM
+ANTHROPIC_API_KEY=sk-... uv run python scripts/run_battle.py --p1 anthropic --p2 anthropic
+
+# Local model via LM Studio vs random bot
+uv run python scripts/run_battle.py --p1 lmstudio --model "mistral-7b"
 ```
 
-This starts two `RandomBot` players, runs one Gen 3 random singles battle, and prints the result:
+Example output (random vs random):
 
 ```
-Starting battle: RandomBot 1 vs RandomBot 2
-  RandomBot 1: 1W / 0L / 0T  (finished: 1)
-  RandomBot 2: 0W / 1L / 0T  (finished: 1)
+Starting battle: RandomBot 1 (random) vs RandomBot 2 (random)
+  RandomBot 1 [random]: 1W / 0L / 0T
+  RandomBot 2 [random]: 0W / 1L / 0T
 
-Winner: RandomBot 1
+Winner: RandomBot 1 [random]
 ```
 
 ---
