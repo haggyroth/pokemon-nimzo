@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
+import httpx
 from fastapi import BackgroundTasks, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -69,6 +70,27 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     @app.get("/api/battles")
     def get_battles(limit: int = 20) -> list[dict]:
         return store.recent_battles(limit=limit)
+
+    @app.get("/api/lmstudio/models")
+    async def get_lmstudio_models() -> list[str]:
+        """Proxy to LM Studio's /v1/models — returns model id strings.
+
+        Returns an empty list (not an error) if LM Studio is unreachable,
+        so the UI degrades gracefully to manual text entry.
+        """
+        base_url = os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(
+                    f"{base_url}/models",
+                    headers={"Authorization": "Bearer lm-studio"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return [m["id"] for m in data.get("data", [])]
+        except Exception as exc:
+            logger.debug("LM Studio not reachable at %s: %s", base_url, exc)
+            return []
 
     @app.get("/api/battles/{battle_id}/turns")
     def get_turns(battle_id: int) -> list[dict]:

@@ -3,14 +3,8 @@ import BattleAnalysis from './BattleAnalysis'
 
 const PROVIDERS = ['random', 'anthropic', 'openai', 'lmstudio']
 
-// Quick-select presets shown as chips under the model input
-const MODEL_PRESETS = {
-  lmstudio: [
-    { label: 'Granite 4H', value: 'ibm/granite-4-h-tiny' },
-    { label: 'Ministral 3B', value: 'mistralai/ministral-3-3b' },
-    { label: 'Llama 3.2 3B', value: 'meta-llama/llama-3.2-3b-instruct' },
-    { label: 'Gemma 3 1B', value: 'google/gemma-3-1b-it' },
-  ],
+// Static fallback presets for cloud providers
+const STATIC_PRESETS = {
   anthropic: [
     { label: 'Sonnet 4.5', value: 'claude-sonnet-4-5' },
     { label: 'Haiku 3.5', value: 'claude-haiku-3-5' },
@@ -21,8 +15,26 @@ const MODEL_PRESETS = {
   ],
 }
 
-function ModelSelector({ label, provider, model, onProviderChange, onModelChange }) {
-  const presets = MODEL_PRESETS[provider] || []
+/**
+ * Fetches available LM Studio models from the backend proxy.
+ * Returns [] if LM Studio is offline — UI falls back to free-text input.
+ */
+async function fetchLMStudioModels() {
+  try {
+    const res = await fetch('/api/lmstudio/models')
+    if (!res.ok) return []
+    return await res.json()   // string[]
+  } catch {
+    return []
+  }
+}
+
+function ModelSelector({ label, provider, model, onProviderChange, onModelChange, lmModels, lmLoading }) {
+  // For lmstudio: show live chips; for cloud providers: show static chips
+  const chips = provider === 'lmstudio'
+    ? lmModels.map(id => ({ label: id.split('/').pop(), value: id }))
+    : (STATIC_PRESETS[provider] || [])
+
   return (
     <div className="model-selector">
       <label className="form-label">{label}</label>
@@ -45,14 +57,23 @@ function ModelSelector({ label, provider, model, onProviderChange, onModelChange
           onChange={e => onModelChange(e.target.value)}
         />
       </div>
-      {presets.length > 0 && provider !== 'random' && (
+
+      {provider === 'lmstudio' && lmLoading && (
+        <div className="model-presets-status">querying LM Studio…</div>
+      )}
+      {provider === 'lmstudio' && !lmLoading && lmModels.length === 0 && (
+        <div className="model-presets-status offline">LM Studio offline — enter model id manually</div>
+      )}
+
+      {chips.length > 0 && provider !== 'random' && (
         <div className="model-presets">
-          {presets.map(p => (
+          {chips.map(p => (
             <button
               key={p.value}
               type="button"
               className={`preset-chip ${model === p.value ? 'active' : ''}`}
               onClick={() => onModelChange(p.value)}
+              title={p.value}
             >
               {p.label}
             </button>
@@ -64,16 +85,37 @@ function ModelSelector({ label, provider, model, onProviderChange, onModelChange
 }
 
 export default function Leaderboard({ onBattleStarted }) {
-  const [rows, setRows]         = useState([])
-  const [battles, setBattles]   = useState([])
-  const [loading, setLoading]   = useState(false)
+  const [rows, setRows]           = useState([])
+  const [battles, setBattles]     = useState([])
+  const [loading, setLoading]     = useState(false)
   const [analyzing, setAnalyzing] = useState(null)
-  const [form, setForm]         = useState({
+  const [lmModels, setLmModels]   = useState([])
+  const [lmLoading, setLmLoading] = useState(true)
+  const [form, setForm]           = useState({
     p1_provider: 'lmstudio', p2_provider: 'lmstudio',
-    p1_model: 'ibm/granite-4-h-tiny',
-    p2_model: 'mistralai/ministral-3-3b',
+    p1_model: '', p2_model: '',
     n_battles: 1,
   })
+
+  // Fetch LM Studio models once on mount; auto-select first two if form is blank
+  useEffect(() => {
+    let cancelled = false
+    setLmLoading(true)
+    fetchLMStudioModels().then(models => {
+      if (cancelled) return
+      setLmModels(models)
+      setLmLoading(false)
+      // Auto-fill model inputs with first two loaded models
+      if (models.length > 0) {
+        setForm(f => ({
+          ...f,
+          p1_model: f.p1_model || models[0] || '',
+          p2_model: f.p2_model || models[1] || models[0] || '',
+        }))
+      }
+    })
+    return () => { cancelled = true }
+  }, [])
 
   async function fetchData() {
     try {
@@ -88,7 +130,6 @@ export default function Leaderboard({ onBattleStarted }) {
 
   useEffect(() => {
     fetchData()
-    // Refresh leaderboard every 30s (not the aggressive 5s churn from before)
     const id = setInterval(fetchData, 30000)
     return () => clearInterval(id)
   }, [])
@@ -213,6 +254,8 @@ export default function Leaderboard({ onBattleStarted }) {
             model={form.p1_model}
             onProviderChange={v => setForm(f => ({ ...f, p1_provider: v }))}
             onModelChange={v => setForm(f => ({ ...f, p1_model: v }))}
+            lmModels={lmModels}
+            lmLoading={lmLoading}
           />
 
           <ModelSelector
@@ -221,6 +264,8 @@ export default function Leaderboard({ onBattleStarted }) {
             model={form.p2_model}
             onProviderChange={v => setForm(f => ({ ...f, p2_provider: v }))}
             onModelChange={v => setForm(f => ({ ...f, p2_model: v }))}
+            lmModels={lmModels}
+            lmLoading={lmLoading}
           />
 
           <div className="form-group">

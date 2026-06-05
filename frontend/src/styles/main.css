@@ -1320,3 +1320,14 @@ body::after {
   color: var(--accent-green);
   background: rgba(0,255,136,0.06);
 }
+
+.model-presets-status {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  padding: 0.2rem 0;
+  font-style: italic;
+}
+.model-presets-status.offline {
+  color: var(--accent-red);
+  opacity: 0.6;
+}
