@@ -23,10 +23,14 @@
 - [x] Per-model stats and leaderboard CLI (`scripts/leaderboard.py`)
 - [x] Turn logging in LLMPlayer (action, parse success, raw response)
 
-## v0.5 — API & Visualizer
-- [ ] FastAPI backend with WebSocket live-battle feed
-- [ ] React frontend: live battlefield visualizer (adapted from Nimzo's pattern)
-- [ ] Post-game analysis: annotate RNG swings (crits, misses), key decision points
+## v0.5 — API & Visualizer ✓
+- [x] FastAPI backend with WebSocket live-battle feed (`/ws/battles`)
+- [x] REST endpoints: leaderboard, battles, turns, start-battle
+- [x] React + Vite frontend: retro CRT dark-theme battlefield visualizer
+- [x] Live Pokémon cards with animated HP bars, type badges, status, boosts
+- [x] Battle log, heuristic advisory drawer, winner banner
+- [x] `POST /api/battles/start` triggers background battle with streaming events
+- [ ] Post-game analysis: annotate RNG swings, crits, blunders (future)
 
 ## Future
 - Drafted teams (including LLM-drafted team mode)
