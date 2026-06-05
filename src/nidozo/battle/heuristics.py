@@ -53,12 +53,17 @@ def _score_move(
     opp: Pokemon | None,
     battle: AbstractBattle,
 ) -> dict[str, Any]:
+    try:
+        priority = move.priority
+    except KeyError:
+        priority = 0  # pseudo-moves like 'recharge' have no priority entry
+
     score: dict[str, Any] = {
         "move_id": move.id,
         "type_multiplier": None,
         "effectiveness_label": "unknown",
         "estimated_damage_pct": None,
-        "priority": move.priority,
+        "priority": priority,
         "is_status": move.category == MoveCategory.STATUS,
         "notes": [],
     }
@@ -111,8 +116,8 @@ def _score_move(
         elif pct >= 50:
             score["notes"].append("likely 2HKO")
 
-    if move.priority > 0:
-        score["notes"].append(f"priority +{move.priority} — moves before most attacks")
+    if priority > 0:
+        score["notes"].append(f"priority +{priority} — moves before most attacks")
 
     # STAB
     if own is not None and move.type in own.types:
