@@ -15,7 +15,7 @@ function HeuristicDrawer({ heuristics }) {
       {open && (
         <div className="heuristic-content">
           {heuristics.move_scores.map((ms, i) => {
-            const isSuper = ms.effectiveness_label?.includes('super')
+            const isSuper  = ms.effectiveness_label?.includes('super')
             const isImmune = ms.effectiveness_label?.includes('immune')
             return (
               <div key={i} className="heuristic-move">
@@ -38,16 +38,33 @@ function HeuristicDrawer({ heuristics }) {
   )
 }
 
-export default function BattleField({ p1State, p2State, battleInfo, battleResult, events, onDismiss }) {
-  // p1State.state.my_active = p1's own active mon
-  // p2State.state.my_active = p2's own active mon (shown on right)
+function ThinkingBadge({ role }) {
+  if (!role) return null
+  return (
+    <div className="thinking-badge">
+      <span className="thinking-badge-dot" />
+      <span className="thinking-badge-dot" />
+      <span className="thinking-badge-dot" />
+      <span style={{ marginLeft: '0.4rem', fontSize: '0.65rem', opacity: 0.7 }}>
+        {role.toUpperCase()} THINKING
+      </span>
+    </div>
+  )
+}
+
+export default function BattleField({
+  p1State, p2State, battleInfo, battleResult, events, thinking, onDismiss,
+}) {
   const p1Mon   = p1State?.state?.my_active ?? null
   const p2Mon   = p2State?.state?.my_active ?? null
   const oppOfP1 = p1State?.state?.opponent_active ?? null  // p2 from p1's view
   const weather = p1State?.state?.weather ?? p2State?.state?.weather ?? null
   const turn    = Math.max(p1State?.turn ?? 0, p2State?.turn ?? 0)
 
-  // Last heuristics come from the most recent turn event (whichever arrived last)
+  // Bench: exclude active mon (species match), exclude fainted
+  const p1Bench = (p1State?.state?.my_team ?? []).filter(m => m.species !== p1Mon?.species)
+  const p2Bench = (p2State?.state?.my_team ?? []).filter(m => m.species !== p2Mon?.species)
+
   const lastState = (p1State?.turn ?? 0) >= (p2State?.turn ?? 0)
     ? p1State?.state
     : p2State?.state
@@ -59,7 +76,10 @@ export default function BattleField({ p1State, p2State, battleInfo, battleResult
         <div className="turn-counter">
           {turn > 0 ? `TURN ${turn}` : 'READY'}
         </div>
-        {weather && <div className="weather-badge">🌤 {weather}</div>}
+        <div className="battle-header-center">
+          {weather && <div className="weather-badge">🌤 {weather}</div>}
+          <ThinkingBadge role={thinking} />
+        </div>
         <div className="battle-status-text">
           {battleInfo
             ? `${battleInfo.p1} vs ${battleInfo.p2}`
@@ -69,14 +89,28 @@ export default function BattleField({ p1State, p2State, battleInfo, battleResult
 
       {/* Arena */}
       <div className="arena">
-        <PokemonCard mon={p1Mon} side="p1" isOpponent={false} />
+        <PokemonCard
+          mon={p1Mon}
+          side="p1"
+          isOpponent={false}
+          isThinking={thinking === 'p1'}
+          bench={p1Bench}
+        />
         <div className="vs-divider">VS</div>
-        {/* Right side: use p2's own state if available, else p1's opponent view */}
-        <PokemonCard mon={p2Mon ?? oppOfP1} side="p2" isOpponent={!p2Mon} />
+        <PokemonCard
+          mon={p2Mon ?? oppOfP1}
+          side="p2"
+          isOpponent={!p2Mon}
+          isThinking={thinking === 'p2'}
+          bench={p2Bench}
+        />
       </div>
 
       {/* Bottom panels */}
-      <div className="bottom-panels" style={!lastState?.heuristics?.move_scores?.length ? { gridTemplateColumns: '1fr' } : {}}>
+      <div
+        className="bottom-panels"
+        style={!lastState?.heuristics?.move_scores?.length ? { gridTemplateColumns: '1fr' } : {}}
+      >
         <BattleLog events={events} />
         <HeuristicDrawer heuristics={lastState?.heuristics} />
       </div>
