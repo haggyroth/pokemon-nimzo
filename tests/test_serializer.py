@@ -10,14 +10,11 @@ We use mocks to construct precise battle states without needing a live server.
 
 from unittest.mock import MagicMock, PropertyMock
 
-import pytest
-
 from nidozo.battle.serializer import (
-    serialize_battle,
-    _serialize_own_pokemon,
     _serialize_opponent_pokemon,
+    _serialize_own_pokemon,
+    serialize_battle,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers to build mock Pokémon and Move objects

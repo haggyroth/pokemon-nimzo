@@ -1,16 +1,16 @@
 """Tests for the post-game battle analyzer."""
 
 import json
+
 import pytest
 
 from nidozo.analysis.analyzer import (
     _composite_score,
-    _rank_moves,
     _parse_move_slot,
-    annotate_turn,
+    _rank_moves,
     analyze_battle,
+    annotate_turn,
 )
-
 
 # ---------------------------------------------------------------------------
 # _composite_score

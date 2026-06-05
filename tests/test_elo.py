@@ -2,7 +2,7 @@
 
 import pytest
 
-from nidozo.db.elo import expected_score, updated_ratings, DEFAULT_RATING, K_FACTOR
+from nidozo.db.elo import K_FACTOR, expected_score, updated_ratings
 
 
 def test_equal_ratings_expect_half() -> None:

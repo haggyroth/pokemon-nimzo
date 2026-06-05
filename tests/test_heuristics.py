@@ -4,8 +4,7 @@ from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 
-from nidozo.battle.heuristics import score_actions, _effectiveness_label
-
+from nidozo.battle.heuristics import _effectiveness_label, score_actions
 
 # ---------------------------------------------------------------------------
 # Helpers — same mock pattern as test_serializer.py

@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Optional
 
-from nidozo.db.schema import migrate
 from nidozo.db.elo import DEFAULT_RATING, updated_ratings
+from nidozo.db.schema import migrate
 
 _DEFAULT_DB = Path(__file__).parent.parent.parent.parent / "nimzo.db"
 
@@ -134,10 +133,10 @@ class BattleStore:
         turn_number: int,
         player_role: str,
         prompt_version: str,
-        action_chosen: Optional[str],
+        action_chosen: str | None,
         parse_success: bool,
-        llm_response: Optional[str] = None,
-        state_json: Optional[str] = None,
+        llm_response: str | None = None,
+        state_json: str | None = None,
     ) -> None:
         self._conn.execute(
             """INSERT INTO turns

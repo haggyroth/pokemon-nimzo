@@ -27,7 +27,7 @@ jobs:
           enable-cache: false
 
       - name: Run ruff via uvx (no venv needed)
-        run: uvx ruff check src/ tests/
+        run: uvx ruff@0.11.13 check src/ tests/
 
   test:
     name: Test (pytest)
