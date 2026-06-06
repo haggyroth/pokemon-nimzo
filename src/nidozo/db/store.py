@@ -245,6 +245,13 @@ class BattleStore:
         )
         return [dict(r) for r in cur.fetchall()]
 
+    def get_player_model_ids(self, battle_id: int) -> tuple[int, int] | None:
+        """Return (p1_model_id, p2_model_id) for a battle, or None if not found."""
+        row = self._conn.execute(
+            "SELECT p1_model_id, p2_model_id FROM battles WHERE id=?", (battle_id,)
+        ).fetchone()
+        return (row["p1_model_id"], row["p2_model_id"]) if row else None
+
     def get_battle_players(self, battle_id: int) -> dict | None:
         """Return provider and model_name for both players of a battle, or None."""
         row = self._conn.execute(
@@ -373,6 +380,29 @@ class BattleStore:
                WHERE b.finished_at IS NOT NULL
                ORDER BY b.finished_at DESC LIMIT ?""",
             (limit,),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+    # ------------------------------------------------------------------
+    # Lessons (post-battle LLM reflections)
+    # ------------------------------------------------------------------
+
+    def create_lesson(self, model_id: int, battle_id: int, content: str) -> int:
+        """Persist a post-battle lesson and return its id."""
+        cur = self._conn.execute(
+            "INSERT INTO lessons (model_id, battle_id, content) VALUES (?,?,?)",
+            (model_id, battle_id, content),
+        )
+        self._conn.commit()
+        return cur.lastrowid
+
+    def get_lessons(self, model_id: int, limit: int = 5) -> list[dict]:
+        """Return the most recent lessons for a model, newest first."""
+        cur = self._conn.execute(
+            """SELECT id, battle_id, content, created_at
+               FROM lessons WHERE model_id=?
+               ORDER BY created_at DESC LIMIT ?""",
+            (model_id, limit),
         )
         return [dict(r) for r in cur.fetchall()]
 

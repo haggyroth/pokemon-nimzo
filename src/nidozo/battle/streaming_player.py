@@ -27,10 +27,17 @@ def _battle_event(battle: AbstractBattle, action: str, player_role: str) -> dict
 class StreamingLLMPlayer(LLMPlayer):
     """LLMPlayer that additionally pushes turn/thinking events to the EventBus."""
 
-    def __init__(self, event_bus, player_role: str = "p1", **kwargs) -> None:
+    def __init__(
+        self,
+        event_bus,
+        player_role: str = "p1",
+        lessons: list[str] | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(
             player_role=player_role,
             on_thinking=self._emit_thinking,
+            lessons=lessons,
             **kwargs,
         )
         self._bus = event_bus

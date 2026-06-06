@@ -41,13 +41,34 @@ class PromptBuilder:
         )
         self._turn_template = self._jinja_env.get_template("turn.txt.jinja")
 
-    def build_system(self) -> Message:
-        return Message(role="system", content=self._system_text)
+    def build_system(self, lessons: list[str] | None = None) -> Message:
+        """Return the system message, optionally appending the model's memory."""
+        content = self._system_text
+        if lessons:
+            memory_lines = "\n".join(f"{i}. {lesson}" for i, lesson in enumerate(lessons, 1))
+            content = (
+                f"{content}\n\n"
+                f"## Your Battle Memory\n"
+                f"Based on your previous battles, you have learned:\n"
+                f"{memory_lines}\n\n"
+                f"Apply these lessons as you make decisions this battle."
+            )
+        return Message(role="system", content=content)
 
     def build_turn(self, battle_state: dict) -> Message:
         rendered = self._turn_template.render(**battle_state)
         return Message(role="user", content=rendered)
 
-    def build_messages(self, battle_state: dict) -> list[Message]:
-        """Return [system, turn] ready to pass to a ModelBackend."""
-        return [self.build_system(), self.build_turn(battle_state)]
+    def build_messages(
+        self,
+        battle_state: dict,
+        lessons: list[str] | None = None,
+    ) -> list[Message]:
+        """Return [system, turn] ready to pass to a ModelBackend.
+
+        Args:
+            battle_state: Serialized battle dict from serialize_battle().
+            lessons:      Optional list of prior-battle lesson strings to inject
+                          into the system prompt as the model's "memory".
+        """
+        return [self.build_system(lessons=lessons), self.build_turn(battle_state)]
