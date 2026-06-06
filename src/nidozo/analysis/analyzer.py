@@ -91,7 +91,8 @@ def _load_species_data() -> dict[str, dict[str, Any]]:
     path = os.path.join(data_dir, "gen3_movesets.json")
     try:
         with open(path) as f:
-            return json.load(f)
+            data: dict[str, dict[str, Any]] = json.load(f)
+            return data
     except (OSError, json.JSONDecodeError):
         return {}
 
