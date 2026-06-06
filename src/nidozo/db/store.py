@@ -13,7 +13,12 @@ _DEFAULT_DB = Path(__file__).parent.parent.parent.parent / "nidozo.db"
 
 
 class BattleStore:
-    """Thread-safe SQLite store for battle results, ELO ratings, and turn logs.
+    """SQLite store for battle results, ELO ratings, and turn logs.
+
+    Uses a single connection with WAL mode.  **Not safe for concurrent
+    writers** — serialise all writes through one instance.  Multi-step
+    mutations (e.g. finish_battle + ELO update) are wrapped in
+    ``with self._conn:`` for atomic commit/rollback.
 
     Args:
         db_path: Path to the SQLite file. Created if it doesn't exist.
@@ -132,7 +137,7 @@ class BattleStore:
         return cur.lastrowid
 
     def set_battle_status(self, battle_id: int, status: str) -> None:
-        """Update the status field of a battle (pending/running/completed/cancelled)."""
+        """Update the status field of a battle (pending/running/completed/cancelled/failed)."""
         self._conn.execute(
             "UPDATE battles SET status=? WHERE id=?", (status, battle_id)
         )
@@ -143,7 +148,7 @@ class BattleStore:
         row = self._conn.execute(
             "SELECT status FROM battles WHERE id=?", (battle_id,)
         ).fetchone()
-        if not row or row["status"] in ("completed", "cancelled"):
+        if not row or row["status"] in ("completed", "cancelled", "failed"):
             return False
         self._conn.execute(
             """UPDATE battles SET status='cancelled',
@@ -160,18 +165,19 @@ class BattleStore:
         winner: int | None,
         total_turns: int,
     ) -> None:
-        """Mark battle as finished, record winner, update ELO."""
-        self._conn.execute(
-            """UPDATE battles
-               SET winner=?, total_turns=?,
-                   finished_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
-               WHERE id=?""",
-            (winner, total_turns, battle_id),
-        )
-        self._conn.commit()
-        self._update_elo(battle_id, winner)
+        """Mark battle as finished, record winner, and update ELO atomically."""
+        with self._conn:
+            self._conn.execute(
+                """UPDATE battles
+                   SET winner=?, total_turns=?,
+                       finished_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+                   WHERE id=?""",
+                (winner, total_turns, battle_id),
+            )
+            self._update_elo(battle_id, winner)
 
     def _update_elo(self, battle_id: int, winner: int | None) -> None:
+        """Compute and persist ELO deltas. Must be called inside a transaction."""
         row = self._conn.execute(
             "SELECT p1_model_id, p2_model_id FROM battles WHERE id=?",
             (battle_id,),
@@ -200,7 +206,7 @@ class BattleStore:
                    VALUES (?,?,?,?,?)""",
                 (battle_id, model_id, before, after, after - before),
             )
-        self._conn.commit()
+        # No commit here — the `with self._conn:` block in finish_battle handles it.
 
     # ------------------------------------------------------------------
     # Turns

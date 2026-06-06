@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
+// Keep only the most recent N events to prevent unbounded memory growth
+// over long tournaments.
+const MAX_EVENTS = 500
+
 export function useBattleStream() {
   const [events, setEvents]             = useState([])
   const [isConnected, setConnected]     = useState(false)
@@ -96,7 +100,10 @@ export function useBattleStream() {
           return
         }
 
-        setEvents(prev => [...prev, event])
+        setEvents(prev => {
+          const next = [...prev, event]
+          return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next
+        })
 
         if (event.type === 'battle_start') {
           setBattleInfo(event)

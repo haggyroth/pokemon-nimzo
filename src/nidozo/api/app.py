@@ -12,7 +12,7 @@ import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from nidozo.api.events import EventBus
 from nidozo.db.store import BattleStore
@@ -34,7 +34,7 @@ class StartBattleRequest(BaseModel):
     p2_model: str | None = None
     model: str | None = None
     prompt_version: str = "v2"
-    n_battles: int = 1
+    n_battles: int = Field(1, ge=1, le=50)
 
 
 class StartBattleResponse(BaseModel):
@@ -48,8 +48,8 @@ class PlayerSpec(BaseModel):
 
 
 class StartTournamentRequest(BaseModel):
-    players: list[PlayerSpec]
-    rounds: int = 1
+    players: list[PlayerSpec] = Field(..., min_length=2, max_length=12)
+    rounds: int = Field(1, ge=1, le=10)
     prompt_version: str = "v2"
 
 
@@ -75,9 +75,12 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     app.state.store = store
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=[
+            "http://localhost:5173",   # Vite dev server
+            "http://localhost:5001",   # serve.py production default
+        ],
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
     )
 
     # -----------------------------------------------------------------------
@@ -373,7 +376,7 @@ async def _run_battles(
             raise
         except Exception as exc:
             logger.error("Battle %d failed: %s", battle_id, exc)
-            store.set_battle_status(battle_id, "completed")
+            store.set_battle_status(battle_id, "failed")
             await bus.publish({"type": "error", "battle_id": battle_id, "message": str(exc)})
         finally:
             active_tasks.pop(battle_id, None)
@@ -492,7 +495,7 @@ async def _run_tournament(
             raise
         except Exception as exc:
             logger.error("Tournament %d battle %d failed: %s", tournament_id, battle_id, exc)
-            store.set_battle_status(battle_id, "completed")
+            store.set_battle_status(battle_id, "failed")
             await bus.publish({"type": "error", "battle_id": battle_id, "message": str(exc)})
         finally:
             active_tasks.pop(battle_id, None)
