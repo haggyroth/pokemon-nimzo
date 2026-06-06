@@ -102,9 +102,10 @@ def _serialize_opponent_pokemon(mon: Pokemon | None) -> dict[str, Any] | None:
         "fainted": mon.fainted,
         "status": mon.status.name if mon.status else None,
         "boosts": {k: v for k, v in mon.boosts.items() if v != 0},
-        # item/ability: None until poke-env registers them as revealed
+        # item/ability: None until poke-env registers them as legitimately revealed.
+        # poke-env can return "unknown" as a sentinel — treat that as unrevealed.
         "item": mon.item if mon.item not in (None, "unknown") else None,
-        "ability": mon.ability,
+        "ability": mon.ability if mon.ability not in (None, "unknown") else None,
         "revealed_moves": revealed_moves,
     }
 

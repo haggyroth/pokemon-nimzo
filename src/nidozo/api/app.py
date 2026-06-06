@@ -167,13 +167,7 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
 
     @app.get("/api/battles/{battle_id}/turns")
     def get_turns(battle_id: int) -> list[dict]:
-        rows = store._conn.execute(
-            """SELECT turn_number, player_role, prompt_version,
-                      action_chosen, parse_success
-               FROM turns WHERE battle_id=? ORDER BY turn_number""",
-            (battle_id,),
-        ).fetchall()
-        return [dict(r) for r in rows]
+        return store.get_turns_basic(battle_id)
 
     @app.get("/api/battles/{battle_id}/analysis")
     def get_analysis(battle_id: int) -> dict:
@@ -356,9 +350,7 @@ async def _run_battles(
             battle_obj = p1.battles.get(real_tag)
             total_turns = battle_obj.turn if battle_obj else 0
 
-            store._conn.execute(
-                "UPDATE battles SET battle_tag=? WHERE id=?", (real_tag, battle_id)
-            )
+            store.update_battle_tag(battle_id, real_tag)
             store.finish_battle(battle_id, winner, total_turns)
             store.set_battle_status(battle_id, "completed")
 
@@ -419,15 +411,7 @@ async def _run_tournament(
             active_tasks[battle_id] = task
 
         # Resolve p1/p2 from the battle record
-        battle_info = store._conn.execute(
-            """SELECT p1.provider AS p1_provider, p1.model_name AS p1_model,
-                      p2.provider AS p2_provider, p2.model_name AS p2_model
-               FROM battles b
-               JOIN models p1 ON p1.id = b.p1_model_id
-               JOIN models p2 ON p2.id = b.p2_model_id
-               WHERE b.id=?""",
-            (battle_id,),
-        ).fetchone()
+        battle_info = store.get_battle_players(battle_id)
 
         p1_label = f"{battle_info['p1_provider']}/{battle_info['p1_model']}"
         p2_label = f"{battle_info['p2_provider']}/{battle_info['p2_model']}"
@@ -469,9 +453,7 @@ async def _run_tournament(
             battle_obj = p1.battles.get(real_tag)
             total_turns = battle_obj.turn if battle_obj else 0
 
-            store._conn.execute(
-                "UPDATE battles SET battle_tag=? WHERE id=?", (real_tag, battle_id)
-            )
+            store.update_battle_tag(battle_id, real_tag)
             store.finish_battle(battle_id, winner, total_turns)
             store.set_battle_status(battle_id, "completed")
 

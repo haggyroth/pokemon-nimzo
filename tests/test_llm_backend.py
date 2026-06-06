@@ -54,9 +54,12 @@ def _make_anthropic_backend(model: str = "claude-test"):
 
 
 def _anthropic_response(text: str):
-    """Minimal Anthropic-like response object."""
+    """Minimal Anthropic-like response object with a single text content block."""
+    block = MagicMock()
+    block.type = "text"
+    block.text = text
     msg = MagicMock()
-    msg.content = [MagicMock(text=text)]
+    msg.content = [block]
     return msg
 
 
@@ -106,6 +109,28 @@ async def test_anthropic_backend_no_system_message() -> None:
 
     call_kwargs = backend._client.messages.create.call_args.kwargs
     assert "system" not in call_kwargs
+
+
+@pytest.mark.asyncio
+async def test_anthropic_backend_skips_thinking_blocks() -> None:
+    """Non-text content blocks (e.g. thinking) are skipped; only text blocks are joined."""
+    backend = _make_anthropic_backend()
+
+    thinking_block = MagicMock()
+    thinking_block.type = "thinking"
+    # thinking blocks have no .text; accessing it would raise AttributeError
+    del thinking_block.text
+
+    text_block = MagicMock()
+    text_block.type = "text"
+    text_block.text = "Use surf!"
+
+    resp = MagicMock()
+    resp.content = [thinking_block, text_block]
+    backend._client.messages.create = AsyncMock(return_value=resp)
+
+    result = await backend.complete([{"role": "user", "content": "Move?"}])
+    assert result == "Use surf!"
 
 
 @pytest.mark.asyncio
