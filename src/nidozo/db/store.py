@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -59,21 +60,99 @@ class BattleStore:
     # Battles
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Tournaments
+    # ------------------------------------------------------------------
+
+    def create_tournament(
+        self,
+        players: list[dict],
+        rounds: int,
+        prompt_version: str,
+        total_battles: int,
+    ) -> int:
+        """Insert a tournament row and return its id."""
+        cur = self._conn.execute(
+            """INSERT INTO tournaments (players, rounds, prompt_version, total_battles)
+               VALUES (?,?,?,?)""",
+            (json.dumps(players), rounds, prompt_version, total_battles),
+        )
+        self._conn.commit()
+        return cur.lastrowid
+
+    def finish_tournament(self, tournament_id: int, status: str = "completed") -> None:
+        self._conn.execute(
+            """UPDATE tournaments SET status=?,
+               finished_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+               WHERE id=?""",
+            (status, tournament_id),
+        )
+        self._conn.commit()
+
+    def get_tournament(self, tournament_id: int) -> dict | None:
+        row = self._conn.execute(
+            "SELECT * FROM tournaments WHERE id=?", (tournament_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    # ------------------------------------------------------------------
+    # Battles
+    # ------------------------------------------------------------------
+
+    def get_battle(self, battle_id: int) -> dict | None:
+        """Return a single battle row by id, or None if not found."""
+        row = self._conn.execute(
+            """SELECT b.id, b.battle_tag, b.format, b.winner, b.total_turns,
+                      b.status, b.started_at, b.finished_at, b.tournament_id,
+                      p1.provider||'/'||p1.model_name AS p1,
+                      p2.provider||'/'||p2.model_name AS p2
+               FROM battles b
+               JOIN models p1 ON p1.id = b.p1_model_id
+               JOIN models p2 ON p2.id = b.p2_model_id
+               WHERE b.id=?""",
+            (battle_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
     def create_battle(
         self,
         battle_tag: str,
         format: str,
         p1_model_id: int,
         p2_model_id: int,
+        tournament_id: int | None = None,
     ) -> int:
         """Insert a battle row and return its id."""
         cur = self._conn.execute(
-            """INSERT INTO battles (battle_tag, format, p1_model_id, p2_model_id)
-               VALUES (?,?,?,?)""",
-            (battle_tag, format, p1_model_id, p2_model_id),
+            """INSERT INTO battles (battle_tag, format, p1_model_id, p2_model_id, tournament_id, status)
+               VALUES (?,?,?,?,?,'pending')""",
+            (battle_tag, format, p1_model_id, p2_model_id, tournament_id),
         )
         self._conn.commit()
         return cur.lastrowid
+
+    def set_battle_status(self, battle_id: int, status: str) -> None:
+        """Update the status field of a battle (pending/running/completed/cancelled)."""
+        self._conn.execute(
+            "UPDATE battles SET status=? WHERE id=?", (status, battle_id)
+        )
+        self._conn.commit()
+
+    def cancel_battle(self, battle_id: int) -> bool:
+        """Mark a battle as cancelled. Returns False if already finished."""
+        row = self._conn.execute(
+            "SELECT status FROM battles WHERE id=?", (battle_id,)
+        ).fetchone()
+        if not row or row["status"] in ("completed", "cancelled"):
+            return False
+        self._conn.execute(
+            """UPDATE battles SET status='cancelled',
+               finished_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+               WHERE id=?""",
+            (battle_id,),
+        )
+        self._conn.commit()
+        return True
 
     def finish_battle(
         self,

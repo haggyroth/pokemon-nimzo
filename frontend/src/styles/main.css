@@ -1349,3 +1349,194 @@ body::after {
   color: var(--accent-red);
   opacity: 0.6;
 }
+
+/* ============================================================
+   FORM TABS (battle / tournament toggle)
+   ============================================================ */
+.form-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.form-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.6rem;
+  padding: 0.5rem 1rem 0.6rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+.form-tab:hover { color: var(--text-primary); }
+.form-tab.active {
+  color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+}
+
+/* ============================================================
+   TOURNAMENT FORM
+   ============================================================ */
+.tournament-players-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.btn-add-player {
+  background: rgba(0,170,255,0.1);
+  border: 1px solid var(--border-bright);
+  color: var(--accent-cyan);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.55rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+.btn-add-player:hover { background: rgba(0,170,255,0.2); }
+
+.tournament-player-row {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(30,58,95,0.35);
+}
+.tournament-player-label {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  margin-bottom: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.btn-remove-player {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.6rem;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.btn-remove-player:hover { color: var(--accent-red); }
+.tournament-player-inputs {
+  display: flex;
+  gap: 0.5rem;
+}
+.tournament-battle-count {
+  font-size: 0.6rem;
+  color: var(--accent-amber);
+  margin-top: 0.3rem;
+  opacity: 0.8;
+}
+
+/* ============================================================
+   TOURNAMENT PROGRESS BAR (top of battlefield)
+   ============================================================ */
+.tournament-bar {
+  background: rgba(0,170,255,0.06);
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 1.5rem;
+}
+.tournament-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.6rem;
+  margin-bottom: 0.35rem;
+}
+.tournament-bar-label {
+  color: var(--accent-cyan);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.55rem;
+}
+.tournament-bar-progress { color: var(--text-dim); }
+.tournament-bar-matchup  { color: var(--text-primary); }
+.tournament-bar-cancelled {
+  color: var(--accent-red);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.55rem;
+}
+.tournament-progress-track {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.tournament-progress-fill {
+  height: 100%;
+  background: var(--accent-cyan);
+  border-radius: 2px;
+  transition: width 0.6s ease;
+  box-shadow: 0 0 6px var(--accent-cyan);
+}
+
+/* ============================================================
+   CANCEL BUTTON (battlefield header)
+   ============================================================ */
+.battle-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+.btn-cancel-battle {
+  background: none;
+  border: 1px solid rgba(255,68,85,0.35);
+  color: var(--accent-red);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  border-radius: 2px;
+  opacity: 0.7;
+  transition: opacity 0.15s, border-color 0.15s;
+}
+.btn-cancel-battle:hover {
+  opacity: 1;
+  border-color: var(--accent-red);
+}
+
+/* ============================================================
+   TOURNAMENT END OVERLAY
+   ============================================================ */
+.tournament-end-card { min-width: 320px; }
+.tournament-final-lb {
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+.tournament-lb-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.65rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(30,58,95,0.4);
+}
+.tlb-medal { font-size: 1rem; min-width: 1.5rem; }
+.tlb-name  { flex: 1; color: var(--text-primary); }
+.tlb-elo   { color: var(--accent-amber); font-family: 'IBM Plex Mono', monospace; min-width: 3rem; text-align: right; }
+.tlb-wlt   { color: var(--text-dim); min-width: 5rem; text-align: right; }
+
+/* ============================================================
+   NAV TOURNAMENT BADGE
+   ============================================================ */
+.nav-tournament-badge {
+  display: inline-block;
+  background: var(--accent-amber);
+  color: var(--bg-deep);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.5rem;
+  font-weight: 600;
+  padding: 0.1rem 0.3rem;
+  border-radius: 2px;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}

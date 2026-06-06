@@ -50,6 +50,21 @@ def _normalize(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
 
+def _strip_keyword_prefix(identifier: str) -> str:
+    """Strip an accidental action-type prefix from an identifier.
+
+    Models using the v2 JSON prompt occasionally produce identifiers like
+    ``"switch 1"`` or ``"move thunderbolt"`` instead of just ``"1"`` or
+    ``"thunderbolt"``.  Stripping the prefix lets the rest of the resolver
+    handle the value normally.
+    """
+    lower = identifier.lower()
+    for kw in ("switch ", "move "):
+        if lower.startswith(kw):
+            return identifier[len(kw):].strip()
+    return identifier
+
+
 def _resolve_move(
     identifier: str,
     battle: AbstractBattle,
@@ -60,6 +75,8 @@ def _resolve_move(
     if not moves:
         logger.warning("ACTION: move requested but no moves available")
         return None
+
+    identifier = _strip_keyword_prefix(identifier)
 
     # Try numeric slot — extract leading digits to handle trailing markdown (e.g. "2**")
     m = re.match(r"(\d+)", identifier)
@@ -91,6 +108,8 @@ def _resolve_switch(
     if not switches:
         logger.warning("ACTION: switch requested but no switches available")
         return None
+
+    identifier = _strip_keyword_prefix(identifier)
 
     # Try numeric slot — extract leading digits to handle trailing markdown (e.g. "2**")
     m = re.match(r"(\d+)", identifier)
