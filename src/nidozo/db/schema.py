@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # Table definitions only — safe to run against any DB version via IF NOT EXISTS.
 # Indexes are kept separate because they may reference columns (e.g. tournament_id)
@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS tournaments (
     rounds         INTEGER NOT NULL DEFAULT 1,
     prompt_version TEXT    NOT NULL DEFAULT 'v2',
     total_battles  INTEGER NOT NULL DEFAULT 0,
+    tier           TEXT    NOT NULL DEFAULT 'random',  -- 'random' | 'ou' | 'ubers' | ...
     status         TEXT    NOT NULL DEFAULT 'running',  -- running|completed|cancelled
     created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     finished_at    TEXT
@@ -53,6 +54,9 @@ CREATE TABLE IF NOT EXISTS battles (
     p1_model_id     INTEGER NOT NULL REFERENCES models(id),
     p2_model_id     INTEGER NOT NULL REFERENCES models(id),
     tournament_id   INTEGER REFERENCES tournaments(id),   -- NULL for standalone battles
+    p1_team_id      INTEGER REFERENCES teams(id),         -- NULL for random battles
+    p2_team_id      INTEGER REFERENCES teams(id),         -- NULL for random battles
+    tier            TEXT,                                  -- NULL for random battles
     winner          INTEGER,           -- 1=p1, 2=p2, NULL=tie
     total_turns     INTEGER,
     status          TEXT    NOT NULL DEFAULT 'pending',   -- pending|running|completed|cancelled|failed
@@ -90,6 +94,29 @@ CREATE TABLE IF NOT EXISTS lessons (
     battle_id  INTEGER NOT NULL REFERENCES battles(id),
     content    TEXT    NOT NULL,
     created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- Drafted teams: one row per drafted team (pre-battle)
+CREATE TABLE IF NOT EXISTS teams (
+    id          INTEGER PRIMARY KEY,
+    model_id    INTEGER NOT NULL REFERENCES models(id),
+    tier        TEXT    NOT NULL,   -- 'ou' | 'ubers' | 'uu' | 'nu' | 'lc' | 'freeforall'
+    format      TEXT    NOT NULL,   -- showdown format string e.g. 'gen3ou'
+    pokemon     TEXT    NOT NULL,   -- JSON list of species IDs in pick order
+    team_string TEXT    NOT NULL,   -- Showdown export format string
+    created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- Draft session log: one row per pick sequence (for analysis)
+CREATE TABLE IF NOT EXISTS draft_sessions (
+    id              INTEGER PRIMARY KEY,
+    model_id        INTEGER NOT NULL REFERENCES models(id),
+    tier            TEXT    NOT NULL,
+    pool_size       INTEGER NOT NULL,
+    picked          TEXT    NOT NULL,   -- JSON list of picks in order
+    prompt_version  TEXT    NOT NULL DEFAULT 'v3',
+    reasoning       TEXT,               -- concatenated reasoning from all picks
+    created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 """
 
@@ -195,4 +222,46 @@ def migrate(conn: sqlite3.Connection) -> None:
             "CREATE INDEX IF NOT EXISTS idx_lessons_model ON lessons(model_id, created_at)"
         )
         conn.execute("UPDATE schema_version SET version=5")
+        conn.commit()
+
+    if version < 6:
+        # Add drafted-team tables and new columns to battles + tournaments
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS teams (
+                id          INTEGER PRIMARY KEY,
+                model_id    INTEGER NOT NULL REFERENCES models(id),
+                tier        TEXT    NOT NULL,
+                format      TEXT    NOT NULL,
+                pokemon     TEXT    NOT NULL,
+                team_string TEXT    NOT NULL,
+                created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            );
+            CREATE TABLE IF NOT EXISTS draft_sessions (
+                id              INTEGER PRIMARY KEY,
+                model_id        INTEGER NOT NULL REFERENCES models(id),
+                tier            TEXT    NOT NULL,
+                pool_size       INTEGER NOT NULL,
+                picked          TEXT    NOT NULL,
+                prompt_version  TEXT    NOT NULL DEFAULT 'v3',
+                reasoning       TEXT,
+                created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            );
+        """)
+        for col, defn in (
+            ("p1_team_id", "INTEGER REFERENCES teams(id)"),
+            ("p2_team_id", "INTEGER REFERENCES teams(id)"),
+            ("tier",       "TEXT"),
+        ):
+            try:
+                conn.execute(f"ALTER TABLE battles ADD COLUMN {col} {defn}")
+            except sqlite3.OperationalError:
+                pass  # column already exists
+        try:
+            conn.execute("ALTER TABLE tournaments ADD COLUMN tier TEXT NOT NULL DEFAULT 'random'")
+        except sqlite3.OperationalError:
+            pass
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_teams_model ON teams(model_id, created_at)
+        """)
+        conn.execute("UPDATE schema_version SET version=6")
         conn.commit()
