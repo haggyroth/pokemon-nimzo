@@ -1,30 +1,66 @@
+import { useRef, useEffect, useState } from 'react'
 import HPBar from './HPBar'
 
 // Official Pokémon type colours
 const TYPE_COLORS = {
-  NORMAL: '#9a9a7a', FIRE: '#ff6b35', WATER: '#4d9de0', ELECTRIC: '#f7c948',
-  GRASS: '#4caf50', ICE: '#80deea', FIGHTING: '#e53935', POISON: '#ab47bc',
-  GROUND: '#c6a34a', FLYING: '#9575cd', PSYCHIC: '#e91e8c', BUG: '#8bc34a',
-  ROCK: '#a1887f', GHOST: '#5e35b1', DRAGON: '#5c6bc0', DARK: '#6d4c41',
-  STEEL: '#90a4ae', FAIRY: '#f48fb1',
+  NORMAL:   '#9a9a7a', FIRE:     '#ff6b35', WATER:    '#4d9de0',
+  ELECTRIC: '#f7c948', GRASS:    '#4caf50', ICE:      '#80deea',
+  FIGHTING: '#e53935', POISON:   '#ab47bc', GROUND:   '#c6a34a',
+  FLYING:   '#9575cd', PSYCHIC:  '#e91e8c', BUG:      '#8bc34a',
+  ROCK:     '#a1887f', GHOST:    '#5e35b1', DRAGON:   '#5c6bc0',
+  DARK:     '#6d4c41', STEEL:    '#90a4ae', FAIRY:    '#f48fb1',
+}
+
+// ---------------------------------------------------------------------------
+// Type background + border helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a subtle gradient background reflecting the Pokémon's typing.
+ * Single-type: corner wash of that type's colour.
+ * Dual-type: diagonal split, both corners tinted.
+ * Alpha is kept very low (~10–15%) so text/HP bar always read cleanly.
+ */
+function typeBackground(types) {
+  if (!types?.length) return undefined
+  const c1 = TYPE_COLORS[types[0]]
+  if (!c1) return undefined
+  if (types.length === 1) {
+    return `linear-gradient(145deg, ${c1}28 0%, var(--bg-card) 55%)`
+  }
+  const c2 = TYPE_COLORS[types[1]] ?? c1
+  return `linear-gradient(145deg, ${c1}28 0%, var(--bg-card) 42%, var(--bg-card) 58%, ${c2}22 100%)`
 }
 
 /**
- * Convert a species name to a Showdown Gen 3 sprite URL.
- * Showdown uses lowercase, hyphens for spaces, and handles most forms.
+ * Returns the card border + glow style driven by the primary type.
+ * P1 colours its left edge; P2 colours its right edge.
+ * The thinking state CSS class overrides these with amber via !important.
  */
+function typeAccentStyle(types, side) {
+  const color = TYPE_COLORS[types?.[0]]
+  if (!color) return {}
+  return side === 'p1'
+    ? { borderLeftColor: color,  boxShadow: `0 0 14px ${color}26` }
+    : { borderRightColor: color, boxShadow: `0 0 14px ${color}26` }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function spriteUrl(species) {
   if (!species) return null
-  const slug = species.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/\s+/g, '-')
+  const slug = species.toLowerCase().replace(/[^a-z0-9]/g, '')
   return `https://play.pokemonshowdown.com/sprites/gen3/${slug}.png`
 }
 
-function PokemonSprite({ species, size = 80, isThinking = false }) {
+function PokemonSprite({ species, size = 80, isThinking = false, animClass = '' }) {
   const url = spriteUrl(species)
   if (!url) return null
   return (
     <div
-      className={`pokemon-sprite-wrap${isThinking ? ' thinking' : ''}`}
+      className={`pokemon-sprite-wrap${isThinking ? ' thinking' : ''} ${animClass}`}
       style={{ width: size, height: size }}
     >
       <img
@@ -64,7 +100,6 @@ function StatusBadge({ status }) {
   return <span className={`status-badge status-${label}`}>{label}</span>
 }
 
-/** Mini reserve-mon shown on the bench row */
 function BenchSlot({ mon }) {
   if (!mon) return <div className="bench-slot empty" />
   const url = spriteUrl(mon.species)
@@ -96,7 +131,49 @@ function BenchSlot({ mon }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// PokemonCard
+// ---------------------------------------------------------------------------
+
 export default function PokemonCard({ mon, side, isOpponent = false, isThinking = false, bench = [] }) {
+  // ---- Animation state ----
+  // Track HP changes to trigger hit / heal / faint animations.
+  // Reset when the species changes (new Pokémon switched in).
+  const prevHpRef      = useRef(null)
+  const prevSpeciesRef = useRef(null)
+  const [animClass, setAnimClass] = useState('')
+
+  useEffect(() => {
+    const currHp      = mon?.hp_fraction ?? null
+    const currSpecies = mon?.species     ?? null
+
+    // Species changed — new mon switched in, reset reference HP silently
+    if (currSpecies !== prevSpeciesRef.current) {
+      prevHpRef.current      = currHp
+      prevSpeciesRef.current = currSpecies
+      setAnimClass('')
+      return
+    }
+
+    const prevHp = prevHpRef.current
+    if (prevHp !== null && currHp !== null && prevHp !== currHp) {
+      let cls = ''
+      if (currHp <= 0)          cls = 'card-faint'
+      else if (currHp < prevHp) cls = 'card-hit'
+      else                       cls = 'card-heal'
+
+      setAnimClass(cls)
+      const duration = cls === 'card-faint' ? 800 : 420
+      const timer = setTimeout(() => setAnimClass(''), duration)
+      prevHpRef.current = currHp
+      return () => clearTimeout(timer)
+    }
+
+    prevHpRef.current      = currHp
+    prevSpeciesRef.current = currSpecies
+  }, [mon?.hp_fraction, mon?.species])
+
+  // ---- Empty card ----
   if (!mon) {
     return (
       <div className={`pokemon-card ${side} empty`}>
@@ -110,13 +187,23 @@ export default function PokemonCard({ mon, side, isOpponent = false, isThinking 
     )
   }
 
-  const boostEntries = Object.entries(mon.boosts || {}).filter(([, v]) => v !== 0)
+  const boostEntries  = Object.entries(mon.boosts || {}).filter(([, v]) => v !== 0)
   const revealedMoves = isOpponent ? Object.values(mon.revealed_moves || {}) : null
+  const bg            = typeBackground(mon.types)
+  const accentStyle   = typeAccentStyle(mon.types, side)
 
   return (
-    <div className={`pokemon-card ${side}${isThinking ? ' is-thinking' : ''}`}>
-      {/* Sprite */}
-      <PokemonSprite species={mon.species} size={88} isThinking={isThinking} />
+    <div
+      className={`pokemon-card ${side}${isThinking ? ' is-thinking' : ''} ${animClass}`}
+      style={{ background: bg, ...accentStyle }}
+    >
+      {/* Sprite — shake animation attaches here */}
+      <PokemonSprite
+        species={mon.species}
+        size={88}
+        isThinking={isThinking}
+        animClass={animClass === 'card-hit' ? 'sprite-shake' : ''}
+      />
 
       <div className="card-body">
         <div className="card-header">
@@ -153,12 +240,9 @@ export default function PokemonCard({ mon, side, isOpponent = false, isThinking 
           </div>
         )}
 
-        {mon.item && (
-          <div className="mon-item">Item: {mon.item}</div>
-        )}
+        {mon.item && <div className="mon-item">Item: {mon.item}</div>}
       </div>
 
-      {/* Reserve bench */}
       {bench.length > 0 && (
         <div className="bench-row">
           {bench.map((b, i) => <BenchSlot key={i} mon={b} />)}
