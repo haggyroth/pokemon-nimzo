@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Table definitions only — safe to run against any DB version via IF NOT EXISTS.
 # Indexes are kept separate because they may reference columns (e.g. tournament_id)
@@ -82,6 +82,15 @@ CREATE TABLE IF NOT EXISTS turns (
     llm_response  TEXT,                        -- full raw response (may be large)
     state_json    TEXT                         -- serialized battle state at decision time (v2+)
 );
+
+-- Post-battle lessons: one row per model per battle (LLM-generated reflection)
+CREATE TABLE IF NOT EXISTS lessons (
+    id         INTEGER PRIMARY KEY,
+    model_id   INTEGER NOT NULL REFERENCES models(id),
+    battle_id  INTEGER NOT NULL REFERENCES battles(id),
+    content    TEXT    NOT NULL,
+    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
 """
 
 # Indexes for hot read paths — separate from _DDL_TABLES so they are only
@@ -93,6 +102,7 @@ CREATE INDEX IF NOT EXISTS idx_battles_tournament ON battles(tournament_id);
 CREATE INDEX IF NOT EXISTS idx_battles_p1         ON battles(p1_model_id);
 CREATE INDEX IF NOT EXISTS idx_battles_p2         ON battles(p2_model_id);
 CREATE INDEX IF NOT EXISTS idx_elohist_battle     ON elo_history(battle_id, model_id);
+CREATE INDEX IF NOT EXISTS idx_lessons_model      ON lessons(model_id, created_at);
 """
 
 
@@ -159,6 +169,30 @@ def migrate(conn: sqlite3.Connection) -> None:
     if version < 4:
         # Add indexes for hot read paths (idempotent via IF NOT EXISTS).
         # All required columns now exist (tournament_id added above in v3 block).
-        conn.executescript(_DDL_INDEXES)
+        conn.executescript("""
+            CREATE INDEX IF NOT EXISTS idx_turns_battle       ON turns(battle_id);
+            CREATE INDEX IF NOT EXISTS idx_battles_finished   ON battles(finished_at);
+            CREATE INDEX IF NOT EXISTS idx_battles_tournament ON battles(tournament_id);
+            CREATE INDEX IF NOT EXISTS idx_battles_p1         ON battles(p1_model_id);
+            CREATE INDEX IF NOT EXISTS idx_battles_p2         ON battles(p2_model_id);
+            CREATE INDEX IF NOT EXISTS idx_elohist_battle     ON elo_history(battle_id, model_id);
+        """)
         conn.execute("UPDATE schema_version SET version=4")
+        conn.commit()
+
+    if version < 5:
+        # Add lessons table for post-battle LLM reflections
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS lessons (
+                id         INTEGER PRIMARY KEY,
+                model_id   INTEGER NOT NULL REFERENCES models(id),
+                battle_id  INTEGER NOT NULL REFERENCES battles(id),
+                content    TEXT    NOT NULL,
+                created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_lessons_model ON lessons(model_id, created_at)"
+        )
+        conn.execute("UPDATE schema_version SET version=5")
         conn.commit()

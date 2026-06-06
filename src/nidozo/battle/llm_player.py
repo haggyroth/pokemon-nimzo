@@ -45,6 +45,7 @@ class LLMPlayer(Player):
         battle_id: int | None = None,
         player_role: str = "p1",
         on_thinking: ThinkingCallback = None,
+        lessons: list[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -54,6 +55,7 @@ class LLMPlayer(Player):
         self._battle_id = battle_id
         self._player_role = player_role
         self._on_thinking = on_thinking
+        self._lessons = lessons or []
 
     async def choose_move(self, battle: AbstractBattle) -> BattleOrder:
         # Recharge turn (e.g. after Hyper Beam): only one forced pseudo-move, skip LLM
@@ -63,7 +65,9 @@ class LLMPlayer(Player):
 
         state = serialize_battle(battle)
         state_json = json.dumps(state)
-        messages = self._prompt_builder.build_messages(state)
+        messages = self._prompt_builder.build_messages(
+            state, lessons=self._lessons or None
+        )
         response: str | None = None
 
         # Notify listeners that the model is thinking (for UI spinner)

@@ -235,6 +235,11 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         turns = store.get_turns_with_state(battle_id)
         return analyze_battle(turns)
 
+    @app.get("/api/models/{model_id}/lessons")
+    def get_model_lessons(model_id: int, limit: int = 10) -> list[dict]:
+        """Return the most recent post-battle lessons for a model."""
+        return store.get_lessons(model_id, limit=limit)
+
     @app.get("/api/tournaments/{tournament_id}")
     def get_tournament(tournament_id: int) -> dict:
         t = store.get_tournament(tournament_id)
@@ -385,13 +390,22 @@ async def _run_battles(
         try:
             p1_model = req.p1_model or req.model
             p2_model = req.p2_model or req.model
+
+            # Fetch lessons before building players so they're baked into prompts
+            model_ids = store.get_player_model_ids(battle_id)
+            p1_id, p2_id = model_ids if model_ids else (None, None)
+            p1_lessons = [r["content"] for r in store.get_lessons(p1_id)] if p1_id and req.p1_provider != "random" else None
+            p2_lessons = [r["content"] for r in store.get_lessons(p2_id)] if p2_id and req.p2_provider != "random" else None
+
             p1 = _build_streaming_player(
                 req.p1_provider, p1_model, "p1",
                 req.prompt_version, store, battle_id, bus, cfg, _FORMAT,
+                lessons=p1_lessons,
             )
             p2 = _build_streaming_player(
                 req.p2_provider, p2_model, "p2",
                 req.prompt_version, store, battle_id, bus, cfg, _FORMAT,
+                lessons=p2_lessons,
             )
 
             store.set_battle_status(battle_id, "running")
@@ -421,6 +435,16 @@ async def _run_battles(
                 "winner": winner,
                 "total_turns": total_turns,
             })
+
+            # Generate lessons for LLM players (fire-and-forget; never blocks battle pipeline)
+            turns = store.get_turns_basic(battle_id)
+            p2_label = f"{req.p2_provider}/{_model_name(req.p2_provider, p2_model)}"
+            p1_label = f"{req.p1_provider}/{_model_name(req.p1_provider, p1_model)}"
+            asyncio.create_task(_generate_and_store_lessons(
+                store, battle_id, winner, total_turns, turns,
+                p1_provider=req.p1_provider, p1_model=p1_model, p1_id=p1_id, p1_opponent=p2_label,
+                p2_provider=req.p2_provider, p2_model=p2_model, p2_id=p2_id, p2_opponent=p1_label,
+            ))
 
         except asyncio.CancelledError:
             logger.info("Battle %d cancelled", battle_id)
@@ -487,13 +511,22 @@ async def _run_tournament(
         })
 
         try:
+            # Fetch lessons for LLM players before building so memory is baked in
+            model_ids = store.get_player_model_ids(battle_id)
+            t_p1_id, t_p2_id = model_ids if model_ids else (None, None)
+            t_p1_prov, t_p2_prov = battle_info["p1_provider"], battle_info["p2_provider"]
+            t_p1_lessons = [r["content"] for r in store.get_lessons(t_p1_id)] if t_p1_id and t_p1_prov != "random" else None
+            t_p2_lessons = [r["content"] for r in store.get_lessons(t_p2_id)] if t_p2_id and t_p2_prov != "random" else None
+
             p1 = _build_streaming_player(
-                battle_info["p1_provider"], battle_info["p1_model"], "p1",
+                t_p1_prov, battle_info["p1_model"], "p1",
                 req.prompt_version, store, battle_id, bus, cfg, _FORMAT,
+                lessons=t_p1_lessons,
             )
             p2 = _build_streaming_player(
-                battle_info["p2_provider"], battle_info["p2_model"], "p2",
+                t_p2_prov, battle_info["p2_model"], "p2",
                 req.prompt_version, store, battle_id, bus, cfg, _FORMAT,
+                lessons=t_p2_lessons,
             )
 
             store.set_battle_status(battle_id, "running")
@@ -525,6 +558,14 @@ async def _run_tournament(
                 "total_turns": total_turns,
             })
 
+            # Generate lessons (fire-and-forget)
+            turns = store.get_turns_basic(battle_id)
+            asyncio.create_task(_generate_and_store_lessons(
+                store, battle_id, winner, total_turns, turns,
+                p1_provider=t_p1_prov, p1_model=battle_info["p1_model"], p1_id=t_p1_id, p1_opponent=p2_label,
+                p2_provider=t_p2_prov, p2_model=battle_info["p2_model"], p2_id=t_p2_id, p2_opponent=p1_label,
+            ))
+
         except asyncio.CancelledError:
             logger.info("Tournament %d cancelled at battle %d", tournament_id, battle_id)
             store.cancel_battle(battle_id)
@@ -555,6 +596,30 @@ async def _run_tournament(
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _build_backend(provider: str, model: str | None, json_mode: bool = False):
+    """Construct a ModelBackend for the given provider.  json_mode=False for lessons."""
+    from nidozo.llm import AnthropicBackend, OpenAIBackend
+
+    if provider == "anthropic":
+        return AnthropicBackend(
+            model=model or "claude-sonnet-4-6",
+            api_key=os.environ.get("ANTHROPIC_API_KEY"),
+        )
+    if provider == "openai":
+        return OpenAIBackend(
+            model=model or "gpt-4o",
+            api_key=os.environ.get("OPENAI_API_KEY"),
+            json_mode=json_mode,
+        )
+    # lmstudio
+    return OpenAIBackend(
+        model=model or os.environ.get("LM_STUDIO_MODEL", "local-model"),
+        api_key="lm-studio",
+        base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
+        json_mode=json_mode,
+    )
+
+
 def _build_streaming_player(
     provider: str,
     model: str | None,
@@ -565,9 +630,9 @@ def _build_streaming_player(
     bus: EventBus,
     cfg,
     fmt: str,
+    lessons: list[str] | None = None,
 ):
     from nidozo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
-    from nidozo.llm import AnthropicBackend, OpenAIBackend
 
     if provider == "random":
         return StreamingRandomBot(
@@ -578,25 +643,7 @@ def _build_streaming_player(
         )
 
     use_json_mode = prompt_version == "v2" and provider in ("lmstudio", "openai")
-
-    if provider == "anthropic":
-        backend = AnthropicBackend(
-            model=model or "claude-sonnet-4-6",
-            api_key=os.environ.get("ANTHROPIC_API_KEY"),
-        )
-    elif provider == "openai":
-        backend = OpenAIBackend(
-            model=model or "gpt-4o",
-            api_key=os.environ.get("OPENAI_API_KEY"),
-            json_mode=use_json_mode,
-        )
-    else:  # lmstudio
-        backend = OpenAIBackend(
-            model=model or os.environ.get("LM_STUDIO_MODEL", "local-model"),
-            api_key="lm-studio",
-            base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
-            json_mode=use_json_mode,
-        )
+    backend = _build_backend(provider, model, json_mode=use_json_mode)
 
     return StreamingLLMPlayer(
         backend=backend,
@@ -607,7 +654,60 @@ def _build_streaming_player(
         battle_id=battle_id,
         battle_format=fmt,
         server_configuration=cfg,
+        lessons=lessons,
     )
+
+
+async def _generate_and_store_lessons(
+    store: BattleStore,
+    battle_id: int,
+    winner: int | None,
+    total_turns: int,
+    turns: list[dict],
+    *,
+    p1_provider: str,
+    p1_model: str | None,
+    p1_id: int | None,
+    p1_opponent: str,
+    p2_provider: str,
+    p2_model: str | None,
+    p2_id: int | None,
+    p2_opponent: str,
+) -> None:
+    """Generate and persist post-battle lessons for both LLM players.
+
+    Runs as a fire-and-forget asyncio task.  Errors are logged but never
+    propagate — the battle pipeline must not be affected.
+    """
+    from nidozo.llm.lesson_generator import generate_lesson
+
+    for provider, model, model_id, role, opponent in (
+        (p1_provider, p1_model, p1_id, "p1", p1_opponent),
+        (p2_provider, p2_model, p2_id, "p2", p2_opponent),
+    ):
+        if provider == "random" or model_id is None:
+            continue
+        try:
+            lesson_backend = _build_backend(provider, model, json_mode=False)
+            lesson = await generate_lesson(
+                backend=lesson_backend,
+                player_role=role,
+                winner=winner,
+                total_turns=total_turns,
+                opponent_label=opponent,
+                turns=turns,
+            )
+            if lesson:
+                store.create_lesson(model_id, battle_id, lesson)
+                logger.info(
+                    "Lesson stored for model %d (battle %d, role=%s): %s…",
+                    model_id, battle_id, role, lesson[:80],
+                )
+        except Exception as exc:
+            logger.error(
+                "Failed to generate/store lesson for model %d battle %d: %s",
+                model_id, battle_id, exc,
+            )
 
 
 def _model_name(provider: str, model: str | None) -> str:
