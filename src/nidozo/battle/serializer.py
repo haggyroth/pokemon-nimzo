@@ -180,5 +180,5 @@ def _serialize_fields(battle: AbstractBattle) -> list[str]:
     return [field.name for field in battle.fields]
 
 
-def _serialize_side_conditions(conditions: dict) -> list[str]:
+def _serialize_side_conditions(conditions: dict[Any, Any]) -> list[str]:
     return [cond.name for cond in conditions]

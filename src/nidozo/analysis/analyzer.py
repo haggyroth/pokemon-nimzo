@@ -187,7 +187,7 @@ def annotate_turn(turn: dict[str, Any]) -> dict[str, Any]:
     except (json.JSONDecodeError, TypeError):
         return base
 
-    move_scores: list[dict] = state.get("heuristics", {}).get("move_scores", [])
+    move_scores: list[dict[str, Any]] = state.get("heuristics", {}).get("move_scores", [])
     action = turn.get("action_chosen") or ""
 
     if _is_switch(action):
@@ -261,11 +261,11 @@ def _team_hp_score(state: dict[str, Any]) -> float:
 
     Falls back to just the active Pokémon if my_team is unavailable.
     """
-    team: list[dict] = state.get("my_team") or []
+    team: list[dict[str, Any]] = state.get("my_team") or []
     if team:
-        return sum(max(0.0, m.get("hp_fraction", 0.0)) for m in team)
-    active = state.get("my_active") or {}
-    return max(0.0, active.get("hp_fraction", 0.5))
+        return float(sum(max(0.0, m.get("hp_fraction", 0.0)) for m in team))
+    active: dict[str, Any] = state.get("my_active") or {}
+    return float(max(0.0, active.get("hp_fraction", 0.5)))
 
 
 def _win_prob(p1_state: dict[str, Any] | None, p2_state: dict[str, Any] | None) -> float | None:
@@ -289,7 +289,7 @@ def _merge_turns(flat_turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
     Input: list of DB rows with turn_number, player_role, state_json, …
     Output: [{turn_number, p1: {state, action, parse_success}, p2: {…}}]
     """
-    by_num: dict[int, dict] = {}
+    by_num: dict[int, dict[str, Any]] = {}
     for row in flat_turns:
         n = row["turn_number"]
         if n not in by_num:
@@ -329,12 +329,12 @@ def _detect_turning_point(timeline: list[dict[str, Any]]) -> int | None:
     if len(valid) < 2:
         return None
     best_delta = 0.0
-    best_turn = valid[1][0]
+    best_turn: int = int(valid[1][0])
     for i in range(1, len(valid)):
         delta = abs(valid[i][1] - valid[i - 1][1])
         if delta > best_delta:
             best_delta = delta
-            best_turn = valid[i][0]
+            best_turn = int(valid[i][0])
     return best_turn
 
 
@@ -416,7 +416,7 @@ def _infer_rng_event(
 # Battle-level summary
 # ---------------------------------------------------------------------------
 
-def _player_summary(annotations: list[dict], role: str) -> dict[str, Any]:
+def _player_summary(annotations: list[dict[str, Any]], role: str) -> dict[str, Any]:
     turns = [a for a in annotations if a["player_role"] == role]
     total = len(turns)
     if total == 0:

@@ -12,6 +12,7 @@ JSON-shaped output.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from nidozo.llm.backend import Message, ModelBackend
 
@@ -33,7 +34,7 @@ def _result_label(winner: int | None, player_role: str) -> str:
     return "Win" if winner == role_num else "Loss"
 
 
-def _format_turns(turns: list[dict], player_role: str) -> str:
+def _format_turns(turns: list[dict[str, Any]], player_role: str) -> str:
     """Format a player's turns into a compact bullet list."""
     my_turns = [t for t in turns if t.get("player_role") == player_role]
     # Most recent turns are most informative; show up to _MAX_TURNS_SHOWN
@@ -55,7 +56,7 @@ async def generate_lesson(
     winner: int | None,
     total_turns: int,
     opponent_label: str,
-    turns: list[dict],
+    turns: list[dict[str, Any]],
 ) -> str:
     """Ask the LLM to reflect on the battle and return a 2-3 sentence lesson.
 

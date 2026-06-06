@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 from nidozo.db.elo import DEFAULT_RATING, updated_ratings
 from nidozo.db.schema import migrate
@@ -47,13 +48,14 @@ class BattleStore:
         )
         row = cur.fetchone()
         if row:
-            return row["id"]
+            return int(row["id"])
 
         cur = self._conn.execute(
             "INSERT INTO models (provider, model_name, prompt_version) VALUES (?,?,?)",
             (provider, model_name, prompt_version),
         )
         model_id = cur.lastrowid
+        assert model_id is not None
         self._conn.execute(
             "INSERT INTO elo_ratings (model_id, rating, games) VALUES (?,?,0)",
             (model_id, DEFAULT_RATING),
@@ -71,7 +73,7 @@ class BattleStore:
 
     def create_tournament(
         self,
-        players: list[dict],
+        players: list[dict[str, Any]],
         rounds: int,
         prompt_version: str,
         total_battles: int,
@@ -83,7 +85,9 @@ class BattleStore:
             (json.dumps(players), rounds, prompt_version, total_battles),
         )
         self._conn.commit()
-        return cur.lastrowid
+        row_id = cur.lastrowid
+        assert row_id is not None
+        return row_id
 
     def finish_tournament(self, tournament_id: int, status: str = "completed") -> None:
         self._conn.execute(
@@ -94,7 +98,7 @@ class BattleStore:
         )
         self._conn.commit()
 
-    def get_tournament(self, tournament_id: int) -> dict | None:
+    def get_tournament(self, tournament_id: int) -> dict[str, Any] | None:
         row = self._conn.execute(
             "SELECT * FROM tournaments WHERE id=?", (tournament_id,)
         ).fetchone()
@@ -104,7 +108,7 @@ class BattleStore:
     # Battles
     # ------------------------------------------------------------------
 
-    def get_battle(self, battle_id: int) -> dict | None:
+    def get_battle(self, battle_id: int) -> dict[str, Any] | None:
         """Return a single battle row by id, or None if not found."""
         row = self._conn.execute(
             """SELECT b.id, b.battle_tag, b.format, b.winner, b.total_turns,
@@ -134,7 +138,9 @@ class BattleStore:
             (battle_tag, format, p1_model_id, p2_model_id, tournament_id),
         )
         self._conn.commit()
-        return cur.lastrowid
+        row_id = cur.lastrowid
+        assert row_id is not None
+        return row_id
 
     def set_battle_status(self, battle_id: int, status: str) -> None:
         """Update the status field of a battle (pending/running/completed/cancelled/failed)."""
@@ -235,7 +241,7 @@ class BattleStore:
         )
         self._conn.commit()
 
-    def get_turns_basic(self, battle_id: int) -> list[dict]:
+    def get_turns_basic(self, battle_id: int) -> list[dict[str, Any]]:
         """Return per-turn summary rows (no state_json) ordered by turn number."""
         cur = self._conn.execute(
             """SELECT turn_number, player_role, prompt_version,
@@ -252,7 +258,7 @@ class BattleStore:
         ).fetchone()
         return (row["p1_model_id"], row["p2_model_id"]) if row else None
 
-    def get_battle_players(self, battle_id: int) -> dict | None:
+    def get_battle_players(self, battle_id: int) -> dict[str, Any] | None:
         """Return provider and model_name for both players of a battle, or None."""
         row = self._conn.execute(
             """SELECT p1.provider AS p1_provider, p1.model_name AS p1_model,
@@ -272,7 +278,7 @@ class BattleStore:
         )
         self._conn.commit()
 
-    def get_turns_with_state(self, battle_id: int) -> list[dict]:
+    def get_turns_with_state(self, battle_id: int) -> list[dict[str, Any]]:
         """Return all turns for a battle including state_json, ordered by turn then player."""
         cur = self._conn.execute(
             """SELECT turn_number, player_role, prompt_version,
@@ -287,7 +293,7 @@ class BattleStore:
     # Leaderboard queries
     # ------------------------------------------------------------------
 
-    def leaderboard(self, grouped: bool = True) -> list[dict]:
+    def leaderboard(self, grouped: bool = True) -> list[dict[str, Any]]:
         """Return models sorted by ELO descending.
 
         Args:
@@ -300,7 +306,7 @@ class BattleStore:
             return self._leaderboard_grouped()
         return self._leaderboard_per_version()
 
-    def _leaderboard_grouped(self) -> list[dict]:
+    def _leaderboard_grouped(self) -> list[dict[str, Any]]:
         """One row per (provider, model_name) — aggregated across prompt versions."""
         cur = self._conn.execute(
             """SELECT m.provider, m.model_name,
@@ -336,7 +342,7 @@ class BattleStore:
         )
         return [dict(r) for r in cur.fetchall()]
 
-    def _leaderboard_per_version(self) -> list[dict]:
+    def _leaderboard_per_version(self) -> list[dict[str, Any]]:
         """One row per (provider, model_name, prompt_version) — original behaviour."""
         cur = self._conn.execute(
             """SELECT m.provider, m.model_name, m.prompt_version,
@@ -369,7 +375,7 @@ class BattleStore:
         )
         return [dict(r) for r in cur.fetchall()]
 
-    def recent_battles(self, limit: int = 10) -> list[dict]:
+    def recent_battles(self, limit: int = 10) -> list[dict[str, Any]]:
         cur = self._conn.execute(
             """SELECT b.id, b.battle_tag, b.format, b.total_turns, b.winner, b.finished_at,
                       p1.provider||'/'||p1.model_name AS p1,
@@ -394,9 +400,11 @@ class BattleStore:
             (model_id, battle_id, content),
         )
         self._conn.commit()
-        return cur.lastrowid
+        row_id = cur.lastrowid
+        assert row_id is not None
+        return row_id
 
-    def get_lessons(self, model_id: int, limit: int = 5) -> list[dict]:
+    def get_lessons(self, model_id: int, limit: int = 5) -> list[dict[str, Any]]:
         """Return the most recent lessons for a model, newest first."""
         cur = self._conn.execute(
             """SELECT id, battle_id, content, created_at

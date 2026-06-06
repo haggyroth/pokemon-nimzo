@@ -1,6 +1,7 @@
 """OpenAI-compatible backend — covers OpenAI cloud and local LM Studio."""
 
 import logging
+from typing import Any
 
 import openai
 
@@ -71,10 +72,10 @@ class OpenAIBackend:
         self._json_mode = json_mode
 
     async def complete(self, messages: list[Message]) -> str:
-        kwargs: dict = {
+        kwargs: dict[str, Any] = {
             "model": self._model,
             "max_tokens": self._max_tokens,
-            "messages": messages,  # type: ignore[arg-type]
+            "messages": messages,
         }
         if self._json_mode:
             kwargs["response_format"] = _ACTION_JSON_SCHEMA
