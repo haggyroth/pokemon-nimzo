@@ -4,13 +4,17 @@ import Leaderboard from './components/Leaderboard'
 import BattleField from './components/BattleField'
 import BattleReplay from './components/BattleReplay'
 import ModelStats from './components/ModelStats'
+import TournamentView from './components/TournamentView'
 import { useBattleStream } from './hooks/useBattleStream'
 
 function App() {
-  const [view, setView]                   = useState('home')
-  const [dismissed, setDismissed]         = useState(false)
-  const [replayBattleId, setReplayBattleId] = useState(null)
-  const [statsModelId, setStatsModelId]   = useState(null)
+  const [view, setView]                       = useState('home')
+  const [dismissed, setDismissed]             = useState(false)
+  const [replayBattleId, setReplayBattleId]   = useState(null)
+  const [statsModelId, setStatsModelId]       = useState(null)
+  const [tournamentId, setTournamentId]       = useState(null)
+  // Track where replay was launched from so Close returns there
+  const [replayOrigin, setReplayOrigin]       = useState('home')
   const {
     events, isConnected, p1State, p2State, battleInfo, battleResult,
     thinking, tournament, reset, clearTournament,
@@ -24,21 +28,49 @@ function App() {
     setView('battle')
   }
 
-  function handleTournamentStarted() {
+  function handleTournamentStarted(data) {
     reset()
     clearTournament()
     setDismissed(false)
+    // Go directly to the tournament scoreboard; it has a "watch live" button
+    if (data?.tournament_id) {
+      setTournamentId(data.tournament_id)
+      setView('tournament')
+    } else {
+      setView('battle')
+    }
+  }
+
+  function handleTournamentSelected(id) {
+    setTournamentId(id)
+    setView('tournament')
+  }
+
+  function handleTournamentClose() {
+    setTournamentId(null)
+    setView('home')
+  }
+
+  function handleWatchLive() {
     setView('battle')
   }
 
   function handleReplaySelected(battleId) {
+    setReplayOrigin(view)   // remember where we came from
     setReplayBattleId(battleId)
     setView('replay')
   }
 
   function handleReplayClose() {
     setReplayBattleId(null)
-    setView(statsModelId != null ? 'stats' : 'home')
+    // Return to origin: stats page, tournament view, or home
+    if (replayOrigin === 'stats' && statsModelId != null) {
+      setView('stats')
+    } else if (replayOrigin === 'tournament' && tournamentId != null) {
+      setView('tournament')
+    } else {
+      setView('home')
+    }
   }
 
   function handleModelSelected(modelId) {
@@ -60,8 +92,8 @@ function App() {
         </div>
         <nav className="app-nav">
           <button
-            className={`nav-btn ${view === 'home' || view === 'stats' ? 'active' : ''}`}
-            onClick={() => { setStatsModelId(null); setView('home') }}
+            className={`nav-btn ${view === 'home' || view === 'stats' || view === 'tournament' ? 'active' : ''}`}
+            onClick={() => { setStatsModelId(null); setTournamentId(null); setView('home') }}
           >HOME</button>
           <button
             className={`nav-btn ${view === 'battle' ? 'active' : ''}`}
@@ -75,6 +107,15 @@ function App() {
               </span>
             )}
           </button>
+          {/* Quick-jump to active tournament scoreboard */}
+          {tournament && tournamentId && (
+            <button
+              className={`nav-btn ${view === 'tournament' ? 'active' : ''}`}
+              onClick={() => setView('tournament')}
+            >
+              SCORES
+            </button>
+          )}
         </nav>
       </header>
 
@@ -85,12 +126,22 @@ function App() {
             onTournamentStarted={handleTournamentStarted}
             onReplaySelected={handleReplaySelected}
             onModelSelected={handleModelSelected}
+            onTournamentSelected={handleTournamentSelected}
           />
         )}
         {view === 'stats' && statsModelId != null && (
           <ModelStats
             modelId={statsModelId}
             onClose={handleStatsClose}
+            onReplaySelected={handleReplaySelected}
+          />
+        )}
+        {view === 'tournament' && tournamentId != null && (
+          <TournamentView
+            tournamentId={tournamentId}
+            tournament={tournament?.id === tournamentId ? tournament : null}
+            onClose={handleTournamentClose}
+            onWatchLive={handleWatchLive}
             onReplaySelected={handleReplaySelected}
           />
         )}
@@ -104,6 +155,12 @@ function App() {
             thinking={thinking}
             tournament={tournament}
             onDismiss={() => setDismissed(true)}
+            onTournamentScoreboard={() => {
+              if (tournament?.id) {
+                setTournamentId(tournament.id)
+                setView('tournament')
+              }
+            }}
           />
         )}
         {view === 'replay' && replayBattleId != null && (

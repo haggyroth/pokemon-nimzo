@@ -252,12 +252,46 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
             raise HTTPException(status_code=404, detail="Model not found")
         return stats
 
+    @app.get("/api/tournaments")
+    def list_tournaments(limit: int = 20) -> list[dict[str, Any]]:
+        """List recent tournaments, newest first."""
+        return store.list_tournaments(limit=limit)
+
     @app.get("/api/tournaments/{tournament_id}")
     def get_tournament(tournament_id: int) -> dict[str, Any]:
         t = store.get_tournament(tournament_id)
         if not t:
             raise HTTPException(status_code=404, detail="Tournament not found")
         return t
+
+    @app.get("/api/tournaments/{tournament_id}/standings")
+    def get_tournament_standings(tournament_id: int) -> list[dict[str, Any]]:
+        """Per-player standings within a tournament (W/L/T, points, ELO Δ)."""
+        if not store.get_tournament(tournament_id):
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        return store.get_tournament_standings(tournament_id)
+
+    @app.get("/api/tournaments/{tournament_id}/battles")
+    def get_tournament_battles(tournament_id: int) -> list[dict[str, Any]]:
+        """All battles for a tournament in scheduled order."""
+        if not store.get_tournament(tournament_id):
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        return store.get_tournament_battles(tournament_id)
+
+    @app.post("/api/tournaments/{tournament_id}/cancel")
+    async def cancel_tournament(tournament_id: int) -> dict[str, Any]:
+        """Cancel a running tournament.  Idempotent — 200 if already cancelled."""
+        t = store.get_tournament(tournament_id)
+        if not t:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        cancelled = store.cancel_tournament(tournament_id)
+        if cancelled:
+            await bus.publish({
+                "type": "tournament_cancelled",
+                "tournament_id": tournament_id,
+                "battles_completed": None,
+            })
+        return {"tournament_id": tournament_id, "cancelled": cancelled, "status": t["status"] if not cancelled else "cancelled"}
 
     # -----------------------------------------------------------------------
     # REST: Start a single battle
@@ -571,6 +605,16 @@ async def _run_tournament(
                 "tournament_id": tournament_id,
                 "winner": winner,
                 "total_turns": total_turns,
+            })
+
+            # Push updated standings so the scoreboard refreshes without polling
+            standings = store.get_tournament_standings(tournament_id)
+            await bus.publish({
+                "type": "tournament_standings",
+                "tournament_id": tournament_id,
+                "standings": standings,
+                "battle_num": battle_num,
+                "total_battles": total,
             })
 
             # Generate lessons (fire-and-forget)

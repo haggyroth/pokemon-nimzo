@@ -81,6 +81,14 @@ export function useBattleStream() {
           return
         }
 
+        if (event.type === 'tournament_standings') {
+          setTournament(prev => prev ? {
+            ...prev,
+            standings: event.standings,
+          } : null)
+          return
+        }
+
         if (event.type === 'tournament_end') {
           setTournament(prev => prev ? {
             ...prev,

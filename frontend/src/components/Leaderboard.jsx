@@ -301,13 +301,14 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
 // Main Leaderboard component
 // ---------------------------------------------------------------------------
 
-export default function Leaderboard({ onBattleStarted, onTournamentStarted, onReplaySelected, onModelSelected }) {
-  const [rows, setRows]           = useState([])
-  const [battles, setBattles]     = useState([])
-  const [analyzing, setAnalyzing] = useState(null)
-  const [lmModels, setLmModels]   = useState([])
-  const [lmLoading, setLmLoading] = useState(true)
-  const [formTab, setFormTab]     = useState('battle')   // 'battle' | 'tournament'
+export default function Leaderboard({ onBattleStarted, onTournamentStarted, onReplaySelected, onModelSelected, onTournamentSelected }) {
+  const [rows, setRows]               = useState([])
+  const [battles, setBattles]         = useState([])
+  const [tournaments, setTournaments] = useState([])
+  const [analyzing, setAnalyzing]     = useState(null)
+  const [lmModels, setLmModels]       = useState([])
+  const [lmLoading, setLmLoading]     = useState(true)
+  const [formTab, setFormTab]         = useState('battle')   // 'battle' | 'tournament'
 
   useEffect(() => {
     let cancelled = false
@@ -324,12 +325,14 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
 
   async function fetchData() {
     try {
-      const [lb, bt] = await Promise.all([
+      const [lb, bt, ts] = await Promise.all([
         fetch('/api/leaderboard').then(r => r.json()),
         fetch('/api/battles').then(r => r.json()),
+        fetch('/api/tournaments?limit=8').then(r => r.ok ? r.json() : []).catch(() => []),
       ])
       setRows(lb)
       setBattles(bt)
+      setTournaments(ts)
     } catch {
       // network errors are silently swallowed; UI retains stale data
     }
@@ -456,6 +459,47 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
             })
           )}
         </div>
+
+        {/* Tournament history */}
+        {tournaments.length > 0 && (
+          <div className="panel">
+            <div className="panel-title">RECENT TOURNAMENTS</div>
+            <div className="tournament-history-list">
+              {tournaments.map(t => {
+                let players
+                try { players = JSON.parse(t.players ?? '[]') } catch { players = [] }
+                const statusCls = t.status === 'completed' ? 'th-done'
+                                : t.status === 'cancelled' ? 'th-cancelled'
+                                : 'th-running'
+                return (
+                  <div key={t.id} className="tournament-history-row">
+                    <div className="th-left">
+                      <span className={`th-status ${statusCls}`}>
+                        {t.status === 'running' ? '●' : t.status === 'completed' ? '✓' : '✕'}
+                      </span>
+                      <div className="th-info">
+                        <span className="th-id">#{t.id}</span>
+                        <span className="th-players">{players.length} players · {t.rounds} round{t.rounds !== 1 ? 's' : ''}</span>
+                        <span className="th-progress">{t.battles_completed}/{t.total_battles} battles</span>
+                      </div>
+                    </div>
+                    <div className="th-right">
+                      <span className="th-date">
+                        {t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}
+                      </span>
+                      <button
+                        className="btn-stats"
+                        onClick={() => onTournamentSelected?.(t.id)}
+                      >
+                        SCORES →
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right: tabbed battle / tournament form */}
