@@ -1,0 +1,20 @@
+=== TEAM DRAFT — {{ tier_display | upper }} ===
+Pick {{ pick_num }} of {{ total_picks }}
+
+{% if picked %}
+--- YOUR TEAM SO FAR ---
+{% for mon in picked %}
+  {{ loop.index }}. {{ mon.species }} ({{ mon.types | join(" / ") }})
+{% endfor %}
+
+{% else %}
+--- YOUR TEAM SO FAR ---
+  (none yet — this is your first pick)
+
+{% endif %}
+--- AVAILABLE POOL ({{ pool | length }} Pokémon) ---
+{% for mon in pool %}
+  {{ "%2d" | format(loop.index) }}. {{ mon.species }} ({{ mon.types | join(" / ") }})
+{% endfor %}
+
+Respond with JSON: {"reasoning": "...", "pick": "<species name>"}

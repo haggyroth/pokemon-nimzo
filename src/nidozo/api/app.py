@@ -43,6 +43,8 @@ class StartBattleRequest(BaseModel):
     model: str | None = None
     prompt_version: str = "v2"
     n_battles: int = Field(1, ge=1, le=50)
+    tier: str = "random"   # "random" | "ou" | "ubers" | "uu" | "nu" | "lc" | "freeforall"
+    draft: bool = False    # If True and tier != "random", run LLM draft phase first
 
 
 class StartBattleResponse(BaseModel):
@@ -59,6 +61,8 @@ class StartTournamentRequest(BaseModel):
     players: list[PlayerSpec] = Field(..., min_length=2, max_length=12)
     rounds: int = Field(1, ge=1, le=10)
     prompt_version: str = "v2"
+    tier: str = "random"   # "random" | "ou" | "ubers" | "uu" | "nu" | "lc" | "freeforall"
+    draft: bool = False    # If True and tier != "random", run LLM draft phase before each battle
 
 
 class StartTournamentResponse(BaseModel):
@@ -294,6 +298,57 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         return {"tournament_id": tournament_id, "cancelled": cancelled, "status": t["status"] if not cancelled else "cancelled"}
 
     # -----------------------------------------------------------------------
+    # REST: Tiers
+    # -----------------------------------------------------------------------
+
+    @app.get("/api/tiers")
+    def list_tiers() -> list[dict[str, Any]]:
+        """List all available tiers with display name and Pokémon count."""
+        from nidozo.battle.team_builder import all_species as _all_species
+        from nidozo.battle.team_builder import load_movesets
+        from nidozo.battle.tiers import _TIER_POOLS, TIER_DISPLAY, TIER_TO_FORMAT
+
+        ms = load_movesets()
+        all_s = _all_species(ms)
+        result: list[dict[str, Any]] = []
+        for tier_id, display in TIER_DISPLAY.items():
+            if tier_id == "random":
+                continue
+            pool = _TIER_POOLS.get(tier_id)
+            count = len(pool & all_s) if pool is not None else len(all_s)
+            result.append({
+                "id": tier_id,
+                "name": display,
+                "showdown_format": TIER_TO_FORMAT.get(tier_id, "gen3ou"),
+                "pokemon_count": count,
+            })
+        return result
+
+    @app.get("/api/tiers/{tier_id}/pokemon")
+    def get_tier_pokemon(tier_id: str) -> list[dict[str, Any]]:
+        """List the Pokémon available in a given tier."""
+        from nidozo.battle.team_builder import all_species as _all_species
+        from nidozo.battle.team_builder import get_pool_info, load_movesets
+        from nidozo.battle.tiers import get_pool, is_valid_tier
+
+        if not is_valid_tier(tier_id) or tier_id == "random":
+            raise HTTPException(status_code=404, detail=f"Unknown tier: {tier_id!r}")
+        ms = load_movesets()
+        pool_ids = get_pool(tier_id, _all_species(ms))
+        return get_pool_info(pool_ids, ms)
+
+    @app.get("/api/models/{model_id}/teams")
+    def get_model_teams(model_id: int, limit: int = 20) -> list[dict[str, Any]]:
+        """Return recently drafted teams for a model."""
+        return store.get_teams_for_model(model_id, limit=limit)
+
+    @app.get("/api/battles/{battle_id}/teams")
+    def get_battle_teams(battle_id: int) -> dict[str, Any]:
+        """Return the drafted teams for a specific battle."""
+        p1, p2 = store.get_battle_teams(battle_id)
+        return {"p1": p1, "p2": p2}
+
+    # -----------------------------------------------------------------------
     # REST: Start a single battle
     # -----------------------------------------------------------------------
 
@@ -302,15 +357,27 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         req: StartBattleRequest,
         background_tasks: BackgroundTasks,
     ) -> StartBattleResponse:
+        from nidozo.battle.tiers import TIER_TO_FORMAT, is_valid_tier
+
+        if not is_valid_tier(req.tier) and req.tier != "random":
+            raise HTTPException(status_code=400, detail=f"Unknown tier: {req.tier!r}")
+
+        showdown_format = (
+            "gen3randombattle" if req.tier == "random"
+            else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+        )
+        # Drafted battles always use prompt v3
+        effective_prompt = "v3" if (req.tier != "random" and req.draft) else req.prompt_version
+
         battle_ids = []
         for i in range(req.n_battles):
             p1_model_name = _model_name(req.p1_provider, req.p1_model or req.model)
             p2_model_name = _model_name(req.p2_provider, req.p2_model or req.model)
-            p1_id = store.get_or_create_model(req.p1_provider, p1_model_name, req.prompt_version)
-            p2_id = store.get_or_create_model(req.p2_provider, p2_model_name, req.prompt_version)
+            p1_id = store.get_or_create_model(req.p1_provider, p1_model_name, effective_prompt)
+            p2_id = store.get_or_create_model(req.p2_provider, p2_model_name, effective_prompt)
             bid = store.create_battle(
                 f"pending-{req.p1_provider}-{req.p2_provider}-{i}",
-                "gen3randombattle",
+                showdown_format,
                 p1_id,
                 p2_id,
             )
@@ -333,8 +400,18 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         req: StartTournamentRequest,
         background_tasks: BackgroundTasks,
     ) -> StartTournamentResponse:
+        from nidozo.battle.tiers import TIER_TO_FORMAT, is_valid_tier
+
         if len(req.players) < 2:
             raise HTTPException(status_code=400, detail="Need at least 2 players")
+        if not is_valid_tier(req.tier) and req.tier != "random":
+            raise HTTPException(status_code=400, detail=f"Unknown tier: {req.tier!r}")
+
+        showdown_format = (
+            "gen3randombattle" if req.tier == "random"
+            else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+        )
+        effective_prompt = "v3" if (req.tier != "random" and req.draft) else req.prompt_version
 
         import itertools
         pairs = list(itertools.combinations(range(len(req.players)), 2))
@@ -349,8 +426,9 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         tournament_id = store.create_tournament(
             players=player_specs,
             rounds=req.rounds,
-            prompt_version=req.prompt_version,
+            prompt_version=effective_prompt,
             total_battles=total,
+            tier=req.tier,
         )
 
         # Pre-create all battle records so we can return IDs immediately
@@ -361,11 +439,11 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
                 for (a_idx, b_idx) in [(i, j), (j, i)]:
                     a = player_specs[a_idx]
                     b = player_specs[b_idx]
-                    a_id = store.get_or_create_model(a["provider"], a["model_name"], req.prompt_version)
-                    b_id = store.get_or_create_model(b["provider"], b["model_name"], req.prompt_version)
+                    a_id = store.get_or_create_model(a["provider"], a["model_name"], effective_prompt)
+                    b_id = store.get_or_create_model(b["provider"], b["model_name"], effective_prompt)
                     bid = store.create_battle(
                         f"tournament-{tournament_id}-{battle_num}",
-                        "gen3randombattle",
+                        showdown_format,
                         a_id, b_id,
                         tournament_id=tournament_id,
                     )
@@ -425,7 +503,15 @@ async def _run_battles(
     active_tasks: dict[int, asyncio.Task[None]],
 ) -> None:
     from poke_env import LocalhostServerConfiguration
-    _FORMAT = "gen3randombattle"
+
+    from nidozo.battle.tiers import TIER_TO_FORMAT
+
+    do_draft = req.tier != "random" and req.draft
+    showdown_format = (
+        "gen3randombattle" if req.tier == "random"
+        else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+    )
+    effective_prompt = "v3" if do_draft else req.prompt_version
     cfg = LocalhostServerConfiguration
 
     for battle_id in battle_ids:
@@ -437,21 +523,61 @@ async def _run_battles(
             p1_model = req.p1_model or req.model
             p2_model = req.p2_model or req.model
 
-            # Fetch lessons before building players so they're baked into prompts
+            # Fetch model IDs and lessons before building players
             model_ids = store.get_player_model_ids(battle_id)
             p1_id, p2_id = model_ids if model_ids else (None, None)
             p1_lessons = [r["content"] for r in store.get_lessons(p1_id)] if p1_id and req.p1_provider != "random" else None
             p2_lessons = [r["content"] for r in store.get_lessons(p2_id)] if p2_id and req.p2_provider != "random" else None
 
+            # Draft phase (only for non-random, draft-enabled battles)
+            p1_team: str | None = None
+            p2_team: str | None = None
+            p1_team_id: int | None = None
+            p2_team_id: int | None = None
+
+            if do_draft and p1_id is not None and req.p1_provider != "random":
+                await bus.publish({
+                    "type": "draft_start",
+                    "player_role": "p1",
+                    "tier": req.tier,
+                    "battle_id": battle_id,
+                })
+                p1_backend = _build_backend(req.p1_provider, p1_model)
+                p1_draft = await _run_draft_phase(
+                    p1_backend, p1_id, req.tier, store, bus, "p1"
+                )
+                p1_team = p1_draft["team_string"]
+                p1_team_id = p1_draft["team_id"]
+
+            if do_draft and p2_id is not None and req.p2_provider != "random":
+                await bus.publish({
+                    "type": "draft_start",
+                    "player_role": "p2",
+                    "tier": req.tier,
+                    "battle_id": battle_id,
+                })
+                p2_backend = _build_backend(req.p2_provider, p2_model)
+                p2_draft = await _run_draft_phase(
+                    p2_backend, p2_id, req.tier, store, bus, "p2"
+                )
+                p2_team = p2_draft["team_string"]
+                p2_team_id = p2_draft["team_id"]
+
+            # Persist team associations
+            if do_draft:
+                store.set_battle_teams(battle_id, p1_team_id, p2_team_id, req.tier)
+
             p1 = _build_streaming_player(
                 req.p1_provider, p1_model, "p1",
-                req.prompt_version, store, battle_id, bus, cfg, _FORMAT,
+                effective_prompt, store, battle_id, bus, cfg, showdown_format,
                 lessons=p1_lessons,
+                team=p1_team,
             )
             p2 = _build_streaming_player(
                 req.p2_provider, p2_model, "p2",
-                req.prompt_version, store, battle_id, bus, cfg, _FORMAT,
+                effective_prompt, store, battle_id, bus, cfg, showdown_format,
                 lessons=p2_lessons,
+                team=p2_team,
             )
 
             store.set_battle_status(battle_id, "running")
@@ -460,7 +586,9 @@ async def _run_battles(
                 "battle_id": battle_id,
                 "p1": f"{req.p1_provider}/{_model_name(req.p1_provider, p1_model)}",
                 "p2": f"{req.p2_provider}/{_model_name(req.p2_provider, p2_model)}",
-                "format": _FORMAT,
+                "format": showdown_format,
+                "tier": req.tier,
+                "drafted": do_draft,
             })
 
             await p1.battle_against(p2, n_battles=1)
@@ -518,7 +646,15 @@ async def _run_tournament(
     active_tasks: dict[int, asyncio.Task[None]],
 ) -> None:
     from poke_env import LocalhostServerConfiguration
-    _FORMAT = "gen3randombattle"
+
+    from nidozo.battle.tiers import TIER_TO_FORMAT
+
+    do_draft = req.tier != "random" and req.draft
+    showdown_format = (
+        "gen3randombattle" if req.tier == "random"
+        else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+    )
+    effective_prompt = "v3" if do_draft else req.prompt_version
     cfg = LocalhostServerConfiguration
 
     total = len(battle_ids)
@@ -528,6 +664,7 @@ async def _run_tournament(
         "players": player_specs,
         "total_battles": total,
         "rounds": req.rounds,
+        "tier": req.tier,
     })
 
     for battle_num, battle_id in enumerate(battle_ids, start=1):
@@ -560,22 +697,59 @@ async def _run_tournament(
         })
 
         try:
-            # Fetch lessons for LLM players before building so memory is baked in
+            # Fetch lessons and model IDs
             model_ids = store.get_player_model_ids(battle_id)
             t_p1_id, t_p2_id = model_ids if model_ids else (None, None)
             t_p1_prov, t_p2_prov = battle_info["p1_provider"], battle_info["p2_provider"]
             t_p1_lessons = [r["content"] for r in store.get_lessons(t_p1_id)] if t_p1_id and t_p1_prov != "random" else None
             t_p2_lessons = [r["content"] for r in store.get_lessons(t_p2_id)] if t_p2_id and t_p2_prov != "random" else None
 
+            # Draft phase per battle (each battle gets a fresh draft)
+            t_p1_team: str | None = None
+            t_p2_team: str | None = None
+            t_p1_team_id: int | None = None
+            t_p2_team_id: int | None = None
+
+            if do_draft and t_p1_id is not None and t_p1_prov != "random":
+                await bus.publish({
+                    "type": "draft_start",
+                    "player_role": "p1",
+                    "tier": req.tier,
+                    "battle_id": battle_id,
+                    "tournament_id": tournament_id,
+                })
+                p1_backend = _build_backend(t_p1_prov, battle_info["p1_model"])
+                p1_draft_r = await _run_draft_phase(p1_backend, t_p1_id, req.tier, store, bus, "p1")
+                t_p1_team = p1_draft_r["team_string"]
+                t_p1_team_id = p1_draft_r["team_id"]
+
+            if do_draft and t_p2_id is not None and t_p2_prov != "random":
+                await bus.publish({
+                    "type": "draft_start",
+                    "player_role": "p2",
+                    "tier": req.tier,
+                    "battle_id": battle_id,
+                    "tournament_id": tournament_id,
+                })
+                p2_backend = _build_backend(t_p2_prov, battle_info["p2_model"])
+                p2_draft_r = await _run_draft_phase(p2_backend, t_p2_id, req.tier, store, bus, "p2")
+                t_p2_team = p2_draft_r["team_string"]
+                t_p2_team_id = p2_draft_r["team_id"]
+
+            if do_draft:
+                store.set_battle_teams(battle_id, t_p1_team_id, t_p2_team_id, req.tier)
+
             p1 = _build_streaming_player(
                 t_p1_prov, battle_info["p1_model"], "p1",
-                req.prompt_version, store, battle_id, bus, cfg, _FORMAT,
+                effective_prompt, store, battle_id, bus, cfg, showdown_format,
                 lessons=t_p1_lessons,
+                team=t_p1_team,
             )
             p2 = _build_streaming_player(
                 t_p2_prov, battle_info["p2_model"], "p2",
-                req.prompt_version, store, battle_id, bus, cfg, _FORMAT,
+                effective_prompt, store, battle_id, bus, cfg, showdown_format,
                 lessons=t_p2_lessons,
+                team=t_p2_team,
             )
 
             store.set_battle_status(battle_id, "running")
@@ -585,7 +759,9 @@ async def _run_tournament(
                 "tournament_id": tournament_id,
                 "p1": p1_label,
                 "p2": p2_label,
-                "format": _FORMAT,
+                "format": showdown_format,
+                "tier": req.tier,
+                "drafted": do_draft,
             })
 
             await p1.battle_against(p2, n_battles=1)
@@ -690,6 +866,7 @@ def _build_streaming_player(
     cfg: Any,
     fmt: str,
     lessons: list[str] | None = None,
+    team: str | None = None,
 ) -> Any:
     from nidozo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
 
@@ -701,20 +878,47 @@ def _build_streaming_player(
             server_configuration=cfg,
         )
 
-    use_json_mode = prompt_version == "v2" and provider in ("lmstudio", "openai")
+    use_json_mode = prompt_version in ("v2", "v3") and provider in ("lmstudio", "openai")
     backend = _build_backend(provider, model, json_mode=use_json_mode)
 
-    return StreamingLLMPlayer(
+    kwargs: dict[str, Any] = {
+        "backend": backend,
+        "event_bus": bus,
+        "player_role": role,
+        "prompt_version": prompt_version,
+        "store": store,
+        "battle_id": battle_id,
+        "battle_format": fmt,
+        "server_configuration": cfg,
+        "lessons": lessons,
+    }
+    if team is not None:
+        kwargs["team"] = team
+
+    return StreamingLLMPlayer(**kwargs)
+
+
+async def _run_draft_phase(
+    backend: ModelBackend,
+    model_id: int,
+    tier: str,
+    store: BattleStore,
+    bus: EventBus,
+    player_role: str,
+) -> dict[str, Any]:
+    """Run the draft for one player and return {team_string, team_id}."""
+    from nidozo.battle.draft import run_draft
+
+    result = await run_draft(
         backend=backend,
-        event_bus=bus,
-        player_role=role,
-        prompt_version=prompt_version,
+        model_id=model_id,
+        tier=tier,
         store=store,
-        battle_id=battle_id,
-        battle_format=fmt,
-        server_configuration=cfg,
-        lessons=lessons,
+        bus=bus,
+        player_role=player_role,
+        prompt_version="v3",
     )
+    return {"team_string": result.team_string, "team_id": result.team_id}
 
 
 async def _generate_and_store_lessons(

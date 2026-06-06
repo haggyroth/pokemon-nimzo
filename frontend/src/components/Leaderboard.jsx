@@ -3,6 +3,16 @@ import BattleAnalysis from './BattleAnalysis'
 
 const PROVIDERS = ['random', 'anthropic', 'openai', 'lmstudio']
 
+const TIERS = [
+  { id: 'random',     label: 'Random Battle' },
+  { id: 'ou',         label: 'OverUsed (OU)' },
+  { id: 'ubers',      label: 'Ubers' },
+  { id: 'uu',         label: 'UnderUsed (UU)' },
+  { id: 'nu',         label: 'NeverUsed (NU)' },
+  { id: 'lc',         label: 'Little Cup (LC)' },
+  { id: 'freeforall', label: 'Free-for-All' },
+]
+
 const STATIC_PRESETS = {
   anthropic: [
     { label: 'Sonnet 4.5', value: 'claude-sonnet-4-5' },
@@ -89,6 +99,8 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
     p1_provider: 'lmstudio', p2_provider: 'lmstudio',
     p1_model: '', p2_model: '',
     n_battles: 1,
+    tier: 'random',
+    draft: false,
   })
 
   // Auto-fill with first two LM Studio models once they load.
@@ -126,6 +138,8 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
     }
   }
 
+  const isDrafted = form.tier !== 'random'
+
   return (
     <form className="start-form" onSubmit={handleSubmit}>
       <ModelSelector
@@ -142,6 +156,27 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
         onModelChange={v => setForm(f => ({ ...f, p2_model: v }))}
         lmModels={lmModels} lmLoading={lmLoading}
       />
+      <div className="form-group">
+        <label className="form-label">Tier</label>
+        <select
+          className="form-select"
+          value={form.tier}
+          onChange={e => setForm(f => ({ ...f, tier: e.target.value, draft: e.target.value !== 'random' ? f.draft : false }))}
+        >
+          {TIERS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+      </div>
+      {isDrafted && (
+        <div className="form-group form-group--inline">
+          <label className="form-label">Draft teams (LLM picks)</label>
+          <input
+            type="checkbox"
+            className="form-checkbox"
+            checked={form.draft}
+            onChange={e => setForm(f => ({ ...f, draft: e.target.checked }))}
+          />
+        </div>
+      )}
       <div className="form-group">
         <label className="form-label">Number of battles</label>
         <input
@@ -166,6 +201,8 @@ const EMPTY_PLAYER = { provider: 'lmstudio', model: '' }
 function TournamentForm({ onTournamentStarted, lmModels }) {
   const [loading, setLoading] = useState(false)
   const [rounds, setRounds] = useState(3)
+  const [tier, setTier] = useState('random')
+  const [draft, setDraft] = useState(false)
   const [players, setPlayers] = useState([
     { ...EMPTY_PLAYER },
     { ...EMPTY_PLAYER },
@@ -213,6 +250,8 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
           model: p.provider === 'random' ? null : (p.model || null),
         })),
         rounds: Number(rounds),
+        tier,
+        draft,
       }
       const res = await fetch('/api/tournament/start', {
         method: 'POST',
@@ -278,6 +317,27 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
         </div>
       ))}
 
+      <div className="form-group">
+        <label className="form-label">Tier</label>
+        <select
+          className="form-select"
+          value={tier}
+          onChange={e => { setTier(e.target.value); if (e.target.value === 'random') setDraft(false) }}
+        >
+          {TIERS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+      </div>
+      {tier !== 'random' && (
+        <div className="form-group form-group--inline">
+          <label className="form-label">Draft teams (LLM picks)</label>
+          <input
+            type="checkbox"
+            className="form-checkbox"
+            checked={draft}
+            onChange={e => setDraft(e.target.checked)}
+          />
+        </div>
+      )}
       <div className="form-group">
         <label className="form-label">Rounds per matchup</label>
         <input

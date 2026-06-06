@@ -1,0 +1,103 @@
+=== Turn {{ turn }} | {{ format }} ===
+{% if weather %}
+Weather: {{ weather }}
+{% endif %}
+{% if fields %}
+Field effects: {{ fields | join(", ") }}
+{% endif %}
+{% if my_side_conditions %}
+Your side: {{ my_side_conditions | join(", ") }}
+{% endif %}
+{% if opponent_side_conditions %}
+Opponent's side: {{ opponent_side_conditions | join(", ") }}
+{% endif %}
+
+--- YOUR ACTIVE POKÉMON ---
+{% if my_active %}
+{{ my_active.species | title }} ({{ my_active.types | join("/") }})  |  HP: {{ (my_active.hp_fraction * 100) | round(1) }}%{% if my_active.status %}  |  Status: {{ my_active.status }}{% endif %}
+
+{% if my_active.boosts %}
+  Stat stages: {% for stat, val in my_active.boosts.items() %}{{ stat }} {{ "%+d" | format(val) }}  {% endfor %}
+
+{% endif %}
+{% if my_active.item %}  Item: {{ my_active.item }}{% endif %}{% if my_active.ability %}  |  Ability: {{ my_active.ability }}{% endif %}
+
+  Moves:
+{% for name, move in my_active.moves.items() %}
+    {{ loop.index }}. {{ move.id | replace("_", " ") | title }} ({{ move.type }}, {{ move.category }}, {{ move.base_power }} BP, {{ move.pp }}/{{ move.max_pp }} PP)
+{% endfor %}
+{% else %}
+(no active Pokémon)
+{% endif %}
+
+--- YOUR BENCH ---
+{% if my_team %}
+{% for mon in my_team %}
+  - {{ mon.species | title }} ({{ mon.types | join("/") }})  |  HP: {{ (mon.hp_fraction * 100) | round(1) }}%{% if mon.fainted %}  [FAINTED]{% endif %}{% if mon.status %}  |  {{ mon.status }}{% endif %}
+
+{% endfor %}
+{% else %}
+  (none)
+{% endif %}
+
+--- OPPONENT'S ACTIVE POKÉMON ---
+{% if opponent_active %}
+{{ opponent_active.species | title }} ({{ opponent_active.types | join("/") }})  |  HP: {{ (opponent_active.hp_fraction * 100) | round(1) }}%{% if opponent_active.status %}  |  Status: {{ opponent_active.status }}{% endif %}
+
+{% if opponent_active.boosts %}
+  Stat stages: {% for stat, val in opponent_active.boosts.items() %}{{ stat }} {{ "%+d" | format(val) }}  {% endfor %}
+
+{% endif %}
+{% if opponent_active.item %}  Revealed item: {{ opponent_active.item }}{% endif %}{% if opponent_active.ability %}  |  Revealed ability: {{ opponent_active.ability }}{% endif %}
+
+{% if opponent_active.revealed_moves %}
+  Revealed moves:
+{% for name, move in opponent_active.revealed_moves.items() %}
+    - {{ move.id | replace("_", " ") | title }} ({{ move.type }}, {{ move.category }}, {{ move.base_power }} BP)
+{% endfor %}
+{% else %}
+  Revealed moves: none yet
+{% endif %}
+{% else %}
+(no opponent active)
+{% endif %}
+
+--- OPPONENT'S BENCH ---
+{% if opponent_team %}
+{% for mon in opponent_team %}
+  - {{ mon.species | title }} ({{ mon.types | join("/") }})  |  HP: {{ (mon.hp_fraction * 100) | round(1) }}%{% if mon.fainted %}  [FAINTED]{% endif %}{% if mon.status %}  |  {{ mon.status }}{% endif %}
+
+{% endfor %}
+{% else %}
+  (none revealed)
+{% endif %}
+
+--- AVAILABLE ACTIONS ---
+{% if force_switch %}
+You must switch — your active Pokémon fainted or was forced out.
+{% endif %}
+{% for move in available_moves %}
+  move {{ loop.index }}: {{ move.id | replace("_", " ") | title }} ({{ move.type }}, {{ move.category }}, {{ move.base_power }} BP, {{ move.pp }}/{{ move.max_pp }} PP)
+{% endfor %}
+{% for species in available_switches %}
+  switch {{ loop.index }}: {{ species | title }}
+{% endfor %}
+
+--- HEURISTIC ADVISORY (context for your reasoning — not binding) ---
+{% if heuristics.move_scores %}
+Move analysis:
+{% for ms in heuristics.move_scores %}
+  move {{ loop.index }} ({{ ms.move_id | replace("_", " ") | title }}): {{ ms.effectiveness_label }}{% if ms.estimated_damage_pct %}, est. {{ ms.estimated_damage_pct }} damage{% endif %}{% if ms.priority and ms.priority > 0 %}, priority +{{ ms.priority }}{% endif %}{% if ms.is_status %} [status move]{% endif %}
+
+{% if ms.notes %}
+    Notes: {{ ms.notes | join(" | ") }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if heuristics.switch_scores %}
+Switch analysis:
+{% for ss in heuristics.switch_scores %}
+  switch {{ loop.index }} ({{ ss.species | title }}, HP {{ (ss.hp_fraction * 100) | round(1) }}%):{% if ss.notes %} {{ ss.notes | join(" | ") }}{% else %} no notable matchup info{% endif %}
+
+{% endfor %}
+{% endif %}

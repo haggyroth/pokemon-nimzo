@@ -5,6 +5,7 @@ import BattleField from './components/BattleField'
 import BattleReplay from './components/BattleReplay'
 import ModelStats from './components/ModelStats'
 import TournamentView from './components/TournamentView'
+import DraftPhase from './components/DraftPhase'
 import { useBattleStream } from './hooks/useBattleStream'
 
 function App() {
@@ -17,7 +18,7 @@ function App() {
   const [replayOrigin, setReplayOrigin]       = useState('home')
   const {
     events, isConnected, p1State, p2State, battleInfo, battleResult,
-    thinking, tournament, reset, clearTournament,
+    thinking, tournament, draft, reset, clearTournament,
   } = useBattleStream()
 
   const result = dismissed ? null : battleResult
@@ -146,22 +147,33 @@ function App() {
           />
         )}
         {view === 'battle' && (
-          <BattleField
-            p1State={p1State}
-            p2State={p2State}
-            battleInfo={battleInfo}
-            battleResult={result}
-            events={events}
-            thinking={thinking}
-            tournament={tournament}
-            onDismiss={() => setDismissed(true)}
-            onTournamentScoreboard={() => {
-              if (tournament?.id) {
-                setTournamentId(tournament.id)
-                setView('tournament')
-              }
-            }}
-          />
+          <>
+            {draft && (
+              <DraftPhase
+                draft={draft}
+                p1Label={battleInfo?.p1?.split('/').pop() ?? 'Player 1'}
+                p2Label={battleInfo?.p2?.split('/').pop() ?? 'Player 2'}
+              />
+            )}
+            {!draft && (
+              <BattleField
+                p1State={p1State}
+                p2State={p2State}
+                battleInfo={battleInfo}
+                battleResult={result}
+                events={events}
+                thinking={thinking}
+                tournament={tournament}
+                onDismiss={() => setDismissed(true)}
+                onTournamentScoreboard={() => {
+                  if (tournament?.id) {
+                    setTournamentId(tournament.id)
+                    setView('tournament')
+                  }
+                }}
+              />
+            )}
+          </>
         )}
         {view === 'replay' && replayBattleId != null && (
           <BattleReplay

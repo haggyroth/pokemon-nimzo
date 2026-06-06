@@ -77,12 +77,13 @@ class BattleStore:
         rounds: int,
         prompt_version: str,
         total_battles: int,
+        tier: str = "random",
     ) -> int:
         """Insert a tournament row and return its id."""
         cur = self._conn.execute(
-            """INSERT INTO tournaments (players, rounds, prompt_version, total_battles)
-               VALUES (?,?,?,?)""",
-            (json.dumps(players), rounds, prompt_version, total_battles),
+            """INSERT INTO tournaments (players, rounds, prompt_version, total_battles, tier)
+               VALUES (?,?,?,?,?)""",
+            (json.dumps(players), rounds, prompt_version, total_battles, tier),
         )
         self._conn.commit()
         row_id = cur.lastrowid
@@ -624,6 +625,112 @@ class BattleStore:
             },
             "lessons": [dict(r) for r in lesson_rows],
         }
+
+    # ------------------------------------------------------------------
+    # Teams & Draft Sessions
+    # ------------------------------------------------------------------
+
+    def save_team(
+        self,
+        model_id: int,
+        tier: str,
+        format_: str,
+        pokemon: list[str],
+        team_string: str,
+    ) -> int:
+        """Persist a drafted team and return its primary key."""
+        cur = self._conn.execute(
+            """INSERT INTO teams (model_id, tier, format, pokemon, team_string)
+               VALUES (?, ?, ?, ?, ?)""",
+            (model_id, tier, format_, json.dumps(pokemon), team_string),
+        )
+        team_id = cur.lastrowid
+        assert team_id is not None
+        self._conn.commit()
+        return team_id
+
+    def save_draft_session(
+        self,
+        model_id: int,
+        tier: str,
+        pool_size: int,
+        picked: list[str],
+        prompt_version: str,
+        reasoning: str | None,
+    ) -> int:
+        """Persist a draft session log and return its primary key."""
+        cur = self._conn.execute(
+            """INSERT INTO draft_sessions
+               (model_id, tier, pool_size, picked, prompt_version, reasoning)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (model_id, tier, pool_size, json.dumps(picked), prompt_version, reasoning),
+        )
+        session_id = cur.lastrowid
+        assert session_id is not None
+        self._conn.commit()
+        return session_id
+
+    def set_battle_teams(
+        self,
+        battle_id: int,
+        p1_team_id: int | None,
+        p2_team_id: int | None,
+        tier: str | None,
+    ) -> None:
+        """Set the drafted team IDs and tier on a battle row."""
+        self._conn.execute(
+            """UPDATE battles
+               SET p1_team_id=?, p2_team_id=?, tier=?
+               WHERE id=?""",
+            (p1_team_id, p2_team_id, tier, battle_id),
+        )
+        self._conn.commit()
+
+    def get_battle_teams(
+        self, battle_id: int
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """Return (p1_team_dict, p2_team_dict) for a battle, or (None, None)."""
+        row = self._conn.execute(
+            "SELECT p1_team_id, p2_team_id FROM battles WHERE id=?",
+            (battle_id,),
+        ).fetchone()
+        if not row:
+            return None, None
+
+        def _fetch_team(team_id: int | None) -> dict[str, Any] | None:
+            if team_id is None:
+                return None
+            t = self._conn.execute(
+                "SELECT * FROM teams WHERE id=?", (team_id,)
+            ).fetchone()
+            if not t:
+                return None
+            d = dict(t)
+            try:
+                d["pokemon"] = json.loads(d["pokemon"])
+            except (json.JSONDecodeError, KeyError):
+                pass
+            return d
+
+        return _fetch_team(row["p1_team_id"]), _fetch_team(row["p2_team_id"])
+
+    def get_teams_for_model(self, model_id: int, limit: int = 20) -> list[dict[str, Any]]:
+        """Return the most recent drafted teams for a model."""
+        rows = self._conn.execute(
+            """SELECT id, tier, format, pokemon, created_at
+               FROM teams WHERE model_id=?
+               ORDER BY created_at DESC LIMIT ?""",
+            (model_id, limit),
+        ).fetchall()
+        result: list[dict[str, Any]] = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["pokemon"] = json.loads(d["pokemon"])
+            except (json.JSONDecodeError, KeyError):
+                pass
+            result.append(d)
+        return result
 
     def close(self) -> None:
         self._conn.close()

@@ -13,6 +13,7 @@ export function useBattleStream() {
   const [battleResult, setBattleResult] = useState(null)
   const [thinking, setThinking]         = useState(null)   // 'p1' | 'p2' | null
   const [tournament, setTournament]     = useState(null)   // tournament progress state
+  const [draft, setDraft]               = useState(null)   // draft phase state
   const wsRef         = useRef(null)
   const shouldConnect = useRef(false)
   const retryDelay    = useRef(1000)
@@ -51,6 +52,45 @@ export function useBattleStream() {
 
         if (event.type === 'ping') return
 
+        // Draft phase events
+        if (event.type === 'draft_start') {
+          setDraft(prev => ({
+            ...(prev || { p1: { picks: [], done: false }, p2: { picks: [], done: false } }),
+            tier: event.tier,
+            battleId: event.battle_id,
+            [event.player_role]: { picks: [], done: false },
+          }))
+          return
+        }
+
+        if (event.type === 'draft_pick') {
+          setDraft(prev => {
+            if (!prev) return prev
+            const role = event.player_role
+            const existing = prev[role] || { picks: [], done: false }
+            return {
+              ...prev,
+              [role]: {
+                ...existing,
+                picks: [...existing.picks, { species: event.species, types: event.types }],
+              },
+            }
+          })
+          return
+        }
+
+        if (event.type === 'draft_complete') {
+          setDraft(prev => {
+            if (!prev) return prev
+            const role = event.player_role
+            return {
+              ...prev,
+              [role]: { picks: event.team, done: true },
+            }
+          })
+          return
+        }
+
         if (event.type === 'thinking') {
           setThinking(event.player_role)
           return
@@ -63,6 +103,7 @@ export function useBattleStream() {
             players: event.players,
             total: event.total_battles,
             rounds: event.rounds,
+            tier: event.tier ?? 'random',
             done: 0,
             status: 'running',
             leaderboard: null,
@@ -119,6 +160,7 @@ export function useBattleStream() {
           setP1State(null)
           setP2State(null)
           setThinking(null)
+          setDraft(null)   // clear draft once battle proper begins
         }
 
         if (event.type === 'turn') {
@@ -166,6 +208,7 @@ export function useBattleStream() {
     setBattleInfo(null)
     setBattleResult(null)
     setThinking(null)
+    setDraft(null)
   }, [])
 
   const clearTournament = useCallback(() => setTournament(null), [])
@@ -177,6 +220,6 @@ export function useBattleStream() {
 
   return {
     events, isConnected, p1State, p2State, battleInfo, battleResult,
-    thinking, tournament, reset, clearTournament,
+    thinking, tournament, draft, reset, clearTournament,
   }
 }
