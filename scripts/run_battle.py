@@ -47,7 +47,7 @@ def _build_player(
     role: str,
     store: BattleStore,
     battle_id: int,
-    prompt_version: str = "v1",
+    prompt_version: str = "v2",
 ) -> Player:
     cfg = LocalhostServerConfiguration
 
@@ -102,6 +102,7 @@ async def main(
     model: str | None,
     db_path: Path,
     n_battles: int = 1,
+    prompt_version: str = "v2",
 ) -> None:
     store = BattleStore(db_path)
 
@@ -117,8 +118,8 @@ async def main(
         battle_tag = f"pending-{p1_provider}-vs-{p2_provider}-{i}"
         battle_id = store.create_battle(battle_tag, _FORMAT, p1_id, p2_id)
 
-        p1 = _build_player(p1_provider, model, "p1", store, battle_id)
-        p2 = _build_player(p2_provider, model, "p2", store, battle_id)
+        p1 = _build_player(p1_provider, model, "p1", store, battle_id, prompt_version)
+        p2 = _build_player(p2_provider, model, "p2", store, battle_id, prompt_version)
 
         if n_battles > 1:
             print(f"\nBattle {i+1}/{n_battles}: {p1.username} ({p1_provider}) vs {p2.username} ({p2_provider})")
@@ -175,11 +176,13 @@ if __name__ == "__main__":
     parser.add_argument("--battles", type=int, default=1,
                         help="Number of battles to run (default: 1)")
     parser.add_argument("--db", default=None,
-                        help="Path to SQLite DB (default: nimzo.db in repo root)")
+                        help="Path to SQLite DB (default: nidozo.db in repo root)")
+    parser.add_argument("--prompt-version", default="v2", choices=["v1", "v2"],
+                        help="Prompt version to use (default: v2)")
     args = parser.parse_args()
 
     db_path = Path(args.db) if args.db else Path(
-        os.environ.get("NIMZO_DB", "nimzo.db")
+        os.environ.get("NIDOZO_DB") or os.environ.get("NIMZO_DB", "nidozo.db")
     )
 
-    asyncio.run(main(args.p1, args.p2, args.model, db_path, args.battles))
+    asyncio.run(main(args.p1, args.p2, args.model, db_path, args.battles, args.prompt_version))

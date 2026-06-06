@@ -11,6 +11,7 @@ from nidozo.analysis.analyzer import (
     _merge_turns,
     _parse_move_slot,
     _rank_moves,
+    _resolve_move_slot,
     _score_gap,
     _team_hp_score,
     _win_prob,
@@ -100,21 +101,92 @@ def _make_state(move_scores):
     return json.dumps({"heuristics": {"move_scores": move_scores, "switch_scores": []}})
 
 
+# ---------------------------------------------------------------------------
+# _resolve_move_slot  (H1 fix)
+# ---------------------------------------------------------------------------
+
+_TWO_MOVES = [
+    {"move_id": "thunderbolt", "type_multiplier": 2.0, "estimated_damage_pct": "~55%", "is_status": False, "priority": 0},
+    {"move_id": "tackle",      "type_multiplier": 1.0, "estimated_damage_pct": "~20%", "is_status": False, "priority": 0},
+]
+
+def test_resolve_move_slot_by_name():
+    """Production format: '/choose move <move_id>' resolves by name lookup."""
+    assert _resolve_move_slot("/choose move thunderbolt", _TWO_MOVES) == 1
+    assert _resolve_move_slot("/choose move tackle", _TWO_MOVES) == 2
+
+
+def test_resolve_move_slot_name_normalised():
+    """Names with hyphens or mixed case should still resolve.
+
+    poke-env normalises move IDs to lowercase without spaces (e.g. 'fire_blast'
+    or 'fireblast'), so space-separated multi-word names are not a realistic
+    production format and are not tested here.
+    """
+    moves = [{"move_id": "fire_blast"}, {"move_id": "ice_beam"}]
+    assert _resolve_move_slot("/choose move fire-blast", moves) == 1
+    assert _resolve_move_slot("/choose move fireblast", moves) == 1
+    assert _resolve_move_slot("/choose move FIREBLAST", moves) == 1
+    assert _resolve_move_slot("/choose move ice_beam", moves) == 2
+
+
+def test_resolve_move_slot_numeric_backcompat():
+    """Legacy 'move N' and '/choose move N' still resolve by slot number."""
+    assert _resolve_move_slot("move 1", _TWO_MOVES) == 1
+    assert _resolve_move_slot("/choose move 2", _TWO_MOVES) == 2
+    assert _resolve_move_slot("move 2", _TWO_MOVES) == 2
+
+
+def test_resolve_move_slot_switch_returns_none():
+    assert _resolve_move_slot("/choose switch metagross", _TWO_MOVES) is None
+
+
+def test_resolve_move_slot_unknown_name_returns_none():
+    assert _resolve_move_slot("/choose move unknownmove", _TWO_MOVES) is None
+
+
+def test_resolve_move_slot_empty_returns_none():
+    assert _resolve_move_slot("", _TWO_MOVES) is None
+    assert _resolve_move_slot(None, _TWO_MOVES) is None
+
+
+# ---------------------------------------------------------------------------
+# annotate_turn — fixtures now use the real '/choose move <id>' format
+# ---------------------------------------------------------------------------
+
 def test_annotate_optimal_choice():
     state = _make_state([
         {"move_id": "thunderbolt", "type_multiplier": 2.0, "estimated_damage_pct": "~55%", "is_status": False, "priority": 0},
-        {"move_id": "tackle", "type_multiplier": 1.0, "estimated_damage_pct": "~20%", "is_status": False, "priority": 0},
+        {"move_id": "tackle",      "type_multiplier": 1.0, "estimated_damage_pct": "~20%", "is_status": False, "priority": 0},
     ])
     turn = {
         "turn_number": 3,
         "player_role": "p1",
-        "action_chosen": "move 1",  # thunderbolt — best choice
+        "action_chosen": "/choose move thunderbolt",   # best choice, name format
         "parse_success": 1,
         "state_json": state,
     }
     result = annotate_turn(turn)
     assert result["decision_quality"] == "optimal"
     assert result["heuristic_rank"] == 1
+
+
+def test_annotate_good_choice():
+    state = _make_state([
+        {"move_id": "thunderbolt", "type_multiplier": 2.0, "estimated_damage_pct": "~55%", "is_status": False, "priority": 0},
+        {"move_id": "surf",        "type_multiplier": 1.5, "estimated_damage_pct": "~40%", "is_status": False, "priority": 0},
+        {"move_id": "tackle",      "type_multiplier": 1.0, "estimated_damage_pct": "~20%", "is_status": False, "priority": 0},
+    ])
+    turn = {
+        "turn_number": 1,
+        "player_role": "p1",
+        "action_chosen": "/choose move surf",   # rank 2 of 3 → good
+        "parse_success": 1,
+        "state_json": state,
+    }
+    result = annotate_turn(turn)
+    assert result["decision_quality"] == "good"
+    assert result["heuristic_rank"] == 2
 
 
 def test_annotate_suboptimal_choice():
@@ -128,7 +200,7 @@ def test_annotate_suboptimal_choice():
     turn = {
         "turn_number": 3,
         "player_role": "p1",
-        "action_chosen": "move 4",  # splash — immune, rank 4
+        "action_chosen": "/choose move splash",   # immune, rank 4 — name format
         "parse_success": 1,
         "state_json": state,
     }
@@ -153,7 +225,7 @@ def test_annotate_no_state_json():
     turn = {
         "turn_number": 1,
         "player_role": "p1",
-        "action_chosen": "move 1",
+        "action_chosen": "/choose move thunderbolt",
         "parse_success": 1,
         "state_json": None,
     }
@@ -168,12 +240,28 @@ def test_annotate_switch():
     turn = {
         "turn_number": 2,
         "player_role": "p1",
-        "action_chosen": "switch charizard",
+        "action_chosen": "/choose switch charizard",
         "parse_success": 1,
         "state_json": state,
     }
     result = annotate_turn(turn)
     assert result["decision_quality"] == "switch"
+
+
+def test_annotate_real_format_not_no_data():
+    """Regression: the real '/choose move <id>' format must NOT produce no_data."""
+    state = _make_state([
+        {"move_id": "fireblast", "type_multiplier": 2.0, "estimated_damage_pct": "~60%", "is_status": False, "priority": 0},
+        {"move_id": "earthquake", "type_multiplier": 1.0, "estimated_damage_pct": "~30%", "is_status": False, "priority": 0},
+    ])
+    for action in ("/choose move fireblast", "/choose move earthquake"):
+        result = annotate_turn({
+            "turn_number": 1, "player_role": "p1",
+            "action_chosen": action, "parse_success": 1, "state_json": state,
+        })
+        assert result["decision_quality"] != "no_data", (
+            f"action '{action}' produced no_data — name resolver not working"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -183,13 +271,13 @@ def test_annotate_switch():
 def test_analyze_battle_summary():
     state = _make_state([
         {"move_id": "thunderbolt", "type_multiplier": 2.0, "estimated_damage_pct": "~55%", "is_status": False, "priority": 0},
-        {"move_id": "tackle", "type_multiplier": 1.0, "estimated_damage_pct": "~20%", "is_status": False, "priority": 0},
+        {"move_id": "tackle",      "type_multiplier": 1.0, "estimated_damage_pct": "~20%", "is_status": False, "priority": 0},
     ])
     turns = [
-        {"turn_number": 1, "player_role": "p1", "action_chosen": "move 1", "parse_success": 1, "state_json": state},
-        {"turn_number": 1, "player_role": "p2", "action_chosen": "move 2", "parse_success": 1, "state_json": state},
-        {"turn_number": 2, "player_role": "p1", "action_chosen": None,    "parse_success": 0, "state_json": None},
-        {"turn_number": 2, "player_role": "p2", "action_chosen": "move 1", "parse_success": 1, "state_json": state},
+        {"turn_number": 1, "player_role": "p1", "action_chosen": "/choose move thunderbolt", "parse_success": 1, "state_json": state},
+        {"turn_number": 1, "player_role": "p2", "action_chosen": "/choose move tackle",      "parse_success": 1, "state_json": state},
+        {"turn_number": 2, "player_role": "p1", "action_chosen": None,                       "parse_success": 0, "state_json": None},
+        {"turn_number": 2, "player_role": "p2", "action_chosen": "/choose move thunderbolt", "parse_success": 1, "state_json": state},
     ]
     result = analyze_battle(turns)
 
@@ -250,7 +338,7 @@ def test_score_gap_none_for_immune_best():
 # ---------------------------------------------------------------------------
 
 def test_blunder_flagged_when_gap_exceeds_threshold():
-    # Craft a state where move 4 is immune (score -1) vs move 1 (score 100).
+    # Craft a state where splash is immune (score -1) vs thunderbolt (score 110).
     # The gap will be > BLUNDER_GAP_THRESHOLD.
     state = _make_state([
         {"move_id": "thunderbolt", "type_multiplier": 2.0, "estimated_damage_pct": "~55%", "is_status": False, "priority": 0},
@@ -260,7 +348,7 @@ def test_blunder_flagged_when_gap_exceeds_threshold():
     ])
     turn = {
         "turn_number": 1, "player_role": "p1",
-        "action_chosen": "move 4", "parse_success": 1, "state_json": state,
+        "action_chosen": "/choose move splash", "parse_success": 1, "state_json": state,
     }
     result = annotate_turn(turn)
     assert result["decision_quality"] == "suboptimal"
@@ -276,7 +364,7 @@ def test_blunder_not_flagged_for_good_move():
     ])
     turn = {
         "turn_number": 1, "player_role": "p1",
-        "action_chosen": "move 2", "parse_success": 1, "state_json": state,
+        "action_chosen": "/choose move surf", "parse_success": 1, "state_json": state,
     }
     result = annotate_turn(turn)
     # rank 2 of 2 → good (≤ min(3, 2)), never a blunder
@@ -378,13 +466,13 @@ def _make_full_state(hp_fraction: float, opp_hp: float = 0.5) -> str:
 
 def test_analyze_battle_win_prob_timeline():
     turns = [
-        {"turn_number": 1, "player_role": "p1", "action_chosen": "move 1", "parse_success": 1,
+        {"turn_number": 1, "player_role": "p1", "action_chosen": "/choose move thunderbolt", "parse_success": 1,
          "state_json": _make_full_state(1.0, opp_hp=1.0)},
-        {"turn_number": 1, "player_role": "p2", "action_chosen": "move 2", "parse_success": 1,
+        {"turn_number": 1, "player_role": "p2", "action_chosen": "/choose move thunderbolt", "parse_success": 1,
          "state_json": _make_full_state(1.0, opp_hp=1.0)},
-        {"turn_number": 2, "player_role": "p1", "action_chosen": "move 1", "parse_success": 1,
+        {"turn_number": 2, "player_role": "p1", "action_chosen": "/choose move thunderbolt", "parse_success": 1,
          "state_json": _make_full_state(0.6, opp_hp=0.4)},
-        {"turn_number": 2, "player_role": "p2", "action_chosen": "move 1", "parse_success": 1,
+        {"turn_number": 2, "player_role": "p2", "action_chosen": "/choose move thunderbolt", "parse_success": 1,
          "state_json": _make_full_state(0.4, opp_hp=0.6)},
     ]
     result = analyze_battle(turns)
@@ -417,7 +505,7 @@ def test_analyze_battle_blunders_list_populated():
         },
     })
     turns = [
-        {"turn_number": 1, "player_role": "p1", "action_chosen": "move 4",
+        {"turn_number": 1, "player_role": "p1", "action_chosen": "/choose move splash",
          "parse_success": 1, "state_json": subopt_state},
     ]
     result = analyze_battle(turns)
