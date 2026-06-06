@@ -110,6 +110,7 @@ class BattleStore:
         rows = self._conn.execute(
             """SELECT t.id, t.players, t.rounds, t.prompt_version,
                       t.total_battles, t.status, t.created_at, t.finished_at,
+                      COALESCE(t.tier, 'random') AS tier,
                       COUNT(CASE WHEN b.status='completed' THEN 1 END) AS battles_completed
                FROM tournaments t
                LEFT JOIN battles b ON b.tournament_id = t.id
@@ -171,6 +172,7 @@ class BattleStore:
         rows = self._conn.execute(
             """SELECT b.id, b.status, b.winner, b.total_turns,
                       b.started_at, b.finished_at,
+                      CAST(b.p1_team_id IS NOT NULL AS INT) AS drafted,
                       p1.provider || '/' || p1.model_name AS p1,
                       p2.provider || '/' || p2.model_name AS p2,
                       p1.model_name AS p1_model, p2.model_name AS p2_model,
@@ -212,6 +214,8 @@ class BattleStore:
         row = self._conn.execute(
             """SELECT b.id, b.battle_tag, b.format, b.winner, b.total_turns,
                       b.status, b.started_at, b.finished_at, b.tournament_id,
+                      COALESCE(b.tier, 'random') AS tier,
+                      CAST(b.p1_team_id IS NOT NULL AS INT) AS drafted,
                       p1.provider||'/'||p1.model_name AS p1,
                       p2.provider||'/'||p2.model_name AS p2
                FROM battles b
@@ -392,7 +396,7 @@ class BattleStore:
     # Leaderboard queries
     # ------------------------------------------------------------------
 
-    def leaderboard(self, grouped: bool = True) -> list[dict[str, Any]]:
+    def leaderboard(self, grouped: bool = True, tier: str | None = None) -> list[dict[str, Any]]:
         """Return models sorted by ELO descending.
 
         Args:
@@ -400,15 +404,18 @@ class BattleStore:
                      (provider, model_name) into a single row — shows best ELO,
                      summed W/L/T, and a 'versions' field listing what was played.
                      If False, return one row per (provider, model_name, prompt_version).
+            tier: If provided, restrict W/L/T/games to battles of that tier only.
+                  ELO still reflects global rating.
         """
         if grouped:
-            return self._leaderboard_grouped()
+            return self._leaderboard_grouped(tier=tier)
         return self._leaderboard_per_version()
 
-    def _leaderboard_grouped(self) -> list[dict[str, Any]]:
+    def _leaderboard_grouped(self, tier: str | None = None) -> list[dict[str, Any]]:
         """One row per (provider, model_name) — aggregated across prompt versions."""
+        tier_filter = "AND b.tier = :tier" if tier and tier != "all" else ""
         cur = self._conn.execute(
-            """SELECT m.provider, m.model_name,
+            f"""SELECT m.provider, m.model_name,
                       MAX(e.rating)          AS rating,
                       SUM(e.games)           AS games,
                       COALESCE(SUM(wld.wins),   0) AS wins,
@@ -431,17 +438,18 @@ class BattleStore:
                               CASE WHEN winner=1 THEN 'win'
                                    WHEN winner=2 THEN 'loss'
                                    ELSE 'tie' END AS result
-                       FROM battles WHERE finished_at IS NOT NULL
+                       FROM battles b WHERE finished_at IS NOT NULL {tier_filter}
                        UNION ALL
                        SELECT p2_model_id,
                               CASE WHEN winner=2 THEN 'win'
                                    WHEN winner=1 THEN 'loss'
                                    ELSE 'tie' END
-                       FROM battles WHERE finished_at IS NOT NULL
+                       FROM battles b WHERE finished_at IS NOT NULL {tier_filter}
                    ) GROUP BY model_id
                ) wld ON wld.model_id = m.id
                GROUP BY m.provider, m.model_name
                ORDER BY MAX(e.rating) DESC""",
+            {"tier": tier},
         )
         return [dict(r) for r in cur.fetchall()]
 
@@ -481,6 +489,9 @@ class BattleStore:
     def recent_battles(self, limit: int = 10) -> list[dict[str, Any]]:
         cur = self._conn.execute(
             """SELECT b.id, b.battle_tag, b.format, b.total_turns, b.winner, b.finished_at,
+                      b.status,
+                      COALESCE(b.tier, 'random') AS tier,
+                      CAST(b.p1_team_id IS NOT NULL AS INT) AS drafted,
                       p1.provider||'/'||p1.model_name AS p1,
                       p2.provider||'/'||p2.model_name AS p2
                FROM battles b

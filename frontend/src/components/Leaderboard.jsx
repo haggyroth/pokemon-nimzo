@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import BattleAnalysis from './BattleAnalysis'
 
 const PROVIDERS = ['random', 'anthropic', 'openai', 'lmstudio']
@@ -12,6 +12,26 @@ const TIERS = [
   { id: 'lc',         label: 'Little Cup (LC)' },
   { id: 'freeforall', label: 'Free-for-All' },
 ]
+
+const TIER_SHORT = {
+  random:     'RND',
+  ou:         'OU',
+  ubers:      'UBERS',
+  uu:         'UU',
+  nu:         'NU',
+  lc:         'LC',
+  freeforall: 'FFA',
+}
+
+// Inline tier badge — same palette as BattleField/TournamentView
+function TierBadge({ tier }) {
+  if (!tier || tier === 'random') return null
+  return (
+    <span className={`tier-badge tier-badge--${tier}`}>
+      {TIER_SHORT[tier] ?? tier.toUpperCase()}
+    </span>
+  )
+}
 
 const STATIC_PRESETS = {
   anthropic: [
@@ -361,6 +381,17 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
 // Main Leaderboard component
 // ---------------------------------------------------------------------------
 
+const LB_TIERS = [
+  { id: 'all',        label: 'All' },
+  { id: 'random',     label: 'Random' },
+  { id: 'ou',         label: 'OU' },
+  { id: 'ubers',      label: 'Ubers' },
+  { id: 'uu',         label: 'UU' },
+  { id: 'nu',         label: 'NU' },
+  { id: 'lc',         label: 'LC' },
+  { id: 'freeforall', label: 'FFA' },
+]
+
 export default function Leaderboard({ onBattleStarted, onTournamentStarted, onReplaySelected, onModelSelected, onTournamentSelected }) {
   const [rows, setRows]               = useState([])
   const [battles, setBattles]         = useState([])
@@ -369,6 +400,7 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
   const [lmModels, setLmModels]       = useState([])
   const [lmLoading, setLmLoading]     = useState(true)
   const [formTab, setFormTab]         = useState('battle')   // 'battle' | 'tournament'
+  const [lbTier, setLbTier]          = useState('all')       // leaderboard tier filter
 
   useEffect(() => {
     let cancelled = false
@@ -383,10 +415,11 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
     return () => { cancelled = true }
   }, [])
 
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     try {
+      const lbUrl = lbTier === 'all' ? '/api/leaderboard' : `/api/leaderboard?tier=${lbTier}`
       const [lb, bt, ts] = await Promise.all([
-        fetch('/api/leaderboard').then(r => r.json()),
+        fetch(lbUrl).then(r => r.json()),
         fetch('/api/battles').then(r => r.json()),
         fetch('/api/tournaments?limit=8').then(r => r.ok ? r.json() : []).catch(() => []),
       ])
@@ -396,13 +429,13 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
     } catch {
       // network errors are silently swallowed; UI retains stale data
     }
-  }
+  }, [lbTier])
 
   useEffect(() => {
     void Promise.resolve().then(fetchData)
     const id = setInterval(fetchData, 30000)
     return () => clearInterval(id)
-  }, [])
+  }, [fetchData])
 
   function rankBadge(i) {
     if (i === 0) return <span className="rank-badge gold">①</span>
@@ -416,9 +449,24 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
       {/* Left: leaderboard + recent battles */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <div className="panel">
-          <div className="panel-title">ELO LEADERBOARD</div>
+          <div className="panel-title-row">
+            <div className="panel-title">ELO LEADERBOARD</div>
+            <div className="lb-tier-tabs">
+              {LB_TIERS.map(t => (
+                <button
+                  key={t.id}
+                  className={`lb-tier-tab ${lbTier === t.id ? 'active' : ''}`}
+                  onClick={() => setLbTier(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
           {rows.length === 0 ? (
-            <div className="empty-state">No battles recorded yet</div>
+            <div className="empty-state">
+              {lbTier === 'all' ? 'No battles recorded yet' : `No ${lbTier.toUpperCase()} battles recorded yet`}
+            </div>
           ) : (
             <table className="leaderboard-table">
               <thead>
@@ -490,6 +538,8 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
                     <div className="battle-meta">
                       <div className={winnerCls}>{winnerLabel}</div>
                       <div>{b.total_turns ?? '?'} turns</div>
+                      {b.tier && b.tier !== 'random' && <TierBadge tier={b.tier} />}
+                      {b.drafted ? <span className="battle-drafted-tag">DRAFT</span> : null}
                       <button
                         className={`btn-analyze ${isOpen ? 'active' : ''}`}
                         onClick={() => setAnalyzing(isOpen ? null : b.id)}
@@ -539,6 +589,7 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
                       </span>
                       <div className="th-info">
                         <span className="th-id">#{t.id}</span>
+                        {t.tier && t.tier !== 'random' && <TierBadge tier={t.tier} />}
                         <span className="th-players">{players.length} players · {t.rounds} round{t.rounds !== 1 ? 's' : ''}</span>
                         <span className="th-progress">{t.battles_completed}/{t.total_battles} battles</span>
                       </div>

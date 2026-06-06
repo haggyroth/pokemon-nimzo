@@ -3326,3 +3326,217 @@ body::after {
   accent-color: var(--accent-cyan);
   cursor: pointer;
 }
+
+/* ==========================================================================
+   Tier badges — shared across BattleField, TournamentView, Leaderboard
+   ========================================================================== */
+
+.tier-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tier-badge--ou         { background: #1a4a8a; color: #7ab4ff; border: 1px solid #2a6adf; }
+.tier-badge--ubers      { background: #6b1a1a; color: #ff8585; border: 1px solid #c03030; }
+.tier-badge--uu         { background: #0d4a3a; color: #5ce8c0; border: 1px solid #1a9070; }
+.tier-badge--nu         { background: #2a3d10; color: #9de050; border: 1px solid #4a7a18; }
+.tier-badge--lc         { background: #3d1a5a; color: #d088ff; border: 1px solid #7a30c0; }
+.tier-badge--freeforall { background: #4a3500; color: #ffd060; border: 1px solid #b07800; }
+
+/* Draft badge */
+.draft-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: #1a3020;
+  color: #50d890;
+  border: 1px solid #208040;
+}
+
+/* Battle header badge row */
+.battle-header-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.2rem;
+}
+
+/* ==========================================================================
+   Winner card — tier badge + drafted team rosters
+   ========================================================================== */
+
+.winner-tier-badge {
+  margin-bottom: 0.5rem;
+}
+
+.winner-teams {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  max-width: 420px;
+}
+
+.winner-team-label {
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  margin-bottom: 0.35rem;
+  font-family: var(--font-mono);
+}
+
+.winner-team--p1 .winner-team-label { color: var(--accent-cyan); }
+.winner-team--p2 .winner-team-label { color: var(--accent-amber); }
+
+.winner-team-mons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.winner-team-mon {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 3px;
+  color: var(--text-dim);
+  text-transform: capitalize;
+}
+
+/* ==========================================================================
+   Tournament bar — tier display
+   ========================================================================== */
+
+.tournament-bar-tier {
+  margin-left: 0.5rem;
+}
+
+/* ==========================================================================
+   TournamentView — tier badge in header + battle grid enhancements
+   ========================================================================== */
+
+.ts-tier-badge {
+  margin-left: 0.5rem;
+}
+
+.ts-drafted-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: #1a3020;
+  color: #50d890;
+  border: 1px solid #208040;
+  margin-right: 0.3rem;
+}
+
+.ts-br-running {
+  background: rgba(100, 200, 100, 0.04);
+}
+
+.ts-result-badge.ts-r-running {
+  background: rgba(50, 200, 100, 0.2);
+  color: #50d890;
+  border-color: #208040;
+  animation: pulse-border 1.4s ease-in-out infinite;
+}
+
+.ts-br-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #50d890;
+  margin-left: 4px;
+  vertical-align: middle;
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* ==========================================================================
+   Leaderboard — tier filter tabs + badges in battle list
+   ========================================================================== */
+
+.panel-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.panel-title-row .panel-title {
+  margin-bottom: 0;
+}
+
+.lb-tier-tabs {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.lb-tier-tab {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.lb-tier-tab:hover {
+  color: var(--text-dim);
+  border-color: rgba(255,255,255,0.25);
+}
+
+.lb-tier-tab.active {
+  background: rgba(100, 200, 255, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.battle-drafted-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: #1a3020;
+  color: #50d890;
+  border: 1px solid #208040;
+}
