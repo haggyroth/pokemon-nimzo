@@ -47,7 +47,9 @@
 
 ### v0.8 — JSON Outputs, Engine Reliability, UI Polish
 - **v2 prompt**: JSON structured output (`{"reasoning","action_type","identifier"}`)
-- LM Studio `response_format=json_object` for grammar-sampled valid JSON
+- LM Studio `response_format=json_schema` for grammar-sampled valid JSON
+- `reasoning_content` fallback for Qwen 3 thinking models
+- Fuzzy species name matching (`difflib`, cutoff=0.82) for switch typos
 - Retry on empty LLM response; logs `finish_reason` for diagnosis
 - Thinking events: amber pulsing indicator while model reasons
 - Gen 3 sprites via Showdown CDN with pixelated rendering
@@ -55,24 +57,119 @@
 - Model selector queries LM Studio's `/v1/models` for live chips
 - WebSocket keepalive pings (25s) — eliminates reconnection churn
 - CI pipeline: ruff lint + pytest + frontend build in parallel
-- 123 tests including full API endpoint coverage
+- 127 tests including full API endpoint coverage
+- Leaderboard grouped by model (aggregates across prompt versions; `v1`/`v2` pill tags)
+- First meaningful ELO results: gemma-4-e2b 7-3 vs ministral-3-3b
 
 ---
 
 ## Upcoming
 
-### Near-term
-- **Expanded model testing** — run more model pairs, build a real ELO ranking
-- **Pause / cancel battle** — stop a running battle from the UI
-- **Battle replay** — step through a completed battle turn by turn
-- **RNG annotation** — flag crits, misses, and secondary effects in post-game analysis so variance is visible and model decisions aren't blamed for luck
+---
 
-### Medium-term
-- **Drafted teams** — fixed teams instead of random; includes an LLM-drafted team mode
-- **Expanded generation support** — beyond Gen 3 (Gen 4+ mechanics, items, abilities)
-- **Tournament brackets** — single-elim, double-elim, scheduled round-robins
-- **Richer post-game analysis** — key turning-point detection, blunder annotation
+### Phase 1 — Live Pipeline & UI Foundation
+*Goal: the GUI becomes the single point of entry. No terminal required to run or watch battles.*
 
-### Long-term
-- **Doubles** battles (adds target-selection complexity)
-- **Multi-agent reasoning** — let a model consult a "coach" model before deciding
+**Live Battles** (pipeline integration)
+- `tournament.py` routes battles through `POST /api/battles/start` instead of running directly
+- All battles — scripted or UI-triggered — publish events to the shared WebSocket bus
+- Tournament results visible live in the battlefield view, not just in the leaderboard after the fact
+- Fix: handle `"identifier":"switch 1"` (model outputs full command string instead of slot number)
+
+**UI as primary interface**
+- Tournament launcher in the UI: configure N players, rounds, and format; start from the browser
+- All settings and options accessible from the GUI (no CLI required for standard use)
+- CLI scripts remain and stay in sync with GUI features, but are the secondary path
+
+**Pause / Cancel Battle**
+- Stop button in the battlefield view cancels a running battle gracefully
+- Cancelled battles recorded in DB with `status=cancelled`; excluded from ELO
+
+---
+
+### Phase 2 — Replay, Analysis & Visibility
+*Goal: every completed battle is fully reviewable and annotated.*
+
+**Battle Replay**
+- Step forward/backward through any completed battle turn by turn
+- Battlefield view rehydrates from stored `state_json` — same visual layout as live
+- Accessible from the Recent Battles panel with a ▶ REPLAY button
+
+**RNG Annotation**
+- Flag crits, misses, and secondary effect rolls in the turn log
+- Post-game analysis distinguishes "model made a poor call" from "model got unlucky"
+- RNG events highlighted in the replay timeline
+
+**Battle Animations**
+- Damage flash, shake, and faint animation for the active Pokémon cards
+- Animated HP bar drains (smooth transition, not instant snap)
+- Heal / status-recovery pulse effect
+- Explore Pokémon Showdown's existing animation assets as a source
+
+**Richer Post-game Analysis**
+- Key turning-point detection: identify the turn where win probability shifted decisively
+- Blunder annotation: flag decisions that were significantly worse than the best available option
+- RNG-adjusted quality score: penalise bad decisions, not bad luck
+
+---
+
+### Phase 3 — Model Intelligence
+*Goal: models become more interesting players over time.*
+
+**Lessons / Memory**
+- After each battle, a model generates a short lesson: what worked, what to avoid
+- Lessons stored per model in the DB and injected into future system prompts
+- Configurable memory window (last N lessons or last N turns of history)
+- Enables cross-battle strategy evolution — models that adapt over time
+
+**Multi-agent Reasoning** (coach / tutor mode)
+- Optional: before acting, the player model queries a "coach" model for advice
+- Coach receives the same battle state but no output constraints — free analysis
+- Player weighs coach advice alongside its own reasoning
+- Configurable: which models use a coach, which coach model to use
+
+**Model Stats Pages**
+- Dedicated page per model: full W/L/T history, ELO sparkline over time, opponent breakdown
+- Decision quality distribution (optimal / good / suboptimal / fallback %)
+- Model metadata pulled from Hugging Face API (architecture, parameters, license)
+- Model-specific insights: common move preferences, switch frequency, fallback rate
+
+**Win Probability**
+- Real-time win probability estimate shown during live battles
+- Based on current HP totals, remaining Pokémon, type matchups, speed advantage
+- Displayed as a live bar at the top of the battlefield view
+
+---
+
+### Phase 4 — Battle Formats
+*Goal: expand the strategic surface area.*
+
+**Drafted Teams**
+- Fixed teams defined before battle starts (no more random)
+- LLM-drafted team mode: model builds a team from a pool of legal Pokémon
+- Team stored in DB, tied to model entry for reproducible matchups
+
+**Tournament Brackets**
+- Single-elimination and double-elimination bracket modes
+- Scheduled round-robins with configurable cadence
+- Bracket visualizer in the UI showing live progression
+
+**Doubles**
+- 2v2 format with target selection (adds which-Pokémon-to-hit decision)
+- Prompt and action parser extended for `target` field
+- Heuristic engine updated for spread moves and partner synergy
+
+---
+
+### Phase 5 — Platform Expansion
+*Goal: broaden the competitive scope.*
+
+**Expanded Generation Support**
+- Gen 4+ mechanics: held items, abilities, physical/special split
+- Incremental: one generation at a time, validated against Showdown rules
+- New prompt context for items and abilities (currently hidden from model)
+
+**Deeper Competitive Features**
+- Speed tie and priority bracket resolution visible in the battle log
+- Weather and terrain strategies tracked in analysis
+- Item usage annotated in turn logs
