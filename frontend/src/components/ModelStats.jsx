@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useReducer, useEffect } from 'react'
 
 // ---------------------------------------------------------------------------
 // ELO Sparkline — pure SVG, no external deps
@@ -285,22 +285,33 @@ function LessonsLog({ lessons }) {
 // Main ModelStats component
 // ---------------------------------------------------------------------------
 
+function fetchReducer(state, action) {
+  switch (action.type) {
+    case 'start':   return { loading: true,  error: null,         stats: null }
+    case 'success': return { loading: false, error: null,         stats: action.data }
+    case 'error':   return { loading: false, error: action.error, stats: null }
+    default:        return state
+  }
+}
+
 export default function ModelStats({ modelId, onClose, onReplaySelected }) {
-  const [stats, setStats] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [{ loading, error, stats }, dispatch] = useReducer(
+    fetchReducer,
+    { loading: true, error: null, stats: null },
+  )
 
   useEffect(() => {
     if (modelId == null) return
-    setLoading(true)
-    setError(null)
+    let cancelled = false
+    dispatch({ type: 'start' })
     fetch(`/api/models/${modelId}/stats`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
-      .then(data => { setStats(data); setLoading(false) })
-      .catch(err => { setError(err.message); setLoading(false) })
+      .then(data => { if (!cancelled) dispatch({ type: 'success', data }) })
+      .catch(err  => { if (!cancelled) dispatch({ type: 'error', error: err.message }) })
+    return () => { cancelled = true }
   }, [modelId])
 
   if (loading) {
