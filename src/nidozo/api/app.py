@@ -6,6 +6,8 @@ import asyncio
 import json
 import logging
 import os
+import socket
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -21,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 _DB_PATH = Path(os.environ.get("NIDOZO_DB") or os.environ.get("NIMZO_DB", "nidozo.db"))
 _FRONTEND_DIST = Path(__file__).parent.parent.parent.parent / "frontend" / "dist"
+_SHOWDOWN_HOST = "localhost"
+_SHOWDOWN_PORT = 8000
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +75,22 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     # battle_id → asyncio.Task — lets us cancel running battles
     _active_tasks: dict[int, asyncio.Task] = {}
 
-    app = FastAPI(title="Nidozo", version="0.9.0")
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        logger.info("Nidozo starting up", extra={"db": str(db_path)})
+        yield
+        # Graceful shutdown: cancel all in-flight battle tasks, then close DB.
+        if _active_tasks:
+            logger.info(
+                "Shutdown: cancelling %d active battle task(s)", len(_active_tasks)
+            )
+            for task in list(_active_tasks.values()):
+                task.cancel()
+            await asyncio.gather(*_active_tasks.values(), return_exceptions=True)
+        store.close()
+        logger.info("Nidozo shut down cleanly")
+
+    app = FastAPI(title="Nidozo", version="0.10.0", lifespan=lifespan)
     app.state.store = store
     app.add_middleware(
         CORSMiddleware,
@@ -82,6 +101,47 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
     )
+
+    # -----------------------------------------------------------------------
+    # Health check
+    # -----------------------------------------------------------------------
+
+    @app.get("/healthz")
+    def healthz() -> dict:
+        """Liveness + readiness probe.
+
+        Returns HTTP 200 with status "ok" when both the database and Showdown
+        server are reachable.  Returns HTTP 503 with status "degraded" if
+        either dependency is down — safe to wire up to a load-balancer or
+        container orchestrator health check.
+        """
+        checks: dict[str, str] = {}
+
+        # Database — a trivial query is enough to confirm the connection is live
+        try:
+            store._conn.execute("SELECT 1")
+            checks["db"] = "ok"
+        except Exception as exc:
+            logger.error("Health check: DB unreachable: %s", exc)
+            checks["db"] = "unreachable"
+
+        # Showdown — TCP connect with a tight timeout
+        try:
+            with socket.create_connection(
+                (_SHOWDOWN_HOST, _SHOWDOWN_PORT), timeout=1.0
+            ):
+                pass
+            checks["showdown"] = "ok"
+        except OSError:
+            checks["showdown"] = "unreachable"
+
+        overall = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
+        payload = {"status": overall, "version": "0.10.0", **checks}
+
+        if overall != "ok":
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=503, content=payload)
+        return payload
 
     # -----------------------------------------------------------------------
     # REST: Leaderboard & battles

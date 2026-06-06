@@ -7,12 +7,16 @@ Requires the local Showdown server to be running:
 Usage:
     uv run python scripts/serve.py
     uv run python scripts/serve.py --port 8080 --db path/to/nidozo.db
-    uv run python scripts/serve.py --reload   # dev hot-reload (uses NIDOZO_DB env var)
+    uv run python scripts/serve.py --reload              # dev hot-reload
+    uv run python scripts/serve.py --log-level DEBUG     # verbose JSON logs
 
 Notes:
     --reload uses uvicorn's import-string mode.  The --db flag is ignored when
     --reload is active; set NIDOZO_DB in your environment instead.
     create_app() is called as a factory so each reload picks up code changes.
+
+    Logs are emitted as newline-delimited JSON to stdout.  Set --log-level to
+    DEBUG for verbose output during development.
 """
 
 import argparse
@@ -27,11 +31,21 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=5001)
     parser.add_argument("--db", default=None)
     parser.add_argument(
+        "--log-level",
+        default=os.environ.get("LOG_LEVEL", "INFO"),
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging verbosity (default: INFO, or LOG_LEVEL env var).",
+    )
+    parser.add_argument(
         "--reload",
         action="store_true",
         help="Hot-reload on code changes (dev only). Uses NIDOZO_DB env var; --db is ignored.",
     )
     args = parser.parse_args()
+
+    # Configure structured JSON logging before anything else starts.
+    from nidozo.api.logging_config import configure_logging
+    configure_logging(level=args.log_level)
 
     # NIDOZO_DB preferred; NIMZO_DB accepted for backward compat
     db_env = os.environ.get("NIDOZO_DB") or os.environ.get("NIMZO_DB", "nidozo.db")
@@ -53,8 +67,9 @@ if __name__ == "__main__":
             host=args.host,
             port=args.port,
             reload=True,
+            log_config=None,   # suppress uvicorn's default log config; ours is already set
         )
     else:
         from nidozo.api.app import create_app
         app = create_app(db_path=db_path)
-        uvicorn.run(app, host=args.host, port=args.port)
+        uvicorn.run(app, host=args.host, port=args.port, log_config=None)
