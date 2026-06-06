@@ -165,8 +165,57 @@ class BattleStore:
     # Leaderboard queries
     # ------------------------------------------------------------------
 
-    def leaderboard(self) -> list[dict]:
-        """Return all models sorted by ELO descending (one row per model)."""
+    def leaderboard(self, grouped: bool = True) -> list[dict]:
+        """Return models sorted by ELO descending.
+
+        Args:
+            grouped: If True (default), aggregate all prompt versions for the same
+                     (provider, model_name) into a single row — shows best ELO,
+                     summed W/L/T, and a 'versions' field listing what was played.
+                     If False, return one row per (provider, model_name, prompt_version).
+        """
+        if grouped:
+            return self._leaderboard_grouped()
+        return self._leaderboard_per_version()
+
+    def _leaderboard_grouped(self) -> list[dict]:
+        """One row per (provider, model_name) — aggregated across prompt versions."""
+        cur = self._conn.execute(
+            """SELECT m.provider, m.model_name,
+                      MAX(e.rating)          AS rating,
+                      SUM(e.games)           AS games,
+                      COALESCE(SUM(wld.wins),   0) AS wins,
+                      COALESCE(SUM(wld.losses), 0) AS losses,
+                      COALESCE(SUM(wld.ties),   0) AS ties,
+                      GROUP_CONCAT(DISTINCT m.prompt_version) AS versions
+               FROM models m
+               JOIN elo_ratings e ON e.model_id = m.id
+               LEFT JOIN (
+                   SELECT model_id,
+                          SUM(CASE WHEN result='win'  THEN 1 ELSE 0 END) AS wins,
+                          SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END) AS losses,
+                          SUM(CASE WHEN result='tie'  THEN 1 ELSE 0 END) AS ties
+                   FROM (
+                       SELECT p1_model_id AS model_id,
+                              CASE WHEN winner=1 THEN 'win'
+                                   WHEN winner=2 THEN 'loss'
+                                   ELSE 'tie' END AS result
+                       FROM battles WHERE finished_at IS NOT NULL
+                       UNION ALL
+                       SELECT p2_model_id,
+                              CASE WHEN winner=2 THEN 'win'
+                                   WHEN winner=1 THEN 'loss'
+                                   ELSE 'tie' END
+                       FROM battles WHERE finished_at IS NOT NULL
+                   ) GROUP BY model_id
+               ) wld ON wld.model_id = m.id
+               GROUP BY m.provider, m.model_name
+               ORDER BY MAX(e.rating) DESC""",
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+    def _leaderboard_per_version(self) -> list[dict]:
+        """One row per (provider, model_name, prompt_version) — original behaviour."""
         cur = self._conn.execute(
             """SELECT m.provider, m.model_name, m.prompt_version,
                       e.rating, e.games,
@@ -176,7 +225,6 @@ class BattleStore:
                FROM models m
                JOIN elo_ratings e ON e.model_id = m.id
                LEFT JOIN (
-                   -- Single aggregated row per model across p1+p2 perspectives
                    SELECT model_id,
                           SUM(CASE WHEN result='win'  THEN 1 ELSE 0 END) AS wins,
                           SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END) AS losses,

@@ -189,7 +189,16 @@ export default function Leaderboard({ onBattleStarted }) {
                     <td>{rankBadge(i)}</td>
                     <td>
                       <div className="model-name">{r.model_name}</div>
-                      <div className="provider-tag">{r.provider} · {r.prompt_version}</div>
+                      <div className="provider-tag">
+                        {r.provider}
+                        {r.versions && (
+                          <span className="version-tags">
+                            {r.versions.split(',').map(v => (
+                              <span key={v} className="version-tag">{v}</span>
+                            ))}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td><span className="elo-value">{r.rating.toFixed(1)}</span></td>
                     <td>{r.games}</td>

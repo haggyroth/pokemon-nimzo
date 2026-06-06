@@ -69,14 +69,23 @@ async def test_leaderboard_returns_models(app, client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_leaderboard_shape(client: AsyncClient) -> None:
-    """Response is a list; each row has the expected keys."""
+    """Grouped response has expected keys; per-version response includes prompt_version."""
     resp = await client.get("/api/leaderboard")
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data, list)
     for row in data:
         for key in ("provider", "model_name", "rating", "games", "wins", "losses", "ties"):
-            assert key in row, f"Missing key {key!r} in leaderboard row"
+            assert key in row, f"Missing key {key!r} in grouped leaderboard row"
+        # grouped mode: no prompt_version column, but versions field present
+        assert "prompt_version" not in row, "grouped leaderboard should not have prompt_version"
+        assert "versions" in row, "grouped leaderboard should have versions field"
+
+    # per-version mode still works
+    resp2 = await client.get("/api/leaderboard?grouped=false")
+    assert resp2.status_code == 200
+    for row in resp2.json():
+        assert "prompt_version" in row
 
 
 # ---------------------------------------------------------------------------

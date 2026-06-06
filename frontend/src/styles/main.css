@@ -322,6 +322,24 @@ body::after {
 .provider-tag {
   font-size: 0.65rem;
   color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.1rem;
+}
+.version-tags {
+  display: flex;
+  gap: 0.25rem;
+}
+.version-tag {
+  background: rgba(0, 170, 255, 0.12);
+  border: 1px solid rgba(0, 170, 255, 0.25);
+  color: var(--accent-cyan);
+  font-size: 0.55rem;
+  padding: 0 0.3rem;
+  border-radius: 2px;
+  letter-spacing: 0.03em;
 }
 
 .wlt { color: var(--text-dim); }

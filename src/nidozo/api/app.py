@@ -63,8 +63,8 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     # -----------------------------------------------------------------------
 
     @app.get("/api/leaderboard")
-    def get_leaderboard() -> list[dict]:
-        return store.leaderboard()
+    def get_leaderboard(grouped: bool = True) -> list[dict]:
+        return store.leaderboard(grouped=grouped)
 
     @app.get("/api/battles")
     def get_battles(limit: int = 20) -> list[dict]:
