@@ -429,29 +429,72 @@ body::after {
    POKÉMON CARD
    ============================================================ */
 .pokemon-card {
-  background: var(--bg-card);
+  background: var(--bg-card);       /* overridden inline with type gradient */
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.1rem;
   position: relative;
   overflow: hidden;
-  transition: border-color var(--transition), box-shadow var(--transition);
+  /* background and border-color transition together so type shift is smooth on switch */
+  transition: background 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease;
   min-height: 200px;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.pokemon-card.p1 { border-left: 2px solid var(--accent-cyan); }
+/* Default side accents — overridden inline by type colour when a mon is present */
+.pokemon-card.p1 { border-left:  2px solid var(--accent-cyan); }
 .pokemon-card.p2 { border-right: 2px solid var(--accent-amber); }
+
+/* Thinking amber always wins over type colour */
+.pokemon-card.is-thinking {
+  border-color:  var(--accent-amber) !important;
+  box-shadow:    0 0 16px rgba(255,204,0,0.18) !important;
+  transition:    none !important;   /* snap immediately */
+}
+.pokemon-card.p1.is-thinking { border-left-color:  var(--accent-amber) !important; }
+.pokemon-card.p2.is-thinking { border-right-color: var(--accent-amber) !important; }
 
 .pokemon-card::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 60px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+  background: linear-gradient(180deg, rgba(255,255,255,0.025), transparent);
   pointer-events: none;
+  z-index: 0;
+}
+
+/* ---- Hit animation ---- */
+@keyframes card-hit-flash {
+  0%   { box-shadow: none; }
+  18%  { box-shadow: inset 0 0 0 2px rgba(255,68,85,0.55), 0 0 22px rgba(255,68,85,0.35); }
+  55%  { box-shadow: inset 0 0 0 1px rgba(255,68,85,0.20), 0 0 10px rgba(255,68,85,0.15); }
+  100% { box-shadow: none; }
+}
+.pokemon-card.card-hit {
+  animation: card-hit-flash 0.42s ease-out forwards;
+}
+
+/* ---- Heal animation ---- */
+@keyframes card-heal-pulse {
+  0%   { box-shadow: none; }
+  30%  { box-shadow: inset 0 0 0 2px rgba(0,230,118,0.45), 0 0 20px rgba(0,230,118,0.30); }
+  100% { box-shadow: none; }
+}
+.pokemon-card.card-heal {
+  animation: card-heal-pulse 0.50s ease-out forwards;
+}
+
+/* ---- Faint animation ---- */
+@keyframes card-faint-out {
+  0%   { filter: none;                         opacity: 1.0; }
+  30%  { filter: grayscale(0.6) brightness(0.65); opacity: 0.9; }
+  100% { filter: grayscale(1)   brightness(0.35); opacity: 0.45; }
+}
+.pokemon-card.card-faint {
+  animation: card-faint-out 0.75s ease-in forwards;
 }
 
 .pokemon-card.empty {
@@ -1112,19 +1155,22 @@ body::after {
 
 .pokemon-sprite {
   display: block;
-  /* pixelated upscaling for Gen 3 sprites */
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
 
-/* Glow border when this player is thinking */
-.pokemon-card.is-thinking {
-  border-color: var(--accent-amber);
-  box-shadow: 0 0 16px rgba(255,204,0,0.18);
+/* Sprite shake on damage hit */
+@keyframes sprite-shake {
+  0%   { transform: translateX(0); }
+  18%  { transform: translateX(-6px) rotate(-3deg); }
+  36%  { transform: translateX(5px)  rotate(2deg); }
+  54%  { transform: translateX(-3px) rotate(-1deg); }
+  72%  { transform: translateX(2px); }
+  100% { transform: translateX(0); }
 }
-
-.pokemon-card.p1.is-thinking { border-left-color: var(--accent-amber); }
-.pokemon-card.p2.is-thinking { border-right-color: var(--accent-amber); }
+.pokemon-sprite-wrap.sprite-shake {
+  animation: sprite-shake 0.38s ease-out;
+}
 
 /* Card layout — flex column so sprite sits above content */
 
