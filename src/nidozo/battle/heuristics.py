@@ -2,12 +2,18 @@
 Heuristic scorer — produces advisory context for each legal action each turn.
 
 This is NOT a decision function. It computes signals that the LLM can reason
-over: type matchups, rough damage estimates, priority, status effects, and
-switch type matchups. The model chooses freely; this just surfaces structure.
+over: type matchups, rough damage estimates, speed tiers, status effects,
+switch value, and battle phase. The model chooses freely; this surfaces
+structure it would otherwise have to infer from raw numbers.
 
-Damage estimates use base stats (public Pokédex data) for both sides and
-assume level 100. They are deliberately rough — enough to flag obvious
-advantages, not a precise damage calculator.
+Design rules:
+- Advisory, never prescriptive. Notes say "you move first", not "use this".
+- Gen 3 mechanics where they differ from later gens (paralysis = 25% speed,
+  burn = halved attack, no Fairy type, etc.).
+- Damage estimates are rough but directionally correct. They incorporate
+  stat stages, weather, STAB, and accuracy — enough to tell a 2HKO from a
+  4HKO, not a precise damage calculator.
+- All computations are guarded; a None opponent or missing stat never crashes.
 """
 
 from __future__ import annotations
@@ -18,29 +24,298 @@ from poke_env.battle import AbstractBattle, Pokemon
 from poke_env.battle.move import Move
 from poke_env.battle.move_category import MoveCategory
 
+# ---------------------------------------------------------------------------
 # Stat stage multipliers: stage -6..+6
-_STAGE_MULT = {
+# ---------------------------------------------------------------------------
+
+_STAGE_MULT: dict[int, float] = {
     -6: 2/8, -5: 2/7, -4: 2/6, -3: 2/5, -2: 2/4, -1: 2/3,
-    0: 1.0,
-    1: 3/2, 2: 4/2, 3: 5/2, 4: 6/2, 5: 7/2, 6: 8/2,
+     0: 1.0,
+     1: 3/2,  2: 4/2,  3: 5/2,  4: 6/2,  5: 7/2,  6: 8/2,
 }
 
+
+def _stage_mult(stage: int) -> float:
+    return _STAGE_MULT.get(max(-6, min(6, stage)), 1.0)
+
+
+# ---------------------------------------------------------------------------
+# Weather damage modifiers (Gen 3)
+# ---------------------------------------------------------------------------
+
+# Maps (weather_name, move_type_name) → multiplier
+_WEATHER_MODS: dict[tuple[str, str], float] = {
+    ("RAINDANCE", "WATER"):  1.5,
+    ("RAINDANCE", "FIRE"):   0.5,
+    ("SUNNYDAY",  "FIRE"):   1.5,
+    ("SUNNYDAY",  "WATER"):  0.5,
+    # Sandstorm boosts Rock SpD in Gen 3+ but doesn't modify damage
+    # Hail has no damage modifier in Gen 3
+}
+
+
+def _weather_damage_mod(weather_name: str | None, move_type_name: str) -> float:
+    if not weather_name:
+        return 1.0
+    return _WEATHER_MODS.get((weather_name.upper(), move_type_name.upper()), 1.0)
+
+
+# ---------------------------------------------------------------------------
+# Status effect names → Gen 3 mechanical impact summaries
+# ---------------------------------------------------------------------------
+
+_STATUS_IMPACT: dict[str, str] = {
+    "BRN": "Burn: attack stat halved; takes 1/8 HP per turn",
+    "PAR": "Paralysis: speed reduced to 25%; 25% chance to be fully paralyzed each turn",
+    "PSN": "Poison: takes 1/8 HP per turn",
+    "TOX": "Badly Poisoned: damage increases each turn (1/16, 2/16, 3/16…)",
+    "SLP": "Sleep: cannot act (1–7 turns)",
+    "FRZ": "Frozen: cannot act until thawed (rare thaw chance each turn)",
+}
+
+# Status move annotations — what each status inflicts and why it matters
+_STATUS_MOVE_EFFECTS: dict[str, dict[str, Any]] = {
+    # Sleep
+    "spore":        {"inflicts": "SLP", "note": "inflicts Sleep (most reliable — 100% accurate)"},
+    "sleeppowder":  {"inflicts": "SLP", "note": "inflicts Sleep (75% accurate)"},
+    "hypnosis":     {"inflicts": "SLP", "note": "inflicts Sleep (60% accurate)"},
+    "sing":         {"inflicts": "SLP", "note": "inflicts Sleep (55% accurate)"},
+    "grasswhistle": {"inflicts": "SLP", "note": "inflicts Sleep (55% accurate)"},
+    "lovelykiss":   {"inflicts": "SLP", "note": "inflicts Sleep (75% accurate)"},
+    "yawn":         {"inflicts": "SLP", "note": "inflicts Sleep next turn (opponent can switch)"},
+    # Paralysis
+    "thunderwave":  {"inflicts": "PAR", "note": "inflicts Paralysis (100% accurate) — slows opponent to 25% speed, 25% chance to not act"},
+    "stunspore":    {"inflicts": "PAR", "note": "inflicts Paralysis (75% accurate)"},
+    "glare":        {"inflicts": "PAR", "note": "inflicts Paralysis (75% accurate) — hits Normal types unlike Thunder Wave"},
+    "bodyslam":     {"inflicts": "PAR", "note": "30% paralysis chance on hit"},
+    "lick":         {"inflicts": "PAR", "note": "30% paralysis chance on hit"},
+    # Burn
+    "willowisp":    {"inflicts": "BRN", "note": "inflicts Burn (85% accurate) — halves opponent's physical attack"},
+    # Poison
+    "toxic":        {"inflicts": "TOX", "note": "inflicts Badly Poisoned — damage escalates each turn; high value in longer battles"},
+    "poisonpowder": {"inflicts": "PSN", "note": "inflicts Poison (75% accurate)"},
+    "poisongas":    {"inflicts": "PSN", "note": "inflicts Poison (55% accurate)"},
+    # Stat boosts — own
+    "swordsdance":  {"stat_boost": {"atk": +2}, "note": "raises Attack +2 stages"},
+    "nastyplot":    {"stat_boost": {"spa": +2}, "note": "raises Sp. Atk +2 stages"},
+    "calmmind":     {"stat_boost": {"spa": +1, "spd": +1}, "note": "raises Sp. Atk and Sp. Def +1 stage each"},
+    "dragondance":  {"stat_boost": {"atk": +1, "spe": +1}, "note": "raises Attack and Speed +1 stage each"},
+    "bulkup":       {"stat_boost": {"atk": +1, "def": +1}, "note": "raises Attack and Defense +1 stage each"},
+    "agility":      {"stat_boost": {"spe": +2}, "note": "raises Speed +2 stages — may enable you to outspeed threats"},
+    "amnesia":      {"stat_boost": {"spd": +2}, "note": "raises Sp. Def +2 stages"},
+    "growth":       {"stat_boost": {"spa": +1}, "note": "raises Sp. Atk +1 stage"},
+    "meditate":     {"stat_boost": {"atk": +1}, "note": "raises Attack +1 stage"},
+    "sharpen":      {"stat_boost": {"atk": +1}, "note": "raises Attack +1 stage"},
+    "workup":       {"stat_boost": {"atk": +1, "spa": +1}, "note": "raises Attack and Sp. Atk +1 stage each"},
+    "batonpass":    {"baton_pass": True, "note": "passes stat boosts/drops to the next ally — use while boosted"},
+    # Stat drops — opponent
+    "screech":      {"stat_drop": {"def": -2}, "note": "lowers opponent Defense -2 stages — amplifies physical moves"},
+    "charm":        {"stat_drop": {"atk": -2}, "note": "lowers opponent Attack -2 stages — reduces physical damage taken"},
+    "growl":        {"stat_drop": {"atk": -1}, "note": "lowers opponent Attack -1 stage"},
+    "leer":         {"stat_drop": {"def": -1}, "note": "lowers opponent Defense -1 stage"},
+    "tickle":       {"stat_drop": {"atk": -1, "def": -1}, "note": "lowers opponent Attack and Defense -1 stage each"},
+    "stringshot":   {"stat_drop": {"spe": -1}, "note": "lowers opponent Speed -1 stage"},
+    "featherdance": {"stat_drop": {"atk": -2}, "note": "lowers opponent Attack -2 stages"},
+    "sweetscent":   {"stat_drop": {"eva": -1}, "note": "lowers opponent evasion -1 stage"},
+    # Utility
+    "recover":   {"heal": 0.5, "note": "restores 50% of max HP"},
+    "softboiled":{"heal": 0.5, "note": "restores 50% of max HP"},
+    "moonlight": {"heal": 0.5, "note": "restores HP (50% normally, more in Sun, less in Sand/Rain)"},
+    "morningsun":{"heal": 0.5, "note": "restores HP (50% normally, more in Sun, less in Sand/Rain)"},
+    "synthesis": {"heal": 0.5, "note": "restores HP (50% normally, more in Sun, less in Sand/Rain)"},
+    "wish":      {"heal": 0.5, "note": "heals ally next turn — use while healthy so the ally benefits"},
+    "lightscreen":{"screen": "spa", "note": "halves special damage for 5 turns for your side"},
+    "reflect":   {"screen": "atk", "note": "halves physical damage for 5 turns for your side"},
+    "substitute":{"substitute": True, "note": "creates a 25% HP decoy — blocks status and chip damage"},
+    "leechseed": {"inflicts": "SEED", "note": "drains 1/8 HP per turn from opponent; wasted on Grass types"},
+    "spikes":    {"hazard": True, "note": "lays entry hazard — damages grounded opponents on switch-in"},
+    "rapidspin": {"hazard": True, "note": "removes entry hazards and Leech Seed from your side"},
+    "perishsong":{"perish": True, "note": "both active Pokémon faint in 3 turns unless switched"},
+    "encore":    {"encore": True, "note": "forces opponent to repeat their last move for 3 turns"},
+    "taunt":     {"taunt": True, "note": "prevents opponent from using status moves for 3 turns"},
+    "protect":   {"protect": True, "note": "blocks all moves this turn — good for scouting or stalling"},
+    "detect":    {"protect": True, "note": "blocks all moves this turn — same effect as Protect"},
+    "roar":      {"phazing": True, "note": "forces opponent to switch; erases their stat boosts"},
+    "whirlwind": {"phazing": True, "note": "forces opponent to switch; erases their stat boosts"},
+    "haze":      {"haze": True, "note": "resets all stat stages for both sides to zero"},
+    "trick":     {"trick": True, "note": "swaps held items with opponent — devastating if you hold a Choice item"},
+    "knockoff":  {"knockoff": True, "note": "removes opponent's held item permanently"},
+    "spite":     {"spite": True, "note": "reduces PP of opponent's last used move by 4"},
+    "painsplit": {"painsplit": True, "note": "averages HP between both active Pokémon — best when opponent is high HP"},
+}
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
 
 def score_actions(battle: AbstractBattle) -> dict[str, Any]:
     """Return scored move and switch options for the current battle state."""
     own = battle.active_pokemon
     opp = battle.opponent_active_pokemon
+    weather = _current_weather(battle)
 
     move_scores = [
-        _score_move(move, own, opp, battle)
+        _score_move(move, own, opp, battle, weather)
         for move in battle.available_moves
     ]
     switch_scores = [
-        _score_switch(mon, opp, battle)
+        _score_switch(mon, own, opp, battle)
         for mon in battle.available_switches
     ]
 
-    return {"move_scores": move_scores, "switch_scores": switch_scores}
+    return {
+        "battle_context": _battle_context(own, opp, battle, weather),
+        "move_scores": move_scores,
+        "switch_scores": switch_scores,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Battle context — top-level advisory
+# ---------------------------------------------------------------------------
+
+def _current_weather(battle: AbstractBattle) -> str | None:
+    try:
+        weather = battle.weather
+        if not weather:
+            return None
+        key = next(iter(weather))
+        return key.name if hasattr(key, "name") else str(key)
+    except (StopIteration, AttributeError, TypeError):
+        return None
+
+
+def _effective_speed(mon: Pokemon, is_own: bool) -> float:
+    """Estimate effective speed accounting for stat stages and paralysis."""
+    try:
+        if is_own:
+            raw = (mon.stats or {}).get("spe")
+            base_spd = float(raw) if isinstance(raw, int | float) else float(mon.base_stats.get("spe", 80))
+        else:
+            base_spd = float(mon.base_stats.get("spe", 80))
+        stage_raw = mon.boosts.get("spe", 0)
+        stage = int(stage_raw) if isinstance(stage_raw, int | float) else 0
+        spd = base_spd * _stage_mult(stage)
+        # Gen 3: paralysis reduces speed to 25%
+        if mon.status and mon.status.name == "PAR":
+            spd *= 0.25
+        return spd
+    except (TypeError, ValueError, AttributeError):
+        return 80.0  # safe fallback
+
+
+def _remaining_count(battle: AbstractBattle, own: bool) -> int:
+    """Count non-fainted Pokémon (including active) on the given side."""
+    if own:
+        team = battle.team
+    else:
+        team = battle.opponent_team
+    return sum(1 for p in team.values() if not p.fainted)
+
+
+def _active_matchup_quality(own: Pokemon | None, opp: Pokemon | None) -> str:
+    """Classify the current type matchup as favorable / neutral / disadvantaged."""
+    if own is None or opp is None:
+        return "unknown"
+    # Check how our own STAB types hit the opponent
+    own_offense_mult = max(
+        (opp.damage_multiplier(t) for t in own.types),
+        default=1.0,
+    )
+    # Check how opponent STAB types hit us
+    opp_offense_mult = max(
+        (own.damage_multiplier(t) for t in opp.types),
+        default=1.0,
+    )
+    if own_offense_mult >= 2.0 and opp_offense_mult < 2.0:
+        return "favorable"
+    if opp_offense_mult >= 2.0 and own_offense_mult < 2.0:
+        return "disadvantaged"
+    if own_offense_mult >= 2.0 and opp_offense_mult >= 2.0:
+        return "double-edged"
+    return "neutral"
+
+
+def _battle_context(
+    own: Pokemon | None,
+    opp: Pokemon | None,
+    battle: AbstractBattle,
+    weather: str | None,
+) -> dict[str, Any]:
+    ctx: dict[str, Any] = {}
+
+    # Speed comparison
+    if own is not None and opp is not None:
+        own_spd = _effective_speed(own, is_own=True)
+        opp_spd = _effective_speed(opp, is_own=False)
+        faster = own_spd > opp_spd
+        speed_note = (
+            f"You move FIRST (est. {own_spd:.0f} vs {opp_spd:.0f})"
+            if faster
+            else (
+                f"You move SECOND (est. {own_spd:.0f} vs {opp_spd:.0f})"
+                if own_spd < opp_spd
+                else f"Speed tie (est. {own_spd:.0f} vs {opp_spd:.0f}) — RNG decides order"
+            )
+        )
+        ctx["speed"] = {
+            "you_move_first": faster,
+            "speed_tie": own_spd == opp_spd,
+            "own_speed_estimate": round(own_spd),
+            "opp_speed_estimate": round(opp_spd),
+            "note": speed_note,
+        }
+
+    # Remaining Pokémon (battle phase)
+    try:
+        own_remaining = _remaining_count(battle, own=True)
+        opp_remaining = _remaining_count(battle, own=False)
+        ctx["own_remaining"] = own_remaining
+        ctx["opp_remaining"] = opp_remaining
+        if own_remaining == 1 and opp_remaining > 1:
+            ctx["phase"] = "endgame_behind"
+        elif opp_remaining == 1 and own_remaining > 1:
+            ctx["phase"] = "endgame_ahead"
+        elif own_remaining == 1 and opp_remaining == 1:
+            ctx["phase"] = "endgame_last_vs_last"
+        elif own_remaining <= 2 or opp_remaining <= 2:
+            ctx["phase"] = "late"
+        elif own_remaining + opp_remaining <= 6:
+            ctx["phase"] = "midgame"
+        else:
+            ctx["phase"] = "early"
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Active matchup quality
+    if own is not None and opp is not None:
+        ctx["active_matchup"] = _active_matchup_quality(own, opp)
+
+    # Weather
+    if weather:
+        ctx["weather"] = weather
+        if weather == "SANDSTORM":
+            ctx["weather_note"] = "Sandstorm: non-Rock/Steel/Ground types take 1/16 HP per turn"
+        elif weather == "HAIL":
+            ctx["weather_note"] = "Hail: non-Ice types take 1/16 HP per turn"
+        elif weather == "RAINDANCE":
+            ctx["weather_note"] = "Rain: Water moves ×1.5, Fire moves ×0.5"
+        elif weather == "SUNNYDAY":
+            ctx["weather_note"] = "Sun: Fire moves ×1.5, Water moves ×0.5"
+
+    # Own status impact
+    if own is not None and own.status:
+        impact = _STATUS_IMPACT.get(own.status.name)
+        if impact:
+            ctx["own_status_impact"] = impact
+
+    # Opponent status (for evaluating status move value)
+    if opp is not None and opp.status:
+        ctx["opp_status"] = opp.status.name
+        ctx["opp_status_impact"] = _STATUS_IMPACT.get(opp.status.name, opp.status.name)
+
+    return ctx
 
 
 # ---------------------------------------------------------------------------
@@ -52,25 +327,39 @@ def _score_move(
     own: Pokemon | None,
     opp: Pokemon | None,
     battle: AbstractBattle,
+    weather: str | None,
 ) -> dict[str, Any]:
     try:
         priority = move.priority
     except KeyError:
         priority = 0  # pseudo-moves like 'recharge' have no priority entry
 
+    # PP warning
+    low_pp = False
+    try:
+        if move.max_pp > 0 and (move.current_pp / move.max_pp) <= 0.25:
+            low_pp = True
+    except (AttributeError, ZeroDivisionError):
+        pass
+
     score: dict[str, Any] = {
         "move_id": move.id,
         "type_multiplier": None,
         "effectiveness_label": "unknown",
         "estimated_damage_pct": None,
+        "accuracy_adjusted_pct": None,
         "priority": priority,
         "is_status": move.category == MoveCategory.STATUS,
+        "low_pp": low_pp,
         "notes": [],
     }
 
+    if low_pp:
+        score["notes"].append(f"LOW PP ({move.current_pp}/{move.max_pp}) — consider conserving")
+
     if move.category == MoveCategory.STATUS:
         score["effectiveness_label"] = "status"
-        _annotate_status_move(move, score)
+        _annotate_status_move(move, score, opp, own)
         return score
 
     if opp is None:
@@ -84,10 +373,24 @@ def _score_move(
     if mult == 0.0:
         score["notes"].append("immune — will deal no damage")
         score["estimated_damage_pct"] = "0%"
+        score["accuracy_adjusted_pct"] = "0%"
         return score
 
-    # Rough damage estimate: Gen 3 damage formula simplified for advisory use.
-    # actual_stat uses our real stats when available, base_stats as fallback.
+    # Weather modifier on this move type
+    try:
+        move_type_name = move.type.name
+    except AttributeError:
+        move_type_name = ""
+    weather_mod = _weather_damage_mod(weather, move_type_name)
+
+    # Accuracy fraction (True means always hits — e.g. Swift)
+    try:
+        acc = move.accuracy
+        acc_frac = 1.0 if acc is True else float(acc) / 100.0
+    except (AttributeError, TypeError, ValueError):
+        acc_frac = 1.0
+
+    # Rough damage estimate — Gen 3 formula, simplified for advisory use
     if own is not None:
         own_stats = own.stats or {}
         is_physical = move.category == MoveCategory.PHYSICAL
@@ -97,27 +400,56 @@ def _score_move(
         own_atk_base = own_stats.get(atk_key) or own.base_stats.get(atk_key, 80)
         opp_def_base = opp.base_stats.get(def_key, 80)
 
-        # Apply visible stat stages
+        # Stat stages
         own_atk_stage = own.boosts.get(atk_key, 0)
-        opp_def_stage = opp.boosts.get(def_key, 0)
-        own_atk = own_atk_base * _STAGE_MULT.get(own_atk_stage, 1.0)
-        opp_def = opp_def_base * _STAGE_MULT.get(opp_def_stage, 1.0)
+        opp_def_stage  = opp.boosts.get(def_key, 0)
+        own_atk = own_atk_base * _stage_mult(own_atk_stage)
+        opp_def = opp_def_base * _stage_mult(opp_def_stage)
 
-        # Simplified Gen 3 formula (level 100, no crit, no random roll)
-        raw = ((42 * move.base_power * own_atk / opp_def) / 50 + 2) * mult
+        # Gen 3: burn halves physical attack
+        if is_physical and own.status and own.status.name == "BRN":
+            own_atk *= 0.5
 
-        # Express as % of a typical opponent HP pool (base HP × ~2 for level 100 approx)
+        # Gen 3 damage formula (level 100, no crit, no random roll), with weather
+        raw = ((42 * move.base_power * own_atk / opp_def) / 50 + 2) * mult * weather_mod
+
+        # Express as % of a typical opponent HP pool (base HP × approx level-100 multiplier)
         opp_hp_approx = opp.base_stats.get("hp", 80) * 2 + 110
         pct = min(raw / opp_hp_approx * 100, 999)
         score["estimated_damage_pct"] = f"~{pct:.0f}%"
+        score["accuracy_adjusted_pct"] = f"~{pct * acc_frac:.0f}%"
 
         if pct >= 100:
             score["notes"].append("likely OHKO")
         elif pct >= 50:
             score["notes"].append("likely 2HKO")
+        elif pct >= 34:
+            score["notes"].append("likely 3HKO")
+
+        # Burn impact note for physical moves
+        if is_physical and own.status and own.status.name == "BRN":
+            score["notes"].append("Burn halves your Attack — physical damage is reduced")
+
+    if weather_mod != 1.0:
+        mod_label = f"×{weather_mod:.1f} ({weather} boost)" if weather_mod > 1 else f"×{weather_mod:.1f} ({weather} penalty)"
+        score["notes"].append(f"Weather modifier: {mod_label}")
+
+    if acc_frac < 1.0:
+        score["notes"].append(f"Accuracy: {int(acc_frac * 100)}% — miss rate introduces variance")
 
     if priority > 0:
-        score["notes"].append(f"priority +{priority} — moves before most attacks")
+        score["notes"].append(f"Priority +{priority} — moves before non-priority attacks regardless of speed")
+
+    # Speed note — does priority change who attacks first?
+    if priority == 0 and own is not None and opp is not None:
+        own_spd = _effective_speed(own, is_own=True)
+        opp_spd = _effective_speed(opp, is_own=False)
+        if own_spd > opp_spd:
+            score["notes"].append("You move first this turn")
+        elif own_spd < opp_spd:
+            score["notes"].append("Opponent moves first — you attack after taking damage")
+        else:
+            score["notes"].append("Speed tie — move order is random (50/50)")
 
     # STAB
     if own is not None and move.type in own.types:
@@ -126,49 +458,75 @@ def _score_move(
     return score
 
 
-# Exact poke-env move IDs for common status effects.
-# Using exact sets avoids substring false-positives (e.g. "stun" matching
-# "stunspore" was fine but "sing" or "poison" as substrings could misfire on
-# future moves). Bogus tokens like "lovecaster"/"darkv" have been removed.
-_SLEEP_MOVES: frozenset[str] = frozenset({
-    "spore", "sleeppowder", "hypnosis", "sing", "grasswhistle",
-    "lovelykiss", "yawn",
-})
-_POISON_MOVES: frozenset[str] = frozenset({
-    "toxic", "poisonpowder", "poisongas",
-})
-_PARA_MOVES: frozenset[str] = frozenset({
-    "thunderwave", "stunspore", "glare", "bodyslam", "lick",
-    "zappycannon",  # included for future-proofing; safe if absent
-})
-_BURN_MOVES: frozenset[str] = frozenset({
-    "willowisp",
-})
-_BOOST_MOVES: frozenset[str] = frozenset({
-    "swordsdance", "nastyplot", "calmmind", "dragondance",
-    "bulkup", "workup", "agility", "amnesia", "batonpass",
-    "growth", "meditate", "sharpen",
-})
-_DROP_MOVES: frozenset[str] = frozenset({
-    "screech", "charm", "growl", "leer", "tickle",
-    "stringshot", "featherdance", "sweetscent",
-})
+# ---------------------------------------------------------------------------
+# Status move annotation (expanded)
+# ---------------------------------------------------------------------------
 
-
-def _annotate_status_move(move: Move, score: dict[str, Any]) -> None:
+def _annotate_status_move(
+    move: Move,
+    score: dict[str, Any],
+    opp: Pokemon | None,
+    own: Pokemon | None,
+) -> None:
     mid = move.id
-    if mid in _SLEEP_MOVES:
-        score["notes"].append("inflicts Sleep")
-    elif mid in _POISON_MOVES:
-        score["notes"].append("inflicts Poison/Toxic")
-    elif mid in _PARA_MOVES:
-        score["notes"].append("inflicts Paralysis")
-    elif mid in _BURN_MOVES:
-        score["notes"].append("inflicts Burn")
-    elif mid in _BOOST_MOVES:
-        score["notes"].append("boosts own stats")
-    elif mid in _DROP_MOVES:
-        score["notes"].append("drops opponent stats")
+    entry = _STATUS_MOVE_EFFECTS.get(mid)
+
+    if entry is None:
+        # Unknown status move — generic fallback
+        score["notes"].append("status move")
+        return
+
+    score["notes"].append(entry["note"])
+
+    # Status infliction check — wasted if opponent already has a status
+    inflicts = entry.get("inflicts")
+    if inflicts and inflicts not in ("SEED",) and opp is not None and opp.status is not None:
+        score["notes"].append(
+            f"⚠ Opponent already has {opp.status.name} — status moves cannot stack; this would be wasted"
+        )
+
+    # Boost moves — show current stage and diminishing value
+    stat_boost = entry.get("stat_boost")
+    if stat_boost and own is not None:
+        stage_notes = []
+        for stat, delta in stat_boost.items():
+            current = own.boosts.get(stat, 0)
+            new_stage = min(6, current + delta)
+            if current >= 6:
+                stage_notes.append(f"{stat} already at +6 (max) — no further effect")
+            else:
+                mult_now = _stage_mult(current)
+                mult_after = _stage_mult(new_stage)
+                gain_pct = int((mult_after / mult_now - 1) * 100)
+                stage_notes.append(f"{stat} {current:+d} → {new_stage:+d} (+{gain_pct}% effective stat)")
+        if stage_notes:
+            score["notes"].extend(stage_notes)
+
+    # Stat drop moves — show opponent's current stage
+    stat_drop = entry.get("stat_drop")
+    if stat_drop and opp is not None:
+        drop_notes = []
+        for stat, delta in stat_drop.items():
+            current = opp.boosts.get(stat, 0)
+            new_stage = max(-6, current + delta)
+            if current <= -6:
+                drop_notes.append(f"Opponent {stat} already at -6 (min) — no further effect")
+            else:
+                mult_now = _stage_mult(current)
+                mult_after = _stage_mult(new_stage)
+                reduction_pct = int((1 - mult_after / mult_now) * 100)
+                drop_notes.append(f"Opponent {stat} {current:+d} → {new_stage:+d} (-{reduction_pct}% effective stat)")
+        if drop_notes:
+            score["notes"].extend(drop_notes)
+
+    # Healing moves — context based on own HP
+    heal_frac = entry.get("heal")
+    if heal_frac is not None and own is not None:
+        hp = own.current_hp_fraction
+        if hp >= 0.875:
+            score["notes"].append(f"HP is high ({int(hp * 100)}%) — limited recovery value right now")
+        elif hp <= 0.5:
+            score["notes"].append(f"HP is low ({int(hp * 100)}%) — high recovery value")
 
 
 def _effectiveness_label(mult: float) -> str:
@@ -191,22 +549,38 @@ def _effectiveness_label(mult: float) -> str:
 
 def _score_switch(
     incoming: Pokemon,
+    own: Pokemon | None,
     opp: Pokemon | None,
     battle: AbstractBattle,
 ) -> dict[str, Any]:
     score: dict[str, Any] = {
         "species": incoming.species,
         "hp_fraction": round(incoming.current_hp_fraction, 3),
+        "switch_quality": 0,   # integer from -3 (bad) to +3 (excellent)
         "notes": [],
     }
+
+    if incoming.fainted:
+        score["notes"].append("fainted — cannot be sent out")
+        score["switch_quality"] = -3
+        return score
+
+    # HP penalty: low HP bench mons have limited switch value
+    hp = incoming.current_hp_fraction
+    if hp < 0.25:
+        score["switch_quality"] -= 2
+        score["notes"].append(f"Very low HP ({int(hp * 100)}%) — high risk if switched in")
+    elif hp < 0.5:
+        score["switch_quality"] -= 1
+        score["notes"].append(f"Moderate HP ({int(hp * 100)}%)")
+    else:
+        score["notes"].append(f"Healthy HP ({int(hp * 100)}%)")
 
     if opp is None:
         return score
 
-    # How well does the incoming mon's typing hold up against the opponent?
-    # Check resistance to opponent's revealed move types and STAB types.
+    # Opponent threat types: STAB types + revealed move types
     opp_threat_types = {m.type for m in opp.moves.values() if m.category != MoveCategory.STATUS}
-    # Also include opponent STAB types as likely threats even if not yet revealed
     opp_threat_types.update(opp.types)
 
     resists, weak_to, immune_to = [], [], []
@@ -214,22 +588,79 @@ def _score_switch(
         mult = incoming.damage_multiplier(t)
         if mult == 0.0:
             immune_to.append(t.name)
-        elif mult < 1.0:
+            score["switch_quality"] += 1
+        elif mult <= 0.5:
             resists.append(t.name)
-        elif mult > 1.0:
+            score["switch_quality"] += 1
+        elif mult >= 2.0:
             weak_to.append(t.name)
+            score["switch_quality"] -= 1
 
     if immune_to:
-        score["notes"].append(f"immune to {', '.join(immune_to)}")
+        score["notes"].append(f"Immune to {', '.join(immune_to)}")
     if resists:
-        score["notes"].append(f"resists {', '.join(resists)}")
+        score["notes"].append(f"Resists {', '.join(resists)}")
     if weak_to:
-        score["notes"].append(f"weak to {', '.join(weak_to)}")
+        score["notes"].append(f"Weak to {', '.join(weak_to)}")
 
-    # Does the incoming mon have a type advantage offensively?
+    # Offensive type coverage vs opponent
+    hitting_types = []
     for t in incoming.types:
         opp_mult = opp.damage_multiplier(t)
         if opp_mult >= 2.0:
-            score["notes"].append(f"{t.name} is super effective vs opponent")
+            hitting_types.append(t.name)
+            score["switch_quality"] += 1
+
+    if hitting_types:
+        score["notes"].append(f"{', '.join(hitting_types)} type(s) hit opponent super effectively")
+
+    # Context: is the current active mon in a bad matchup? (high switch incentive)
+    if own is not None:
+        current_matchup = _active_matchup_quality(own, opp)
+        if current_matchup == "disadvantaged":
+            score["notes"].append("Active Pokémon is in a disadvantaged matchup — switching out has high value")
+            score["switch_quality"] += 1
+        elif current_matchup == "favorable":
+            score["notes"].append("Active Pokémon has type advantage — consider staying in")
+
+    # Own status: burned/paralyzed active mon may be worth replacing
+    if own is not None and own.status:
+        status_name = own.status.name
+        if status_name == "BRN" and _is_primarily_physical(own):
+            score["notes"].append("Active mon is burned (attack halved) — switching may recover offensive pressure")
+            score["switch_quality"] += 1
+        elif status_name == "PAR":
+            score["notes"].append("Active mon is paralyzed (25% speed) — switching avoids full-paralysis turns")
+
+    # Clamp switch_quality to [-3, +3]
+    score["switch_quality"] = max(-3, min(3, score["switch_quality"]))
+
+    # Human-readable quality label
+    sq = score["switch_quality"]
+    if sq >= 2:
+        score["quality_label"] = "excellent switch"
+    elif sq == 1:
+        score["quality_label"] = "good switch"
+    elif sq == 0:
+        score["quality_label"] = "neutral"
+    elif sq == -1:
+        score["quality_label"] = "risky switch"
+    else:
+        score["quality_label"] = "poor switch"
 
     return score
+
+
+def _is_primarily_physical(mon: Pokemon) -> bool:
+    """Heuristic: is this mon's damage profile mainly physical?"""
+    phys_bp = sum(
+        m.base_power for m in mon.moves.values()
+        if m.category == MoveCategory.PHYSICAL
+    )
+    spec_bp = sum(
+        m.base_power for m in mon.moves.values()
+        if m.category == MoveCategory.SPECIAL
+    )
+    if phys_bp + spec_bp == 0:
+        return mon.base_stats.get("atk", 0) > mon.base_stats.get("spa", 0)
+    return phys_bp > spec_bp
