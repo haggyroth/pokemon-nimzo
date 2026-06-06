@@ -78,13 +78,21 @@
 - **Wave R2 — Frontend lint + CI gate**: all 16 ESLint v10 / react-hooks v7 errors resolved; `npm run lint` added to CI; pytest coverage gate at 65%; `uv.lock` committed for reproducible builds
 - **Wave R3 — Robustness**: `failed` battle status wired end-to-end; Pydantic `Field(ge/le)` bounds on all API inputs (422 on bad requests); 6 DB indexes for hot read paths; `finish_battle` + ELO update made fully atomic; CORS restricted to known origins; EventBus queues bounded (256) with drop-oldest overflow; events list capped at 500 in frontend
 - **Wave R4 — Test coverage**: 35 new tests across `LLMPlayer`, `StreamingLLMPlayer`, `StreamingRandomBot`, `AnthropicBackend`, `OpenAIBackend`, `BattleStore`, and schema migrations; overall coverage 85%; schema migration bug found and fixed (`migrate()` would crash on v1 databases due to index creation before column existed)
-- **Technical debt cleared**:
-  - Heuristic status-move annotation replaced with exact `frozenset` lookups; bogus tokens (`"lovecaster"`, `"darkv"`) and Gen 6/7 moves removed
-  - `AnthropicBackend` now iterates all content blocks — fixes crash on thinking-model responses where `content[0]` is a thinking block with no `.text`
-  - Opponent `ability` field in serializer guarded against `"unknown"` sentinel (matching existing `item` guard)
-  - Inline `store._conn.execute()` calls in `app.py` replaced with `BattleStore` methods (`get_turns_basic`, `get_battle_players`, `update_battle_tag`)
-  - `serve.py --reload` fixed — now uses `factory=True` + import string so uvicorn hot-reload actually works
+- **Technical debt cleared**: heuristic bogus tokens removed; `AnthropicBackend` multi-block crash fixed; opponent `ability` hidden-info guard; inline SQL moved to `BattleStore`; `serve.py --reload` fixed
 - 203 tests
+
+### v0.11 — Memory, Intelligence, Drafted Teams & Deep Analysis
+- **Cross-battle lessons**: after each battle the LLM generates a short lesson (what worked, what to avoid); stored per model in SQLite; injected into future system prompts so models evolve strategy across battles
+- **Per-model stats page**: full W/L/T history, ELO sparkline, opponent breakdown, decision-quality distribution, lesson log — all in-browser
+- **Richer post-game analysis**: per-turn key moments list (blunders, RNG events, turning point); enhanced lesson generation grounded in specific blunders; `AnalysisSummary` panel in Battle Replay with clickable moments that seek to the turn
+- **Tournament mode**: configure N models and rounds in the browser; round-robin; live progress + standings overlay; cancel individual battles mid-run; full tournament history page
+- **Drafted teams + Smogon meta tiers**: LLM snake-drafts a 6-mon team from a curated pool; 8 tier formats (Random / OU / UU / NU / LC / Ubers / Freeforall); DraftPhase UI with animated pick reveal; `teams` table in DB; drafted team rosters shown on post-battle result card
+- **Tier context in UI**: tier badges throughout battlefield, leaderboard, tournament scoreboard; tier filter tabs on leaderboard
+- **Heuristic overhaul**: speed-tier awareness (Gen 3 paralysis ×0.25), weather damage modifier, accuracy-adjusted damage estimates, low-PP warnings, battle context block (matchup quality, remaining counts, status impact), switch quality scoring with matchup labels
+- **Draft critique**: team composition analysis — STAB offensive type spread, shared defensive weaknesses (Gen 3 type chart), coverage gaps, execution quality (blunders + decision_quality_pct)
+- **Variance report**: structured tally of all inferred RNG events (crits + misses) with per-player benefit counts and plain-English verdict; new `VarianceReport` and `DraftCritiqueSection` panels in Battle Replay
+- **Gen 3 pool expansion**: 93 → 153 species with Smogon ADV competitive sets covering all missing starters (Blaziken, Charizard, Venusaur, Blastoise), legends (Raikou, Entei, Regirock, Registeel), and popular UU/NU picks; all Gen 3 legal (no Gen 4+ moves)
+- 358 tests; mypy strict enforced across all source files
 
 ---
 
@@ -92,14 +100,8 @@
 
 ---
 
-### Phase 3 — Model Intelligence
-*Goal: models become more interesting players over time.*
-
-**Lessons / Memory**
-- After each battle, a model generates a short lesson: what worked, what to avoid
-- Lessons stored per model in the DB and injected into future system prompts
-- Configurable memory window (last N lessons or last N turns of history)
-- Enables cross-battle strategy evolution — models that adapt over time
+### Phase 5 — Platform Expansion
+*Goal: broaden the competitive scope and polish.*
 
 **Multi-agent Reasoning** (coach / tutor mode)
 - Optional: before acting, the player model queries a "coach" model for advice
@@ -107,30 +109,8 @@
 - Player weighs coach advice alongside its own reasoning
 - Configurable: which models use a coach, which coach model to use
 
-**Model Stats Pages**
-- Dedicated page per model: full W/L/T history, ELO sparkline over time, opponent breakdown
-- Decision quality distribution (optimal / good / suboptimal / fallback %)
-- Model metadata pulled from Hugging Face API (architecture, parameters, license)
-- Model-specific insights: common move preferences, switch frequency, fallback rate
-
-**Win Probability**
-- Real-time win probability estimate shown during live battles
-- Based on current HP totals, remaining Pokémon, type matchups, speed advantage
-- Displayed as a live bar at the top of the battlefield view
-
----
-
-### Phase 4 — Battle Formats
-*Goal: expand the strategic surface area.*
-
-**Drafted Teams**
-- Fixed teams defined before battle starts (no more random)
-- LLM-drafted team mode: model builds a team from a pool of legal Pokémon
-- Team stored in DB, tied to model entry for reproducible matchups
-
 **Tournament Brackets**
 - Single-elimination and double-elimination bracket modes
-- Scheduled round-robins with configurable cadence
 - Bracket visualizer in the UI showing live progression
 
 **Doubles**
@@ -138,39 +118,24 @@
 - Prompt and action parser extended for `target` field
 - Heuristic engine updated for spread moves and partner synergy
 
----
-
-### Phase 5 — Platform Expansion
-*Goal: broaden the competitive scope.*
-
 **Expanded Generation Support**
 - Gen 4+ mechanics: held items, abilities, physical/special split
 - Incremental: one generation at a time, validated against Showdown rules
-- New prompt context for items and abilities (currently hidden from model)
 
 **Deeper Competitive Features**
 - Speed tie and priority bracket resolution visible in the battle log
 - Weather and terrain strategies tracked in analysis
 - Item usage annotated in turn logs
+- Win probability bar shown live during active battles
 
 ---
 
 ### Technical Debt & Housekeeping
-*Cleared in v0.10 (marked ✅). Remaining items below.*
 
 **Refactoring**
-- ✅ Move inline SQL from `app.py` into `BattleStore` methods
-- ✅ Replace `serve.py --reload` (now uses `factory=True` + import string)
 - Split `app.py` into routing / orchestration / WebSocket layers — still growing
 
-**Correctness**
-- ✅ Heuristic status-move bogus tokens fixed; exact `frozenset` lookups
-- ✅ `AnthropicBackend` multi-block / thinking-response crash fixed
-- ✅ Opponent `ability` hidden-info guard added
-
 **Infrastructure**
-- Add structured logging + `/healthz` endpoint with graceful runner shutdown
-- Add `mypy` / type-check gate to CI (types are already thorough)
 - Add E2E smoke tests (Playwright) covering start → watch → replay → analyze
 - Add Dependabot for Python and npm dependency updates
-- Add `CHANGELOG.md` (Phase 5 milestone)
+- Add `CHANGELOG.md`
