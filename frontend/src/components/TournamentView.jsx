@@ -1,6 +1,29 @@
 import { useState, useEffect, useReducer } from 'react'
 
 // ---------------------------------------------------------------------------
+// Shared tier badge (mirrors BattleField palette)
+// ---------------------------------------------------------------------------
+
+const TIER_LABELS = {
+  random:     'RANDOM',
+  ou:         'OU',
+  ubers:      'UBERS',
+  uu:         'UU',
+  nu:         'NU',
+  lc:         'LC',
+  freeforall: 'FREE-FOR-ALL',
+}
+
+function TierBadge({ tier, className = '' }) {
+  if (!tier || tier === 'random') return null
+  return (
+    <span className={`tier-badge tier-badge--${tier} ${className}`}>
+      {TIER_LABELS[tier] ?? tier.toUpperCase()}
+    </span>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Status badge
 // ---------------------------------------------------------------------------
 
@@ -109,23 +132,30 @@ function BattleGrid({ battles, onReplaySelected }) {
       <tbody>
         {battles.map((b, i) => {
           const done = b.status === 'completed'
-          const cls = !done ? 'ts-br-pending'
+          const isRunning = b.status === 'running'
+          const cls = isRunning ? 'ts-br-running'
+                    : !done ? 'ts-br-pending'
                     : b.winner === 1 ? 'ts-br-p1win'
                     : b.winner === 2 ? 'ts-br-p2win'
                     : 'ts-br-tie'
           return (
             <tr key={b.id} className={`ts-battle-row ${cls}`}>
-              <td className="ts-bn">{i + 1}</td>
+              <td className="ts-bn">
+                {i + 1}
+                {isRunning && <span className="ts-br-live-dot" title="Live" />}
+              </td>
               <td className={`ts-bplayer ${b.winner === 1 ? 'ts-winner-player' : ''}`}>
                 <span className="ts-bmodel">{b.p1_model}</span>
                 <span className="ts-bprov">{b.p1_provider}</span>
               </td>
               <td className="ts-vs-cell">
-                {done
-                  ? <span className={`ts-result-badge ts-r-${b.winner === 1 ? 'p1' : b.winner === 2 ? 'p2' : 'tie'}`}>
-                      {b.winner === 1 ? 'P1 WON' : b.winner === 2 ? 'P2 WON' : 'TIE'}
-                    </span>
-                  : <span className="ts-result-badge ts-r-pending">PENDING</span>
+                {isRunning
+                  ? <span className="ts-result-badge ts-r-running">LIVE</span>
+                  : done
+                    ? <span className={`ts-result-badge ts-r-${b.winner === 1 ? 'p1' : b.winner === 2 ? 'p2' : 'tie'}`}>
+                        {b.winner === 1 ? 'P1 WON' : b.winner === 2 ? 'P2 WON' : 'TIE'}
+                      </span>
+                    : <span className="ts-result-badge ts-r-pending">PENDING</span>
                 }
               </td>
               <td className={`ts-bplayer ts-bplayer-right ${b.winner === 2 ? 'ts-winner-player' : ''}`}>
@@ -140,6 +170,7 @@ function BattleGrid({ battles, onReplaySelected }) {
                 }
               </td>
               <td className="ts-replay-cell">
+                {b.drafted ? <span className="ts-drafted-tag" title="Drafted teams">DRAFT</span> : null}
                 {done && (
                   <button
                     className="btn-replay btn-replay-sm"
@@ -221,6 +252,7 @@ export default function TournamentView({ tournamentId, tournament: liveTournamen
   const status    = liveTournament?.status ?? meta?.status ?? 'running'
   const totalBattles = meta?.total_battles ?? 0
   const battlesCompleted = liveTournament?.done ?? battles.filter(b => b.status === 'completed').length
+  const tier = liveTournament?.tier ?? meta?.tier ?? 'random'
 
   // Enrich battle list: if liveTournament.currentBattleId matches, mark it as running
   const enrichedBattles = battles.map(b => {
@@ -262,6 +294,7 @@ export default function TournamentView({ tournamentId, tournament: liveTournamen
         <div className="ts-title-group">
           <div className="ts-title">TOURNAMENT #{tournamentId}</div>
           <StatusBadge status={status} />
+          <TierBadge tier={tier} className="ts-tier-badge" />
         </div>
 
         <div className="ts-header-meta">

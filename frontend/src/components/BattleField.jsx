@@ -1,6 +1,25 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import PokemonCard from './PokemonCard'
 import BattleLog from './BattleLog'
+
+const TIER_LABELS = {
+  random:     'RANDOM',
+  ou:         'OU',
+  ubers:      'UBERS',
+  uu:         'UU',
+  nu:         'NU',
+  lc:         'LC',
+  freeforall: 'FREE-FOR-ALL',
+}
+
+function TierBadge({ tier, className = '' }) {
+  if (!tier || tier === 'random') return null
+  return (
+    <span className={`tier-badge tier-badge--${tier} ${className}`}>
+      {TIER_LABELS[tier] ?? tier.toUpperCase()}
+    </span>
+  )
+}
 
 function HeuristicDrawer({ heuristics }) {
   const [open, setOpen] = useState(false)
@@ -57,6 +76,18 @@ async function cancelBattle(battleId) {
   await fetch(`/api/battles/${battleId}/cancel`, { method: 'POST' })
 }
 
+function useTeams(battleId, enabled) {
+  const [teams, setTeams] = useState(null)
+  useEffect(() => {
+    if (!battleId || !enabled) return
+    fetch(`/api/battles/${battleId}/teams`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setTeams(d) })
+      .catch(() => {})
+  }, [battleId, enabled])
+  return teams
+}
+
 export default function BattleField({
   p1State, p2State, battleInfo, battleResult, events, thinking, onDismiss, tournament,
   onTournamentScoreboard,
@@ -76,6 +107,11 @@ export default function BattleField({
 
   const isLive = battleInfo && !battleResult
   const currentBattleId = battleInfo?.battle_id
+  const battleTier = battleInfo?.tier
+  const battleDrafted = battleInfo?.drafted
+
+  // Fetch drafted teams when a result arrives (only for drafted battles)
+  const teams = useTeams(currentBattleId, !!battleResult && !!battleDrafted)
 
   return (
     <div className="battlefield-wrapper">
@@ -90,6 +126,10 @@ export default function BattleField({
           {turn > 0 ? `TURN ${turn}` : 'READY'}
         </div>
         <div className="battle-header-center">
+          <div className="battle-header-badges">
+            <TierBadge tier={battleTier} />
+            {battleDrafted && <span className="draft-badge">DRAFT</span>}
+          </div>
           {weather && <div className="weather-badge">🌤 {weather}</div>}
           <ThinkingBadge role={thinking} />
         </div>
@@ -151,6 +191,9 @@ export default function BattleField({
             ) : (
               <>
                 <div className="winner-label">BATTLE COMPLETE</div>
+                {battleTier && battleTier !== 'random' && (
+                  <TierBadge tier={battleTier} className="winner-tier-badge" />
+                )}
                 <div className="winner-name">
                   {battleResult.winner === 1
                     ? (battleInfo?.p1 ?? 'P1') + ' WINS'
@@ -159,6 +202,27 @@ export default function BattleField({
                       : 'DRAW'}
                 </div>
                 <div className="winner-turns">{battleResult.total_turns} turns</div>
+
+                {/* Drafted team rosters */}
+                {teams && (teams.p1 || teams.p2) && (
+                  <div className="winner-teams">
+                    {[['p1', battleInfo?.p1], ['p2', battleInfo?.p2]].map(([role, label]) => {
+                      const team = teams[role]
+                      if (!team) return null
+                      const pokemon = Array.isArray(team.pokemon) ? team.pokemon : []
+                      return (
+                        <div key={role} className={`winner-team winner-team--${role}`}>
+                          <div className="winner-team-label">{label?.split('/').pop() ?? role.toUpperCase()}</div>
+                          <div className="winner-team-mons">
+                            {pokemon.map(sid => (
+                              <span key={sid} className="winner-team-mon">{sid}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </>
             )}
             <button className="btn-dismiss" onClick={onDismiss}>CLOSE</button>
@@ -178,15 +242,20 @@ function TournamentBar({ tournament, onScoreboard }) {
   const pct = tournament.total > 0
     ? Math.round((tournament.done / tournament.total) * 100)
     : 0
+  const tier = tournament.tier
+  const tierLabel = TIER_LABELS[tier] ?? tier?.toUpperCase()
 
   return (
     <div className="tournament-bar" onClick={onScoreboard} style={{ cursor: onScoreboard ? 'pointer' : 'default' }} title={onScoreboard ? 'View scoreboard' : undefined}>
       <div className="tournament-bar-info">
         <span className="tournament-bar-label">TOURNAMENT</span>
+        {tier && tier !== 'random' && (
+          <span className={`tournament-bar-tier tier-badge tier-badge--${tier}`}>{tierLabel}</span>
+        )}
         <span className="tournament-bar-progress">
           {tournament.done} / {tournament.total} battles
           {tournament.p1 && (
-            <span className="tournament-bar-matchup"> · {tournament.p1} vs {tournament.p2}</span>
+            <span className="tournament-bar-matchup"> · {tournament.p1.split('/').pop()} vs {tournament.p2?.split('/').pop()}</span>
           )}
         </span>
         {tournament.status === 'cancelled' && (
