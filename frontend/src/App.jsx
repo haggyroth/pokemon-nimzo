@@ -3,12 +3,14 @@ import './styles/main.css'
 import Leaderboard from './components/Leaderboard'
 import BattleField from './components/BattleField'
 import BattleReplay from './components/BattleReplay'
+import ModelStats from './components/ModelStats'
 import { useBattleStream } from './hooks/useBattleStream'
 
 function App() {
-  const [view, setView]                 = useState('home')
-  const [dismissed, setDismissed]       = useState(false)
+  const [view, setView]                   = useState('home')
+  const [dismissed, setDismissed]         = useState(false)
   const [replayBattleId, setReplayBattleId] = useState(null)
+  const [statsModelId, setStatsModelId]   = useState(null)
   const {
     events, isConnected, p1State, p2State, battleInfo, battleResult,
     thinking, tournament, reset, clearTournament,
@@ -36,6 +38,16 @@ function App() {
 
   function handleReplayClose() {
     setReplayBattleId(null)
+    setView(statsModelId != null ? 'stats' : 'home')
+  }
+
+  function handleModelSelected(modelId) {
+    setStatsModelId(modelId)
+    setView('stats')
+  }
+
+  function handleStatsClose() {
+    setStatsModelId(null)
     setView('home')
   }
 
@@ -48,8 +60,8 @@ function App() {
         </div>
         <nav className="app-nav">
           <button
-            className={`nav-btn ${view === 'home' ? 'active' : ''}`}
-            onClick={() => setView('home')}
+            className={`nav-btn ${view === 'home' || view === 'stats' ? 'active' : ''}`}
+            onClick={() => { setStatsModelId(null); setView('home') }}
           >HOME</button>
           <button
             className={`nav-btn ${view === 'battle' ? 'active' : ''}`}
@@ -71,6 +83,14 @@ function App() {
           <Leaderboard
             onBattleStarted={handleBattleStarted}
             onTournamentStarted={handleTournamentStarted}
+            onReplaySelected={handleReplaySelected}
+            onModelSelected={handleModelSelected}
+          />
+        )}
+        {view === 'stats' && statsModelId != null && (
+          <ModelStats
+            modelId={statsModelId}
+            onClose={handleStatsClose}
             onReplaySelected={handleReplaySelected}
           />
         )}

@@ -315,7 +315,11 @@ class BattleStore:
                       COALESCE(SUM(wld.wins),   0) AS wins,
                       COALESCE(SUM(wld.losses), 0) AS losses,
                       COALESCE(SUM(wld.ties),   0) AS ties,
-                      GROUP_CONCAT(DISTINCT m.prompt_version) AS versions
+                      GROUP_CONCAT(DISTINCT m.prompt_version) AS versions,
+                      (SELECT m2.id FROM models m2
+                         JOIN elo_ratings e2 ON e2.model_id = m2.id
+                        WHERE m2.provider = m.provider AND m2.model_name = m.model_name
+                        ORDER BY e2.rating DESC LIMIT 1) AS model_id
                FROM models m
                JOIN elo_ratings e ON e.model_id = m.id
                LEFT JOIN (
@@ -413,6 +417,115 @@ class BattleStore:
             (model_id, limit),
         )
         return [dict(r) for r in cur.fetchall()]
+
+    # ------------------------------------------------------------------
+    # Model stats (per-model history page)
+    # ------------------------------------------------------------------
+
+    def get_model_stats(self, model_id: int) -> dict[str, Any] | None:
+        """Return comprehensive stats for a model: identity, ELO history,
+        battle history, turn quality summary, and recent lessons.
+
+        Returns None if the model_id does not exist.
+        """
+        # Identity + current ELO + W/L/T
+        info_row = self._conn.execute(
+            """SELECT m.id, m.provider, m.model_name, m.prompt_version,
+                      e.rating, e.games,
+                      COALESCE(wld.wins,   0) AS wins,
+                      COALESCE(wld.losses, 0) AS losses,
+                      COALESCE(wld.ties,   0) AS ties
+               FROM models m
+               JOIN elo_ratings e ON e.model_id = m.id
+               LEFT JOIN (
+                   SELECT model_id,
+                          SUM(CASE WHEN result='win'  THEN 1 ELSE 0 END) AS wins,
+                          SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END) AS losses,
+                          SUM(CASE WHEN result='tie'  THEN 1 ELSE 0 END) AS ties
+                   FROM (
+                       SELECT p1_model_id AS model_id,
+                              CASE WHEN winner=1 THEN 'win' WHEN winner=2 THEN 'loss' ELSE 'tie' END AS result
+                       FROM battles WHERE finished_at IS NOT NULL
+                       UNION ALL
+                       SELECT p2_model_id,
+                              CASE WHEN winner=2 THEN 'win' WHEN winner=1 THEN 'loss' ELSE 'tie' END AS result
+                       FROM battles WHERE finished_at IS NOT NULL
+                   ) GROUP BY model_id
+               ) wld ON wld.model_id = m.id
+               WHERE m.id = ?""",
+            (model_id,),
+        ).fetchone()
+        if not info_row:
+            return None
+
+        # ELO history (chronological, capped to last 30 battles)
+        elo_rows = self._conn.execute(
+            """SELECT eh.battle_id, eh.rating_before, eh.rating_after, eh.delta,
+                      b.finished_at
+               FROM elo_history eh
+               JOIN battles b ON b.id = eh.battle_id
+               WHERE eh.model_id = ?
+               ORDER BY b.finished_at ASC
+               LIMIT 30""",
+            (model_id,),
+        ).fetchall()
+
+        # Per-battle history (last 20 completed)
+        battle_rows = self._conn.execute(
+            """SELECT b.id, b.total_turns, b.winner, b.finished_at,
+                      CASE WHEN b.p1_model_id = ? THEN 'p1' ELSE 'p2' END AS my_role,
+                      CASE WHEN b.p1_model_id = ?
+                           THEN p2.provider||'/'||p2.model_name
+                           ELSE p1.provider||'/'||p1.model_name END AS opponent,
+                      CASE WHEN (b.p1_model_id = ? AND b.winner = 1)
+                                OR (b.p2_model_id = ? AND b.winner = 2) THEN 'win'
+                           WHEN b.winner IS NULL THEN 'tie'
+                           ELSE 'loss' END AS result
+               FROM battles b
+               JOIN models p1 ON p1.id = b.p1_model_id
+               JOIN models p2 ON p2.id = b.p2_model_id
+               WHERE (b.p1_model_id = ? OR b.p2_model_id = ?)
+                 AND b.finished_at IS NOT NULL
+               ORDER BY b.finished_at DESC
+               LIMIT 20""",
+            (model_id, model_id, model_id, model_id, model_id, model_id),
+        ).fetchall()
+
+        # Turn quality summary — parse_success rate
+        turn_rows = self._conn.execute(
+            """SELECT t.parse_success
+               FROM turns t
+               JOIN battles b ON b.id = t.battle_id
+               WHERE (b.p1_model_id = ? AND t.player_role = 'p1')
+                  OR (b.p2_model_id = ? AND t.player_role = 'p2')""",
+            (model_id, model_id),
+        ).fetchall()
+
+        total_turns = len(turn_rows)
+        parse_ok = sum(1 for r in turn_rows if r["parse_success"])
+        parse_fail = total_turns - parse_ok
+        parse_success_rate = round(parse_ok / total_turns * 100, 1) if total_turns else None
+
+        # Recent lessons
+        lesson_rows = self._conn.execute(
+            """SELECT id, battle_id, content, created_at
+               FROM lessons WHERE model_id=?
+               ORDER BY created_at DESC LIMIT 10""",
+            (model_id,),
+        ).fetchall()
+
+        return {
+            "model": dict(info_row),
+            "elo_history": [dict(r) for r in elo_rows],
+            "battle_history": [dict(r) for r in battle_rows],
+            "turn_stats": {
+                "total_turns": total_turns,
+                "parse_ok": parse_ok,
+                "parse_fail": parse_fail,
+                "parse_success_rate": parse_success_rate,
+            },
+            "lessons": [dict(r) for r in lesson_rows],
+        }
 
     def close(self) -> None:
         self._conn.close()
