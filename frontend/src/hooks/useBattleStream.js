@@ -1,16 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
 export function useBattleStream() {
-  const [events, setEvents]         = useState([])
-  const [isConnected, setConnected] = useState(false)
-  const [p1State, setP1State]       = useState(null)   // state from p1's perspective
-  const [p2State, setP2State]       = useState(null)   // state from p2's perspective
-  const [battleInfo, setBattleInfo] = useState(null)   // from battle_start event
+  const [events, setEvents]             = useState([])
+  const [isConnected, setConnected]     = useState(false)
+  const [p1State, setP1State]           = useState(null)
+  const [p2State, setP2State]           = useState(null)
+  const [battleInfo, setBattleInfo]     = useState(null)
   const [battleResult, setBattleResult] = useState(null)
-  const [thinking, setThinking]     = useState(null)   // 'p1' | 'p2' | null
-  const wsRef       = useRef(null)
+  const [thinking, setThinking]         = useState(null)   // 'p1' | 'p2' | null
+  const [tournament, setTournament]     = useState(null)   // tournament progress state
+  const wsRef        = useRef(null)
   const shouldConnect = useRef(false)
-  const retryDelay  = useRef(1000)
+  const retryDelay   = useRef(1000)
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN ||
@@ -23,13 +24,12 @@ export function useBattleStream() {
 
     ws.onopen = () => {
       setConnected(true)
-      retryDelay.current = 1000  // reset backoff on successful connection
+      retryDelay.current = 1000
     }
 
     ws.onclose = () => {
       setConnected(false)
       if (shouldConnect.current) {
-        // Exponential backoff: 1s → 2s → 4s → max 30s
         const delay = Math.min(retryDelay.current, 30000)
         retryDelay.current = Math.min(retryDelay.current * 2, 30000)
         setTimeout(connect, delay)
@@ -42,12 +42,54 @@ export function useBattleStream() {
       try {
         const event = JSON.parse(e.data)
 
-        // Keepalive pings — ignore silently
         if (event.type === 'ping') return
 
-        // Thinking indicator — don't add to event log
         if (event.type === 'thinking') {
           setThinking(event.player_role)
+          return
+        }
+
+        // Tournament lifecycle events — update progress, don't pollute battle log
+        if (event.type === 'tournament_start') {
+          setTournament({
+            id: event.tournament_id,
+            players: event.players,
+            total: event.total_battles,
+            rounds: event.rounds,
+            done: 0,
+            status: 'running',
+            leaderboard: null,
+          })
+          return
+        }
+
+        if (event.type === 'tournament_progress') {
+          setTournament(prev => prev ? {
+            ...prev,
+            battleNum: event.battle_num,
+            currentBattleId: event.battle_id,
+            p1: event.p1,
+            p2: event.p2,
+          } : null)
+          return
+        }
+
+        if (event.type === 'tournament_end') {
+          setTournament(prev => prev ? {
+            ...prev,
+            status: 'completed',
+            done: prev.total,
+            leaderboard: event.leaderboard,
+          } : null)
+          return
+        }
+
+        if (event.type === 'tournament_cancelled') {
+          setTournament(prev => prev ? {
+            ...prev,
+            status: 'cancelled',
+            done: event.battles_completed,
+          } : null)
           return
         }
 
@@ -62,13 +104,23 @@ export function useBattleStream() {
         }
 
         if (event.type === 'turn') {
-          setThinking(null)  // thinking resolved — model chose an action
+          setThinking(null)
           if (event.player_role === 'p1') setP1State(event)
           if (event.player_role === 'p2') setP2State(event)
+          // Increment tournament battle counter on each new turn 1
+          if (event.turn === 1) {
+            setTournament(prev => prev ? { ...prev, done: Math.max(0, (prev.done || 0)) } : null)
+          }
         }
 
         if (event.type === 'battle_end') {
           setBattleResult(event)
+          setThinking(null)
+          setTournament(prev => prev ? { ...prev, done: (prev.done || 0) + 1 } : null)
+        }
+
+        if (event.type === 'battle_cancelled') {
+          setBattleResult({ ...event, cancelled: true })
           setThinking(null)
         }
       } catch {}
@@ -90,11 +142,15 @@ export function useBattleStream() {
     setThinking(null)
   }, [])
 
-  // Auto-connect on mount
+  const clearTournament = useCallback(() => setTournament(null), [])
+
   useEffect(() => {
     connect()
     return disconnect
   }, [connect, disconnect])
 
-  return { events, isConnected, p1State, p2State, battleInfo, battleResult, thinking, reset }
+  return {
+    events, isConnected, p1State, p2State, battleInfo, battleResult,
+    thinking, tournament, reset, clearTournament,
+  }
 }

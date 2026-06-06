@@ -253,6 +253,52 @@ def test_name_fallback_when_slot_out_of_range() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Keyword-prefix stripping ("switch 1", "move thunderbolt" as identifier)
+# ---------------------------------------------------------------------------
+
+def test_json_switch_identifier_with_switch_prefix() -> None:
+    """identifier='switch 1' should strip 'switch ' and resolve slot 1."""
+    switches = [_mock_pokemon("aggron"), _mock_pokemon("blastoise")]
+    battle = _make_battle(switches=switches)
+    player = _make_player()
+
+    result = parse_action(
+        '{"action_type":"switch","identifier":"switch 1"}',
+        battle, player,
+    )
+    assert result is not None
+    player.create_order.assert_called_once_with(switches[0])
+
+
+def test_json_switch_identifier_with_move_prefix() -> None:
+    """identifier='move thunderbolt' in a move action should strip 'move '."""
+    moves = [_mock_move("thunderbolt"), _mock_move("surf")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    result = parse_action(
+        '{"action_type":"move","identifier":"move thunderbolt"}',
+        battle, player,
+    )
+    assert result is not None
+    player.create_order.assert_called_once_with(moves[0])
+
+
+def test_json_switch_identifier_with_switch_and_species() -> None:
+    """identifier='switch blastoise' — strip prefix, resolve by name."""
+    switches = [_mock_pokemon("aggron"), _mock_pokemon("blastoise")]
+    battle = _make_battle(switches=switches)
+    player = _make_player()
+
+    result = parse_action(
+        '{"action_type":"switch","identifier":"switch blastoise"}',
+        battle, player,
+    )
+    assert result is not None
+    player.create_order.assert_called_once_with(switches[1])
+
+
+# ---------------------------------------------------------------------------
 # Fuzzy species name matching
 # ---------------------------------------------------------------------------
 

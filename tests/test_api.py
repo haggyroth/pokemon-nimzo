@@ -112,11 +112,12 @@ async def test_battles_respects_limit(client: AsyncClient) -> None:
 
 @pytest.fixture
 def no_battle_runner():
-    """Patch _run_battles so POST /api/battles/start returns immediately without
+    """Patch battle/tournament runners so API calls return immediately without
     trying to connect to Pokémon Showdown (which is not running in CI)."""
     async def _noop(*args, **kwargs):
         pass
-    with patch("nidozo.api.app._run_battles", side_effect=_noop):
+    with patch("nidozo.api.app._run_battles", side_effect=_noop), \
+         patch("nidozo.api.app._run_tournament", side_effect=_noop):
         yield
 
 
@@ -232,6 +233,106 @@ async def test_lmstudio_models_error_returns_empty(client: AsyncClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+# ---------------------------------------------------------------------------
+# GET /api/battles/{id} — single battle
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_get_single_battle(client: AsyncClient, no_battle_runner) -> None:
+    """GET /api/battles/{id} returns the battle row after creation."""
+    resp = await client.post(
+        "/api/battles/start",
+        json={"p1_provider": "random", "p2_provider": "random"},
+    )
+    battle_id = resp.json()["battle_ids"][0]
+
+    resp2 = await client.get(f"/api/battles/{battle_id}")
+    assert resp2.status_code == 200
+    data = resp2.json()
+    assert data["id"] == battle_id
+    assert "status" in data
+    assert "p1" in data
+    assert "p2" in data
+
+
+@pytest.mark.asyncio
+async def test_get_single_battle_not_found(client: AsyncClient) -> None:
+    resp = await client.get("/api/battles/99999")
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# POST /api/battles/{id}/cancel
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_cancel_pending_battle(client: AsyncClient, no_battle_runner) -> None:
+    """A pending battle can be cancelled."""
+    resp = await client.post(
+        "/api/battles/start",
+        json={"p1_provider": "random", "p2_provider": "random"},
+    )
+    battle_id = resp.json()["battle_ids"][0]
+
+    cancel_resp = await client.post(f"/api/battles/{battle_id}/cancel")
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["ok"] is True
+
+    # Verify status updated
+    battle = (await client.get(f"/api/battles/{battle_id}")).json()
+    assert battle["status"] == "cancelled"
+
+
+# ---------------------------------------------------------------------------
+# POST /api/tournament/start
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_start_tournament_returns_ids(client: AsyncClient, no_battle_runner) -> None:
+    """Tournament endpoint returns tournament_id and correct battle count."""
+    resp = await client.post(
+        "/api/tournament/start",
+        json={
+            "players": [
+                {"provider": "random"},
+                {"provider": "random"},
+            ],
+            "rounds": 2,
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "tournament_id" in data
+    assert data["total_battles"] == 4   # 2 players × 1 pair × 2 rounds × 2 sides
+    assert len(data["battle_ids"]) == 4
+
+
+@pytest.mark.asyncio
+async def test_start_tournament_requires_two_players(client: AsyncClient, no_battle_runner) -> None:
+    resp = await client.post(
+        "/api/tournament/start",
+        json={"players": [{"provider": "random"}], "rounds": 1},
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_get_tournament(client: AsyncClient, no_battle_runner) -> None:
+    """GET /api/tournaments/{id} returns tournament metadata."""
+    start = await client.post(
+        "/api/tournament/start",
+        json={"players": [{"provider": "random"}, {"provider": "random"}], "rounds": 1},
+    )
+    tournament_id = start.json()["tournament_id"]
+
+    resp = await client.get(f"/api/tournaments/{tournament_id}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == tournament_id
+    assert data["rounds"] == 1
+    assert data["status"] == "running"
 
 
 # ---------------------------------------------------------------------------

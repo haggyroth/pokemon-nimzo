@@ -7,13 +7,22 @@ import { useBattleStream } from './hooks/useBattleStream'
 function App() {
   const [view, setView] = useState('home')
   const [dismissed, setDismissed] = useState(false)
-  const { events, isConnected, p1State, p2State, battleInfo, battleResult, thinking, reset } =
-    useBattleStream()
+  const {
+    events, isConnected, p1State, p2State, battleInfo, battleResult,
+    thinking, tournament, reset, clearTournament,
+  } = useBattleStream()
 
   const result = dismissed ? null : battleResult
 
   function handleBattleStarted() {
     reset()
+    setDismissed(false)
+    setView('battle')
+  }
+
+  function handleTournamentStarted() {
+    reset()
+    clearTournament()
     setDismissed(false)
     setView('battle')
   }
@@ -36,13 +45,21 @@ function App() {
           >
             <span className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`} />
             LIVE
+            {tournament && tournament.status === 'running' && (
+              <span className="nav-tournament-badge">
+                {tournament.done}/{tournament.total}
+              </span>
+            )}
           </button>
         </nav>
       </header>
 
       <main>
         {view === 'home' && (
-          <Leaderboard onBattleStarted={handleBattleStarted} />
+          <Leaderboard
+            onBattleStarted={handleBattleStarted}
+            onTournamentStarted={handleTournamentStarted}
+          />
         )}
         {view === 'battle' && (
           <BattleField
@@ -52,6 +69,7 @@ function App() {
             battleResult={result}
             events={events}
             thinking={thinking}
+            tournament={tournament}
             onDismiss={() => setDismissed(true)}
           />
         )}

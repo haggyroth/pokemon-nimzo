@@ -237,12 +237,27 @@ def main() -> None:
         "--db", default=None,
         help="Path to SQLite DB. Defaults to NIDOZO_DB env var or nidozo.db",
     )
+    parser.add_argument(
+        "--api-url", default=None,
+        metavar="URL",
+        help=(
+            "Route battles through the Nidozo API server at URL "
+            "(e.g. http://localhost:5001). When set, battles are published to the "
+            "live WebSocket feed and visible in the UI. "
+            "Omit to run battles directly (offline mode, no live view)."
+        ),
+    )
     args = parser.parse_args()
 
     if len(args.players) < 2:
         parser.error("Need at least two --player arguments.")
 
     players = [_parse_player(p) for p in args.players]
+
+    if args.api_url:
+        asyncio.run(_run_via_api(args.api_url, players, args.rounds, args.prompt_version))
+        return
+
     db_path = Path(args.db) if args.db else Path(os.environ.get("NIDOZO_DB", "nidozo.db"))
     store = BattleStore(db_path)
 
@@ -253,6 +268,85 @@ def main() -> None:
         _print_leaderboard(store)
     finally:
         store.close()
+
+
+async def _run_via_api(
+    api_url: str,
+    players: list[tuple[str, str]],
+    rounds: int,
+    prompt_version: str,
+) -> None:
+    """Run a tournament through the API server so battles appear in the live view."""
+    import httpx as _httpx
+
+    api_url = api_url.rstrip("/")
+    player_payload = [{"provider": prov, "model": model} for prov, model in players]
+
+    print(f"\n  Routing through API at {api_url}")
+    print(f"  Battles will appear live in the UI WebSocket feed.\n")
+
+    async with _httpx.AsyncClient(timeout=None) as client:
+        resp = client.post(
+            f"{api_url}/api/tournament/start",
+            json={
+                "players": player_payload,
+                "rounds": rounds,
+                "prompt_version": prompt_version,
+            },
+        )
+        if hasattr(resp, '__await__'):
+            resp = await resp
+        data = resp.json()
+
+        if resp.status_code != 200:
+            print(f"  ERROR starting tournament: {data}")
+            return
+
+        tournament_id = data["tournament_id"]
+        total = data["total_battles"]
+        print(f"  Tournament #{tournament_id} started — {total} battles")
+        print(f"  Watch live at {api_url}\n")
+
+        # Poll until all battles complete
+        battle_ids = data["battle_ids"]
+        done = 0
+        import asyncio as _asyncio
+        while done < total:
+            await _asyncio.sleep(5)
+            t_resp = await client.get(f"{api_url}/api/tournaments/{tournament_id}")
+            if t_resp.status_code == 200:
+                t_data = t_resp.json()
+                if t_data["status"] in ("completed", "cancelled"):
+                    break
+
+            # Count completed battles
+            completed = 0
+            for bid in battle_ids:
+                b_resp = await client.get(f"{api_url}/api/battles/{bid}")
+                if b_resp.status_code == 200 and b_resp.json().get("status") in ("completed", "cancelled"):
+                    completed += 1
+            if completed != done:
+                done = completed
+                print(f"  Progress: {done}/{total} battles complete", flush=True)
+
+        # Fetch and print final leaderboard from API
+        lb_resp = await client.get(f"{api_url}/api/leaderboard")
+        if lb_resp.status_code == 200:
+            rows = lb_resp.json()
+            print(f"\n{'═' * 60}")
+            print(f"  FINAL LEADERBOARD")
+            print(f"{'═' * 60}")
+            print(f"  {'#':<3} {'MODEL':<35} {'ELO':>7}  {'W':>3}{'L':>3}{'T':>3}")
+            print(f"  {'─' * 56}")
+            medals = {0: "🥇", 1: "🥈", 2: "🥉"}
+            for i, r in enumerate(rows):
+                medal = medals.get(i, f" {i+1}")
+                name = f"{r['provider']}/{r['model_name']}"
+                print(
+                    f"  {medal:<3} {name:<35} {r['rating']:>7.1f}"
+                    f"  {r['wins']:>3}{r['losses']:>3}{r['ties']:>3}"
+                )
+            print(f"{'═' * 60}\n")
 
 
 if __name__ == "__main__":

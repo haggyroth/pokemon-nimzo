@@ -3,34 +3,32 @@ import BattleAnalysis from './BattleAnalysis'
 
 const PROVIDERS = ['random', 'anthropic', 'openai', 'lmstudio']
 
-// Static fallback presets for cloud providers
 const STATIC_PRESETS = {
   anthropic: [
     { label: 'Sonnet 4.5', value: 'claude-sonnet-4-5' },
-    { label: 'Haiku 3.5', value: 'claude-haiku-3-5' },
+    { label: 'Haiku 3.5',  value: 'claude-haiku-3-5'  },
   ],
   openai: [
     { label: 'GPT-4o mini', value: 'gpt-4o-mini' },
-    { label: 'GPT-4o', value: 'gpt-4o' },
+    { label: 'GPT-4o',      value: 'gpt-4o'      },
   ],
 }
 
-/**
- * Fetches available LM Studio models from the backend proxy.
- * Returns [] if LM Studio is offline — UI falls back to free-text input.
- */
 async function fetchLMStudioModels() {
   try {
     const res = await fetch('/api/lmstudio/models')
     if (!res.ok) return []
-    return await res.json()   // string[]
+    return await res.json()
   } catch {
     return []
   }
 }
 
+// ---------------------------------------------------------------------------
+// Shared model selector component
+// ---------------------------------------------------------------------------
+
 function ModelSelector({ label, provider, model, onProviderChange, onModelChange, lmModels, lmLoading }) {
-  // For lmstudio: show live chips; for cloud providers: show static chips
   const chips = provider === 'lmstudio'
     ? lmModels.map(id => ({ label: id.split('/').pop(), value: id }))
     : (STATIC_PRESETS[provider] || [])
@@ -42,10 +40,7 @@ function ModelSelector({ label, provider, model, onProviderChange, onModelChange
         <select
           className="form-select provider-select"
           value={provider}
-          onChange={e => {
-            onProviderChange(e.target.value)
-            onModelChange('')  // clear model on provider change
-          }}
+          onChange={e => { onProviderChange(e.target.value); onModelChange('') }}
         >
           {PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
@@ -84,20 +79,232 @@ function ModelSelector({ label, provider, model, onProviderChange, onModelChange
   )
 }
 
-export default function Leaderboard({ onBattleStarted }) {
-  const [rows, setRows]           = useState([])
-  const [battles, setBattles]     = useState([])
-  const [loading, setLoading]     = useState(false)
-  const [analyzing, setAnalyzing] = useState(null)
-  const [lmModels, setLmModels]   = useState([])
-  const [lmLoading, setLmLoading] = useState(true)
-  const [form, setForm]           = useState({
+// ---------------------------------------------------------------------------
+// Single-battle form
+// ---------------------------------------------------------------------------
+
+function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
+  const [loading, setLoading] = useState(false)
+  const [form, setForm] = useState({
     p1_provider: 'lmstudio', p2_provider: 'lmstudio',
     p1_model: '', p2_model: '',
     n_battles: 1,
   })
 
-  // Fetch LM Studio models once on mount; auto-select first two if form is blank
+  // Auto-fill with first two LM Studio models
+  useEffect(() => {
+    if (lmModels.length > 0) {
+      setForm(f => ({
+        ...f,
+        p1_model: f.p1_model || lmModels[0] || '',
+        p2_model: f.p2_model || lmModels[1] || lmModels[0] || '',
+      }))
+    }
+  }, [lmModels])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const body = { ...form, n_battles: Number(form.n_battles) }
+      if (!body.p1_model || body.p1_provider === 'random') delete body.p1_model
+      if (!body.p2_model || body.p2_provider === 'random') delete body.p2_model
+      const res = await fetch('/api/battles/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (res.ok) onBattleStarted?.(data)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form className="start-form" onSubmit={handleSubmit}>
+      <ModelSelector
+        label="PLAYER 1"
+        provider={form.p1_provider} model={form.p1_model}
+        onProviderChange={v => setForm(f => ({ ...f, p1_provider: v }))}
+        onModelChange={v => setForm(f => ({ ...f, p1_model: v }))}
+        lmModels={lmModels} lmLoading={lmLoading}
+      />
+      <ModelSelector
+        label="PLAYER 2"
+        provider={form.p2_provider} model={form.p2_model}
+        onProviderChange={v => setForm(f => ({ ...f, p2_provider: v }))}
+        onModelChange={v => setForm(f => ({ ...f, p2_model: v }))}
+        lmModels={lmModels} lmLoading={lmLoading}
+      />
+      <div className="form-group">
+        <label className="form-label">Number of battles</label>
+        <input
+          className="form-input" type="number" min="1" max="20"
+          value={form.n_battles}
+          onChange={e => setForm(f => ({ ...f, n_battles: e.target.value }))}
+        />
+      </div>
+      <button className="btn-start" type="submit" disabled={loading}>
+        {loading ? '▶ STARTING…' : '▶ START BATTLE'}
+      </button>
+    </form>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Tournament form
+// ---------------------------------------------------------------------------
+
+const EMPTY_PLAYER = { provider: 'lmstudio', model: '' }
+
+function TournamentForm({ onTournamentStarted, lmModels, lmLoading }) {
+  const [loading, setLoading] = useState(false)
+  const [rounds, setRounds] = useState(3)
+  const [players, setPlayers] = useState([
+    { ...EMPTY_PLAYER },
+    { ...EMPTY_PLAYER },
+  ])
+
+  // Auto-fill first two with LM Studio models
+  useEffect(() => {
+    if (lmModels.length > 0) {
+      setPlayers(prev => prev.map((p, i) => ({
+        ...p,
+        model: p.model || lmModels[i] || lmModels[0] || '',
+      })))
+    }
+  }, [lmModels])
+
+  function setPlayer(i, field, value) {
+    setPlayers(prev => prev.map((p, idx) =>
+      idx === i ? { ...p, [field]: value, ...(field === 'provider' ? { model: '' } : {}) } : p
+    ))
+  }
+
+  function addPlayer() {
+    if (players.length >= 6) return
+    setPlayers(prev => [...prev, { ...EMPTY_PLAYER, model: lmModels[prev.length] || '' }])
+  }
+
+  function removePlayer(i) {
+    if (players.length <= 2) return
+    setPlayers(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  const totalBattles = (() => {
+    const n = players.length
+    return n >= 2 ? (n * (n - 1)) * rounds : 0
+  })()
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const payload = {
+        players: players.map(p => ({
+          provider: p.provider,
+          model: p.provider === 'random' ? null : (p.model || null),
+        })),
+        rounds: Number(rounds),
+      }
+      const res = await fetch('/api/tournament/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (res.ok) onTournamentStarted?.(data)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form className="start-form" onSubmit={handleSubmit}>
+      <div className="tournament-players-header">
+        <label className="form-label">PLAYERS</label>
+        {players.length < 6 && (
+          <button type="button" className="btn-add-player" onClick={addPlayer}>+ ADD</button>
+        )}
+      </div>
+
+      {players.map((p, i) => (
+        <div key={i} className="tournament-player-row">
+          <div className="tournament-player-label">
+            P{i + 1}
+            {players.length > 2 && (
+              <button type="button" className="btn-remove-player" onClick={() => removePlayer(i)}>✕</button>
+            )}
+          </div>
+          <div className="tournament-player-inputs">
+            <select
+              className="form-select provider-select"
+              value={p.provider}
+              onChange={e => setPlayer(i, 'provider', e.target.value)}
+            >
+              {PROVIDERS.map(pv => <option key={pv} value={pv}>{pv}</option>)}
+            </select>
+            <input
+              className="form-input model-input"
+              placeholder={p.provider === 'random' ? '—' : 'model id'}
+              value={p.model}
+              disabled={p.provider === 'random'}
+              onChange={e => setPlayer(i, 'model', e.target.value)}
+            />
+          </div>
+          {p.provider === 'lmstudio' && lmModels.length > 0 && (
+            <div className="model-presets" style={{ paddingLeft: '1.8rem' }}>
+              {lmModels.slice(0, 4).map(id => (
+                <button
+                  key={id} type="button"
+                  className={`preset-chip ${p.model === id ? 'active' : ''}`}
+                  onClick={() => setPlayer(i, 'model', id)}
+                  title={id}
+                >
+                  {id.split('/').pop()}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+
+      <div className="form-group">
+        <label className="form-label">Rounds per matchup</label>
+        <input
+          className="form-input" type="number" min="1" max="10"
+          value={rounds}
+          onChange={e => setRounds(e.target.value)}
+        />
+        {totalBattles > 0 && (
+          <div className="tournament-battle-count">{totalBattles} battles total</div>
+        )}
+      </div>
+
+      <button className="btn-start" type="submit" disabled={loading || players.length < 2}>
+        {loading ? '⚔ STARTING…' : `⚔ START TOURNAMENT`}
+      </button>
+    </form>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Main Leaderboard component
+// ---------------------------------------------------------------------------
+
+export default function Leaderboard({ onBattleStarted, onTournamentStarted }) {
+  const [rows, setRows]           = useState([])
+  const [battles, setBattles]     = useState([])
+  const [analyzing, setAnalyzing] = useState(null)
+  const [lmModels, setLmModels]   = useState([])
+  const [lmLoading, setLmLoading] = useState(true)
+  const [formTab, setFormTab]     = useState('battle')   // 'battle' | 'tournament'
+
   useEffect(() => {
     let cancelled = false
     setLmLoading(true)
@@ -105,14 +312,6 @@ export default function Leaderboard({ onBattleStarted }) {
       if (cancelled) return
       setLmModels(models)
       setLmLoading(false)
-      // Auto-fill model inputs with first two loaded models
-      if (models.length > 0) {
-        setForm(f => ({
-          ...f,
-          p1_model: f.p1_model || models[0] || '',
-          p2_model: f.p2_model || models[1] || models[0] || '',
-        }))
-      }
     })
     return () => { cancelled = true }
   }, [])
@@ -134,29 +333,6 @@ export default function Leaderboard({ onBattleStarted }) {
     return () => clearInterval(id)
   }, [])
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setLoading(true)
-    try {
-      const body = { ...form, n_battles: Number(form.n_battles) }
-      if (!body.p1_model || body.p1_provider === 'random') delete body.p1_model
-      if (!body.p2_model || body.p2_provider === 'random') delete body.p2_model
-      const res = await fetch('/api/battles/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        onBattleStarted?.(data)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   function rankBadge(i) {
     if (i === 0) return <span className="rank-badge gold">①</span>
     if (i === 1) return <span className="rank-badge silver">②</span>
@@ -176,11 +352,7 @@ export default function Leaderboard({ onBattleStarted }) {
             <table className="leaderboard-table">
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>MODEL</th>
-                  <th>ELO</th>
-                  <th>GAMES</th>
-                  <th>W / L / T</th>
+                  <th>#</th><th>MODEL</th><th>ELO</th><th>GAMES</th><th>W / L / T</th>
                 </tr>
               </thead>
               <tbody>
@@ -252,45 +424,36 @@ export default function Leaderboard({ onBattleStarted }) {
         </div>
       </div>
 
-      {/* Right: start battle form */}
+      {/* Right: tabbed battle / tournament form */}
       <div className="panel">
-        <div className="panel-title">START BATTLE</div>
-        <form className="start-form" onSubmit={handleSubmit}>
-
-          <ModelSelector
-            label="PLAYER 1"
-            provider={form.p1_provider}
-            model={form.p1_model}
-            onProviderChange={v => setForm(f => ({ ...f, p1_provider: v }))}
-            onModelChange={v => setForm(f => ({ ...f, p1_model: v }))}
-            lmModels={lmModels}
-            lmLoading={lmLoading}
-          />
-
-          <ModelSelector
-            label="PLAYER 2"
-            provider={form.p2_provider}
-            model={form.p2_model}
-            onProviderChange={v => setForm(f => ({ ...f, p2_provider: v }))}
-            onModelChange={v => setForm(f => ({ ...f, p2_model: v }))}
-            lmModels={lmModels}
-            lmLoading={lmLoading}
-          />
-
-          <div className="form-group">
-            <label className="form-label">Number of battles</label>
-            <input
-              className="form-input"
-              type="number" min="1" max="20"
-              value={form.n_battles}
-              onChange={e => setForm(f => ({ ...f, n_battles: e.target.value }))}
-            />
-          </div>
-
-          <button className="btn-start" type="submit" disabled={loading}>
-            {loading ? '▶ STARTING…' : '▶ START BATTLE'}
+        <div className="form-tabs">
+          <button
+            className={`form-tab ${formTab === 'battle' ? 'active' : ''}`}
+            onClick={() => setFormTab('battle')}
+          >
+            ▶ BATTLE
           </button>
-        </form>
+          <button
+            className={`form-tab ${formTab === 'tournament' ? 'active' : ''}`}
+            onClick={() => setFormTab('tournament')}
+          >
+            ⚔ TOURNAMENT
+          </button>
+        </div>
+
+        {formTab === 'battle' ? (
+          <BattleForm
+            onBattleStarted={onBattleStarted}
+            lmModels={lmModels}
+            lmLoading={lmLoading}
+          />
+        ) : (
+          <TournamentForm
+            onTournamentStarted={onTournamentStarted}
+            lmModels={lmModels}
+            lmLoading={lmLoading}
+          />
+        )}
       </div>
     </div>
   )

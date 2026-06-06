@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _DDL = """
 PRAGMA journal_mode=WAL;
@@ -29,17 +29,31 @@ CREATE TABLE IF NOT EXISTS elo_ratings (
     updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
+-- Round-robin or bracket tournament sessions
+CREATE TABLE IF NOT EXISTS tournaments (
+    id             INTEGER PRIMARY KEY,
+    players        TEXT    NOT NULL,  -- JSON array of {provider, model_name}
+    rounds         INTEGER NOT NULL DEFAULT 1,
+    prompt_version TEXT    NOT NULL DEFAULT 'v2',
+    total_battles  INTEGER NOT NULL DEFAULT 0,
+    status         TEXT    NOT NULL DEFAULT 'running',  -- running|completed|cancelled
+    created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    finished_at    TEXT
+);
+
 -- One row per completed battle
 CREATE TABLE IF NOT EXISTS battles (
-    id           INTEGER PRIMARY KEY,
-    battle_tag   TEXT    NOT NULL UNIQUE,
-    format       TEXT    NOT NULL,
-    p1_model_id  INTEGER NOT NULL REFERENCES models(id),
-    p2_model_id  INTEGER NOT NULL REFERENCES models(id),
-    winner       INTEGER,           -- 1=p1, 2=p2, NULL=tie
-    total_turns  INTEGER,
-    started_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-    finished_at  TEXT
+    id              INTEGER PRIMARY KEY,
+    battle_tag      TEXT    NOT NULL UNIQUE,
+    format          TEXT    NOT NULL,
+    p1_model_id     INTEGER NOT NULL REFERENCES models(id),
+    p2_model_id     INTEGER NOT NULL REFERENCES models(id),
+    tournament_id   INTEGER REFERENCES tournaments(id),   -- NULL for standalone battles
+    winner          INTEGER,           -- 1=p1, 2=p2, NULL=tie
+    total_turns     INTEGER,
+    status          TEXT    NOT NULL DEFAULT 'pending',   -- pending|running|completed|cancelled
+    started_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    finished_at     TEXT
 );
 
 -- ELO delta per model per battle (for history / audit)
@@ -88,4 +102,32 @@ def migrate(conn: sqlite3.Connection) -> None:
         except sqlite3.OperationalError:
             pass  # column already exists
         conn.execute("UPDATE schema_version SET version=2")
+        conn.commit()
+
+    if version < 3:
+        # Add tournaments table and new columns to battles
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS tournaments (
+                    id             INTEGER PRIMARY KEY,
+                    players        TEXT    NOT NULL,
+                    rounds         INTEGER NOT NULL DEFAULT 1,
+                    prompt_version TEXT    NOT NULL DEFAULT 'v2',
+                    total_battles  INTEGER NOT NULL DEFAULT 0,
+                    status         TEXT    NOT NULL DEFAULT 'running',
+                    created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                    finished_at    TEXT
+                )
+            """)
+        except sqlite3.OperationalError:
+            pass
+        for col, defn in (
+            ("tournament_id", "INTEGER REFERENCES tournaments(id)"),
+            ("status", "TEXT NOT NULL DEFAULT 'completed'"),
+        ):
+            try:
+                conn.execute(f"ALTER TABLE battles ADD COLUMN {col} {defn}")
+            except sqlite3.OperationalError:
+                pass  # column already exists
+        conn.execute("UPDATE schema_version SET version=3")
         conn.commit()
