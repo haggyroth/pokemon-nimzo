@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import PokemonCard from './PokemonCard'
 
 // ---------------------------------------------------------------------------
@@ -136,6 +136,36 @@ const RNG_META = {
   possible_miss: { icon: '✕',  label: 'POSSIBLE MISS', cls: 'rng-miss' },
 }
 
+// Declared outside TurnActions so it's not recreated on every render.
+function ActionRow({ role, label, data, ann }) {
+  if (!data) return null
+  const action = data.action?.replace(/^\/choose\s+/, '') ?? '—'
+  const rng = ann?.rng_flag ? RNG_META[ann.rng_flag] : null
+
+  return (
+    <div className="tap-row">
+      <span className={`tap-player ${role}`}>{label}</span>
+      <span className="tap-action">
+        {action}
+        {!data.parse_success && (
+          <span className="tap-fallback"> · random fallback</span>
+        )}
+      </span>
+      {ann && ann.decision_quality !== 'no_data' && (
+        <span className={`tap-quality tap-q-${ann.decision_quality}`}>
+          {ann.decision_quality.toUpperCase()}
+          {ann.is_blunder && ' ⚠'}
+        </span>
+      )}
+      {rng && (
+        <span className={`tap-rng ${rng.cls}`} title={rng.label}>
+          {rng.icon} {rng.label}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function TurnActions({ turn, p1Label, p2Label, analysisAnns }) {
   if (!turn) return null
 
@@ -147,41 +177,11 @@ function TurnActions({ turn, p1Label, p2Label, analysisAnns }) {
     }
   }
 
-  function ActionRow({ role, label, data }) {
-    if (!data) return null
-    const action = data.action?.replace(/^\/choose\s+/, '') ?? '—'
-    const ann = annsByRole[role]
-    const rng = ann?.rng_flag ? RNG_META[ann.rng_flag] : null
-
-    return (
-      <div className="tap-row">
-        <span className={`tap-player ${role}`}>{label}</span>
-        <span className="tap-action">
-          {action}
-          {!data.parse_success && (
-            <span className="tap-fallback"> · random fallback</span>
-          )}
-        </span>
-        {ann && ann.decision_quality !== 'no_data' && (
-          <span className={`tap-quality tap-q-${ann.decision_quality}`}>
-            {ann.decision_quality.toUpperCase()}
-            {ann.is_blunder && ' ⚠'}
-          </span>
-        )}
-        {rng && (
-          <span className={`tap-rng ${rng.cls}`} title={rng.label}>
-            {rng.icon} {rng.label}
-          </span>
-        )}
-      </div>
-    )
-  }
-
   return (
     <div className="turn-actions-panel">
       <div className="tap-title">TURN {turn.turn} — DECISIONS</div>
-      <ActionRow role="p1" label={p1Label} data={turn.p1} />
-      <ActionRow role="p2" label={p2Label} data={turn.p2} />
+      <ActionRow role="p1" label={p1Label} data={turn.p1} ann={annsByRole.p1} />
+      <ActionRow role="p2" label={p2Label} data={turn.p2} ann={annsByRole.p2} />
     </div>
   )
 }
@@ -260,25 +260,37 @@ export default function BattleReplay({ battleId, onClose }) {
 
   // Fetch replay data + analysis in parallel
   useEffect(() => {
-    setLoading(true)
-    setError(null)
-    Promise.all([
-      fetch(`/api/battles/${battleId}/replay`).then(r => { if (!r.ok) throw new Error(r.status); return r.json() }),
-      fetch(`/api/battles/${battleId}/analysis`).then(r => r.ok ? r.json() : null).catch(() => null),
-    ])
-      .then(([replayData, analysisData]) => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      setError(null)
+      try {
+        const [replayData, analysisData] = await Promise.all([
+          fetch(`/api/battles/${battleId}/replay`).then(r => { if (!r.ok) throw new Error(r.status); return r.json() }),
+          fetch(`/api/battles/${battleId}/analysis`).then(r => r.ok ? r.json() : null).catch(() => null),
+        ])
+        if (cancelled) return
         setData(replayData)
         setAnalysis(analysisData)
         setIdx(0)
-        setLoading(false)
-      })
-      .catch(e => { setError(e.message); setLoading(false) })
+      } catch(e) {
+        if (!cancelled) setError(e.message)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
   }, [battleId])
 
   // Auto-play
   useEffect(() => {
     if (!playing || !data) return
-    if (idx >= data.turns.length - 1) { setPlaying(false); return }
+    // Defer setPlaying so it isn't synchronous within the effect body.
+    if (idx >= data.turns.length - 1) {
+      const t = setTimeout(() => setPlaying(false), 0)
+      return () => clearTimeout(t)
+    }
     const t = setTimeout(() => setIdx(i => i + 1), PLAY_SPEED_MS)
     return () => clearTimeout(t)
   }, [playing, idx, data])

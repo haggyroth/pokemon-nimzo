@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-function formatEntry(event, idx) {
+function formatEntry(event) {
   if (event.type === 'battle_start') {
     return { cls: 'start-event', text: `▶ Battle started — ${event.p1} vs ${event.p2}` }
   }

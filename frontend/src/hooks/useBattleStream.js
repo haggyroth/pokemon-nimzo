@@ -9,9 +9,12 @@ export function useBattleStream() {
   const [battleResult, setBattleResult] = useState(null)
   const [thinking, setThinking]         = useState(null)   // 'p1' | 'p2' | null
   const [tournament, setTournament]     = useState(null)   // tournament progress state
-  const wsRef        = useRef(null)
+  const wsRef         = useRef(null)
   const shouldConnect = useRef(false)
-  const retryDelay   = useRef(1000)
+  const retryDelay    = useRef(1000)
+  // Stable ref so the ws.onclose handler can schedule a reconnect without
+  // capturing `connect` in a closure before it's declared (immutability rule).
+  const connectRef    = useRef(null)
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN ||
@@ -32,7 +35,7 @@ export function useBattleStream() {
       if (shouldConnect.current) {
         const delay = Math.min(retryDelay.current, 30000)
         retryDelay.current = Math.min(retryDelay.current * 2, 30000)
-        setTimeout(connect, delay)
+        setTimeout(() => connectRef.current?.(), delay)
       }
     }
 
@@ -123,9 +126,17 @@ export function useBattleStream() {
           setBattleResult({ ...event, cancelled: true })
           setThinking(null)
         }
-      } catch {}
+      } catch {
+        // non-JSON WebSocket frames are silently ignored
+      }
     }
   }, [])
+
+  // Keep the ref current so ws.onclose can schedule a reconnect after
+  // `connect` is fully initialised (must be in an effect, not render).
+  useEffect(() => {
+    connectRef.current = connect
+  }, [connect])
 
   const disconnect = useCallback(() => {
     shouldConnect.current = false
