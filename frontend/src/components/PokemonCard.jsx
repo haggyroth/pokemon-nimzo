@@ -157,10 +157,7 @@ export default function PokemonCard({ mon, side, isOpponent = false, isThinking 
 
     const prevHp = prevHpRef.current
     if (prevHp !== null && currHp !== null && prevHp !== currHp) {
-      let cls = ''
-      if (currHp <= 0)          cls = 'card-faint'
-      else if (currHp < prevHp) cls = 'card-hit'
-      else                       cls = 'card-heal'
+      const cls = currHp <= 0 ? 'card-faint' : currHp < prevHp ? 'card-hit' : 'card-heal'
 
       setAnimClass(cls)
       const duration = cls === 'card-faint' ? 800 : 420

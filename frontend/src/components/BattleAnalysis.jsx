@@ -242,13 +242,23 @@ export default function BattleAnalysis({ battleId, p1Label, p2Label }) {
 
   useEffect(() => {
     if (!battleId) return
-    setLoading(true)
-    setError(null)
-    fetch(`/api/battles/${battleId}/analysis`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
-      .then(setData)
-      .catch(e => setError(String(e)))
-      .finally(() => setLoading(false))
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      setError(null)
+      try {
+        const r = await fetch(`/api/battles/${battleId}/analysis`)
+        if (!r.ok) throw new Error(r.statusText)
+        const json = await r.json()
+        if (!cancelled) setData(json)
+      } catch(e) {
+        if (!cancelled) setError(String(e))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
   }, [battleId])
 
   if (loading) return <div className="analysis-loading">Analyzing…</div>

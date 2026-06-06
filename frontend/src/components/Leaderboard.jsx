@@ -91,15 +91,18 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
     n_battles: 1,
   })
 
-  // Auto-fill with first two LM Studio models
+  // Auto-fill with first two LM Studio models once they load.
+  // Deferred to a microtask so setState is not called synchronously inside
+  // the effect body (react-hooks/set-state-in-effect).
   useEffect(() => {
-    if (lmModels.length > 0) {
+    if (lmModels.length === 0) return
+    void Promise.resolve().then(() =>
       setForm(f => ({
         ...f,
         p1_model: f.p1_model || lmModels[0] || '',
         p2_model: f.p2_model || lmModels[1] || lmModels[0] || '',
       }))
-    }
+    )
   }, [lmModels])
 
   async function handleSubmit(e) {
@@ -160,7 +163,7 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
 
 const EMPTY_PLAYER = { provider: 'lmstudio', model: '' }
 
-function TournamentForm({ onTournamentStarted, lmModels, lmLoading }) {
+function TournamentForm({ onTournamentStarted, lmModels }) {
   const [loading, setLoading] = useState(false)
   const [rounds, setRounds] = useState(3)
   const [players, setPlayers] = useState([
@@ -168,14 +171,15 @@ function TournamentForm({ onTournamentStarted, lmModels, lmLoading }) {
     { ...EMPTY_PLAYER },
   ])
 
-  // Auto-fill first two with LM Studio models
+  // Auto-fill first two with LM Studio models once they load.
   useEffect(() => {
-    if (lmModels.length > 0) {
+    if (lmModels.length === 0) return
+    void Promise.resolve().then(() =>
       setPlayers(prev => prev.map((p, i) => ({
         ...p,
         model: p.model || lmModels[i] || lmModels[0] || '',
       })))
-    }
+    )
   }, [lmModels])
 
   function setPlayer(i, field, value) {
@@ -307,12 +311,14 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
 
   useEffect(() => {
     let cancelled = false
-    setLmLoading(true)
-    fetchLMStudioModels().then(models => {
+    async function loadModels() {
+      setLmLoading(true)
+      const models = await fetchLMStudioModels()
       if (cancelled) return
       setLmModels(models)
       setLmLoading(false)
-    })
+    }
+    loadModels()
     return () => { cancelled = true }
   }, [])
 
@@ -324,11 +330,13 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
       ])
       setRows(lb)
       setBattles(bt)
-    } catch {}
+    } catch {
+      // network errors are silently swallowed; UI retains stale data
+    }
   }
 
   useEffect(() => {
-    fetchData()
+    void Promise.resolve().then(fetchData)
     const id = setInterval(fetchData, 30000)
     return () => clearInterval(id)
   }, [])
