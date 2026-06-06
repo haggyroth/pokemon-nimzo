@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _DDL = """
 PRAGMA journal_mode=WAL;
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS battles (
     tournament_id   INTEGER REFERENCES tournaments(id),   -- NULL for standalone battles
     winner          INTEGER,           -- 1=p1, 2=p2, NULL=tie
     total_turns     INTEGER,
-    status          TEXT    NOT NULL DEFAULT 'pending',   -- pending|running|completed|cancelled
+    status          TEXT    NOT NULL DEFAULT 'pending',   -- pending|running|completed|cancelled|failed
     started_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     finished_at     TEXT
 );
@@ -78,6 +78,15 @@ CREATE TABLE IF NOT EXISTS turns (
     llm_response  TEXT,                        -- full raw response (may be large)
     state_json    TEXT                         -- serialized battle state at decision time (v2+)
 );
+
+-- Indexes for hot read paths (leaderboard, replay, analysis).
+-- Must appear after all CREATE TABLE statements.
+CREATE INDEX IF NOT EXISTS idx_turns_battle       ON turns(battle_id);
+CREATE INDEX IF NOT EXISTS idx_battles_finished   ON battles(finished_at);
+CREATE INDEX IF NOT EXISTS idx_battles_tournament ON battles(tournament_id);
+CREATE INDEX IF NOT EXISTS idx_battles_p1         ON battles(p1_model_id);
+CREATE INDEX IF NOT EXISTS idx_battles_p2         ON battles(p2_model_id);
+CREATE INDEX IF NOT EXISTS idx_elohist_battle     ON elo_history(battle_id, model_id);
 """
 
 
@@ -130,4 +139,17 @@ def migrate(conn: sqlite3.Connection) -> None:
             except sqlite3.OperationalError:
                 pass  # column already exists
         conn.execute("UPDATE schema_version SET version=3")
+        conn.commit()
+
+    if version < 4:
+        # Add indexes for hot read paths (idempotent via IF NOT EXISTS in DDL)
+        conn.executescript("""
+            CREATE INDEX IF NOT EXISTS idx_turns_battle       ON turns(battle_id);
+            CREATE INDEX IF NOT EXISTS idx_battles_finished   ON battles(finished_at);
+            CREATE INDEX IF NOT EXISTS idx_battles_tournament ON battles(tournament_id);
+            CREATE INDEX IF NOT EXISTS idx_battles_p1         ON battles(p1_model_id);
+            CREATE INDEX IF NOT EXISTS idx_battles_p2         ON battles(p2_model_id);
+            CREATE INDEX IF NOT EXISTS idx_elohist_battle     ON elo_history(battle_id, model_id);
+        """)
+        conn.execute("UPDATE schema_version SET version=4")
         conn.commit()

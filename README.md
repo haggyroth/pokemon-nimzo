@@ -28,7 +28,7 @@ Sibling project to [Nimzo](https://github.com/haggyroth/nimzo) (the LLM chess ar
 | Tool | Version | Install |
 |------|---------|---------|
 | Python | 3.12 | `brew install python@3.12` or via [uv](https://docs.astral.sh/uv/) |
-| Node.js | 18+ | `brew install node` |
+| Node.js | 20.19+ or 22.12+ | `brew install node` |
 | uv | any | `brew install uv` |
 
 ---
@@ -171,7 +171,7 @@ Check LM Studio is running and the model is loaded. The server retries once auto
 A previous Showdown process is still running. Kill it: `pkill -f pokemon-showdown`
 
 **Node version issues**
-Showdown works with Node 18–22. Check with `node --version`.
+Vite 8 requires Node 20.19+ or 22.12+. Showdown works with Node 18–22. Check with `node --version`.
 
 ---
 

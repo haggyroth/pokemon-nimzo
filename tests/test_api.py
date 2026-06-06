@@ -311,11 +311,12 @@ async def test_start_tournament_returns_ids(client: AsyncClient, no_battle_runne
 
 @pytest.mark.asyncio
 async def test_start_tournament_requires_two_players(client: AsyncClient, no_battle_runner) -> None:
+    # Pydantic Field(min_length=2) returns 422 before the handler runs
     resp = await client.post(
         "/api/tournament/start",
         json={"players": [{"provider": "random"}], "rounds": 1},
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -403,6 +404,93 @@ async def test_replay_not_found(client: AsyncClient) -> None:
     """Replay endpoint returns 404 for a non-existent battle."""
     resp = await client.get("/api/battles/99999/replay")
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# M4 — Input bounds (n_battles / tournament size)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_start_battle_n_battles_zero_rejected(client: AsyncClient, no_battle_runner) -> None:
+    """n_battles=0 is below ge=1 — must return 422."""
+    resp = await client.post(
+        "/api/battles/start",
+        json={"p1_provider": "random", "p2_provider": "random", "n_battles": 0},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_start_battle_n_battles_too_large(client: AsyncClient, no_battle_runner) -> None:
+    """n_battles=51 exceeds le=50 — must return 422."""
+    resp = await client.post(
+        "/api/battles/start",
+        json={"p1_provider": "random", "p2_provider": "random", "n_battles": 51},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_start_tournament_rounds_too_large(client: AsyncClient, no_battle_runner) -> None:
+    """rounds=11 exceeds le=10 — must return 422."""
+    resp = await client.post(
+        "/api/tournament/start",
+        json={
+            "players": [{"provider": "random"}, {"provider": "random"}],
+            "rounds": 11,
+        },
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_start_tournament_too_many_players(client: AsyncClient, no_battle_runner) -> None:
+    """13 players exceeds max_length=12 — must return 422."""
+    resp = await client.post(
+        "/api/tournament/start",
+        json={
+            "players": [{"provider": "random"}] * 13,
+            "rounds": 1,
+        },
+    )
+    assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# M1 — Failed battle status
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_failed_battle_sets_failed_status(app) -> None:
+    """When _run_battles raises an unexpected exception the battle is marked
+    'failed', not 'completed', and ELO is unchanged."""
+    from unittest.mock import patch
+
+    from nidozo.api.app import StartBattleRequest, _run_battles
+    from nidozo.api.events import EventBus
+
+    store = app.state.store
+    bus = EventBus()
+
+    m_id = store.get_or_create_model("random", "random", "v2")
+    rating_before = store._conn.execute(
+        "SELECT rating FROM elo_ratings WHERE model_id=?", (m_id,)
+    ).fetchone()["rating"]
+
+    bid = store.create_battle("test-fail", "gen3randombattle", m_id, m_id)
+    req = StartBattleRequest(p1_provider="random", p2_provider="random")
+
+    with patch("nidozo.api.app._build_streaming_player", side_effect=RuntimeError("boom")):
+        await _run_battles(req, [bid], store, bus, {})
+
+    battle = store.get_battle(bid)
+    assert battle["status"] == "failed", f"Expected 'failed', got {battle['status']!r}"
+
+    # ELO must be unchanged (finish_battle was never called)
+    rating_after = store._conn.execute(
+        "SELECT rating FROM elo_ratings WHERE model_id=?", (m_id,)
+    ).fetchone()["rating"]
+    assert rating_before == rating_after, "ELO must not change on a failed battle"
 
 
 @pytest.mark.asyncio
