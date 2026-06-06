@@ -341,8 +341,150 @@ function AnalysisSummary({ analysis, turns, p1Label, p2Label, onSeek }) {
               </ol>
             </div>
           )}
+
+          {/* Variance report */}
+          {analysis.variance_report && (
+            <VarianceReport report={analysis.variance_report} p1Label={p1Label} p2Label={p2Label} onSeek={onSeek} turnNumToIdx={turnNumToIdx} />
+          )}
+
+          {/* Draft critique */}
+          {(analysis.p1_draft_critique || analysis.p2_draft_critique) && (
+            <DraftCritiqueSection
+              p1={analysis.p1_draft_critique}
+              p2={analysis.p2_draft_critique}
+              p1Label={p1Label}
+              p2Label={p2Label}
+            />
+          )}
         </div>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Variance report panel
+// ---------------------------------------------------------------------------
+
+function VarianceReport({ report, p1Label, p2Label, onSeek, turnNumToIdx }) {
+  if (!report || report.total_events === 0) return null
+
+  const RNG_ICON = { possible_crit: '⚡', possible_miss: '💨' }
+
+  const allEvents = [
+    ...report.crits.map(e => ({ ...e, flag: 'possible_crit' })),
+    ...report.misses.map(e => ({ ...e, flag: 'possible_miss' })),
+  ].sort((a, b) => a.turn_number - b.turn_number)
+
+  return (
+    <div className="vr-section">
+      <div className="vr-title">VARIANCE REPORT</div>
+      <p className="vr-verdict">{report.verdict}</p>
+      <div className="vr-counts">
+        <span className="vr-count-item vr-p1">
+          <span className="vr-count-label">{p1Label}</span>
+          <span className="vr-count-val">{report.p1_benefit_events} events in their favour</span>
+        </span>
+        <span className="vr-count-item vr-p2">
+          <span className="vr-count-label">{p2Label}</span>
+          <span className="vr-count-val">{report.p2_benefit_events} events in their favour</span>
+        </span>
+      </div>
+      <ul className="vr-events">
+        {allEvents.map((e, i) => {
+          const turnIdx = turnNumToIdx?.[e.turn_number]
+          const canSeek = turnIdx != null
+          const label = e.flag === 'possible_crit' ? 'Possible crit' : 'Possible miss'
+          const attacker = e.attacker === 'p1' ? p1Label : p2Label
+          return (
+            <li
+              key={i}
+              className={`vr-event ${canSeek ? 'km-clickable' : ''}`}
+              onClick={() => canSeek && onSeek(turnIdx)}
+              title={canSeek ? `Jump to turn ${e.turn_number}` : undefined}
+            >
+              <span className="vr-event-icon">{RNG_ICON[e.flag]}</span>
+              <span className="vr-event-turn">T{e.turn_number}</span>
+              <span className="vr-event-desc">{label} by {attacker}</span>
+              {canSeek && <span className="km-goto">→</span>}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Draft critique panel
+// ---------------------------------------------------------------------------
+
+const TYPE_COLORS = {
+  FIRE: '#f08030', WATER: '#6890f0', GRASS: '#78c850', ELECTRIC: '#f8d030',
+  ICE: '#98d8d8', FIGHTING: '#c03028', POISON: '#a040a0', GROUND: '#e0c068',
+  FLYING: '#a890f0', PSYCHIC: '#f85888', BUG: '#a8b820', ROCK: '#b8a038',
+  GHOST: '#705898', DRAGON: '#7038f8', DARK: '#705848', STEEL: '#b8b8d0',
+  NORMAL: '#a8a878',
+}
+
+function TypeChip({ type }) {
+  const bg = TYPE_COLORS[type] ?? '#888'
+  return (
+    <span className="dc-type-chip" style={{ background: bg }}>
+      {type.charAt(0) + type.slice(1).toLowerCase()}
+    </span>
+  )
+}
+
+function DraftCritique({ critique, label }) {
+  if (!critique) return null
+  const exec = critique.execution ?? {}
+  return (
+    <div className="dc-player">
+      <div className="dc-player-label">{label}</div>
+      <div className="dc-team">
+        {critique.team?.map((species, i) => (
+          <span key={i} className="dc-species">{species}</span>
+        ))}
+      </div>
+      <div className="dc-row">
+        <span className="dc-field-label">STAB types</span>
+        <span className="dc-types">
+          {critique.offensive_types?.map(t => <TypeChip key={t} type={t} />)}
+        </span>
+      </div>
+      {critique.shared_weaknesses?.length > 0 && (
+        <div className="dc-row dc-row-warn">
+          <span className="dc-field-label">Shared weaknesses</span>
+          <span className="dc-types">
+            {critique.shared_weaknesses.map(t => <TypeChip key={t} type={t} />)}
+          </span>
+        </div>
+      )}
+      <div className="dc-exec">
+        <span className="dc-exec-item">
+          Quality: <strong>{exec.decision_quality_pct != null ? `${exec.decision_quality_pct}%` : '—'}</strong>
+        </span>
+        <span className="dc-exec-item">
+          Blunders: <strong className={exec.blunders > 0 ? 'dc-blunder-val' : ''}>{exec.blunders ?? 0}</strong>
+        </span>
+        <span className="dc-exec-item">
+          Turns: <strong>{exec.total_turns ?? 0}</strong>
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function DraftCritiqueSection({ p1, p2, p1Label, p2Label }) {
+  return (
+    <div className="dc-section">
+      <div className="dc-title">DRAFT CRITIQUE</div>
+      <div className="dc-compare">
+        <DraftCritique critique={p1} label={p1Label} />
+        {p1 && p2 && <div className="dc-divider" />}
+        <DraftCritique critique={p2} label={p2Label} />
+      </div>
     </div>
   )
 }

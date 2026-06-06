@@ -3540,3 +3540,216 @@ body::after {
   color: #50d890;
   border: 1px solid #208040;
 }
+
+/* =========================================================================
+   Variance Report
+   ========================================================================= */
+
+.vr-section {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.vr-title {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.vr-verdict {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.vr-counts {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.vr-count-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.vr-count-label {
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+
+.vr-count-item.vr-p1 .vr-count-label { color: #4a9eff; }
+.vr-count-item.vr-p2 .vr-count-label { color: var(--accent-red); }
+
+.vr-count-val {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  color: var(--text-dim);
+}
+
+.vr-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.vr-event {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.1s;
+}
+
+.vr-event.km-clickable:hover {
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+}
+
+.vr-event-icon {
+  font-size: 0.65rem;
+  min-width: 14px;
+}
+
+.vr-event-turn {
+  color: var(--text-muted);
+  min-width: 2.5ch;
+}
+
+.vr-event-desc {
+  color: var(--text-dim);
+  flex: 1;
+}
+
+/* =========================================================================
+   Draft Critique
+   ========================================================================= */
+
+.dc-section {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.dc-title {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.dc-compare {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.dc-divider {
+  width: 1px;
+  background: var(--border);
+  align-self: stretch;
+  flex-shrink: 0;
+}
+
+.dc-player {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dc-player-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.06em;
+}
+
+.dc-team {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.dc-species {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: var(--text-dim);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 1px 4px;
+}
+
+.dc-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dc-row-warn .dc-field-label { color: var(--accent-amber); }
+
+.dc-field-label {
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dc-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.dc-type-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  font-weight: 700;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 2px;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+
+.dc-exec {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.dc-exec-item {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  color: var(--text-muted);
+}
+
+.dc-exec-item strong {
+  color: var(--text-primary);
+}
+
+.dc-blunder-val {
+  color: var(--accent-amber) !important;
+}

@@ -7,9 +7,11 @@ import pytest
 from nidozo.analysis.analyzer import (
     BLUNDER_GAP_THRESHOLD,
     _build_key_moments,
+    _build_variance_report,
     _composite_score,
     _detect_turning_point,
     _merge_turns,
+    _mon_weaknesses,
     _parse_move_slot,
     _rank_moves,
     _resolve_move_slot,
@@ -18,6 +20,7 @@ from nidozo.analysis.analyzer import (
     _win_prob,
     analyze_battle,
     annotate_turn,
+    critique_draft,
 )
 
 # ---------------------------------------------------------------------------
@@ -622,3 +625,175 @@ def test_analyze_battle_includes_key_moments():
     # Choosing immune splash (rank 4/4) is a clear blunder — should appear in key_moments
     blunders = [m for m in result["key_moments"] if m["type"] == "blunder"]
     assert len(blunders) >= 1
+
+
+# ---------------------------------------------------------------------------
+# _mon_weaknesses
+# ---------------------------------------------------------------------------
+
+def test_mon_weaknesses_single_type():
+    """Water is weak to Electric and Grass only."""
+    w = _mon_weaknesses(["WATER"])
+    assert "ELECTRIC" in w
+    assert "GRASS" in w
+    assert "FIRE" not in w
+
+
+def test_mon_weaknesses_dual_type_amplified():
+    """Ice/Flying (Articuno) stacks weaknesses — Rock should be 4× (super weak)."""
+    w = _mon_weaknesses(["ICE", "FLYING"])
+    assert "ROCK" in w   # Rock is 4× — definitely in the 2× set
+
+
+def test_mon_weaknesses_immunity_overrides():
+    """Ground + Electric → Ground type is immune to Electric."""
+    w = _mon_weaknesses(["GROUND", "ELECTRIC"])
+    # Ground is immune to Electric so no Electric weakness even though Ground has it
+    assert "ELECTRIC" not in w
+
+
+def test_mon_weaknesses_pure_fire():
+    """Fire is weak to Water, Ground, Rock."""
+    w = _mon_weaknesses(["FIRE"])
+    assert "WATER" in w
+    assert "GROUND" in w
+    assert "ROCK" in w
+
+
+# ---------------------------------------------------------------------------
+# _build_variance_report
+# ---------------------------------------------------------------------------
+
+def _ann(turn: int, role: str, rng: str | None) -> dict:
+    return {"turn_number": turn, "player_role": role, "rng_flag": rng, "is_blunder": False}
+
+
+def test_variance_report_empty():
+    report = _build_variance_report([])
+    assert report["total_events"] == 0
+    assert report["crits"] == []
+    assert report["misses"] == []
+    assert "No notable" in report["verdict"]
+
+
+def test_variance_report_crits_help_attacker():
+    """A crit by p1 is a benefit for p1."""
+    anns = [_ann(3, "p1", "possible_crit")]
+    report = _build_variance_report(anns)
+    assert report["total_events"] == 1
+    assert len(report["crits"]) == 1
+    assert report["crits"][0] == {"turn_number": 3, "attacker": "p1"}
+    assert report["p1_benefit_events"] == 1
+    assert report["p2_benefit_events"] == 0
+    assert "p1" in report["verdict"]
+
+
+def test_variance_report_miss_helps_defender():
+    """A miss by p1 benefits p2 (the defender)."""
+    anns = [_ann(5, "p1", "possible_miss")]
+    report = _build_variance_report(anns)
+    assert report["p2_benefit_events"] == 1
+    assert report["p1_benefit_events"] == 0
+
+
+def test_variance_report_even():
+    """Equal events produce 'roughly even' verdict."""
+    anns = [_ann(1, "p1", "possible_crit"), _ann(2, "p2", "possible_crit")]
+    report = _build_variance_report(anns)
+    assert report["p1_benefit_events"] == 1
+    assert report["p2_benefit_events"] == 1
+    assert "even" in report["verdict"]
+
+
+def test_variance_report_analyze_battle_includes_it():
+    """analyze_battle result always has variance_report key."""
+    result = analyze_battle([])
+    assert "variance_report" in result
+    assert result["variance_report"]["total_events"] == 0
+
+
+# ---------------------------------------------------------------------------
+# critique_draft
+# ---------------------------------------------------------------------------
+
+_FAKE_SPECIES: dict = {
+    "pikachu":   {"species": "Pikachu",   "types": ["Electric"]},
+    "charizard": {"species": "Charizard", "types": ["Fire", "Flying"]},
+    "blastoise": {"species": "Blastoise", "types": ["Water"]},
+}
+
+
+def test_critique_draft_none_when_no_ids():
+    """Returns None when team_pokemon_ids is None or empty."""
+    assert critique_draft(None, "p1", []) is None
+    assert critique_draft([], "p1", []) is None
+
+
+def test_critique_draft_team_names():
+    """'team' field lists display names from species_data."""
+    result = critique_draft(["pikachu", "charizard"], "p1", [], species_data=_FAKE_SPECIES)
+    assert result is not None
+    assert result["team"] == ["Pikachu", "Charizard"]
+
+
+def test_critique_draft_offensive_types():
+    """Offensive types are the union of all team member types."""
+    result = critique_draft(["pikachu", "blastoise"], "p1", [], species_data=_FAKE_SPECIES)
+    assert result is not None
+    assert "ELECTRIC" in result["offensive_types"]
+    assert "WATER" in result["offensive_types"]
+
+
+def test_critique_draft_shared_weaknesses():
+    """Shared weaknesses appear for types that hit ≥2 team members."""
+    # Charizard (Fire/Flying) is weak to Rock; Blastoise (Water) is not.
+    # Pikachu (Electric) is weak to Ground; Blastoise (Water) is not.
+    # No shared weakness in this trio.
+    result = critique_draft(
+        ["pikachu", "charizard", "blastoise"], "p1", [], species_data=_FAKE_SPECIES
+    )
+    assert result is not None
+    # Rock hits Charizard (Fire×2, Flying×2 → 4×). Only Charizard is ×2+ to Rock.
+    # (Pikachu: Electric type, no Rock weakness. Blastoise: Water, no Rock weakness.)
+    assert "ROCK" not in result["shared_weaknesses"]
+
+
+def test_critique_draft_execution_blunders():
+    """Execution field reflects blunders in the filtered annotation list."""
+    anns = [
+        {"turn_number": 1, "player_role": "p1", "is_blunder": True, "heuristic_rank": 4,
+         "decision_quality": "suboptimal", "score_gap": 0.8, "action_chosen": "/choose move splash",
+         "best_action": "move 1 (thunderbolt)"},
+        {"turn_number": 2, "player_role": "p1", "is_blunder": False, "heuristic_rank": 1,
+         "decision_quality": "optimal", "score_gap": 0.0, "action_chosen": "/choose move thunderbolt",
+         "best_action": "move 1 (thunderbolt)"},
+        {"turn_number": 1, "player_role": "p2", "is_blunder": False, "heuristic_rank": 1,
+         "decision_quality": "optimal", "score_gap": 0.0, "action_chosen": "/choose move thunderbolt",
+         "best_action": "move 1 (thunderbolt)"},
+    ]
+    result = critique_draft(["pikachu"], "p1", anns, species_data=_FAKE_SPECIES)
+    assert result is not None
+    assert result["execution"]["blunders"] == 1
+    assert result["execution"]["total_turns"] == 2
+
+
+def test_critique_draft_analyze_battle_includes_it():
+    """analyze_battle returns p1_draft_critique / p2_draft_critique keys always."""
+    result = analyze_battle([])
+    assert "p1_draft_critique" in result
+    assert "p2_draft_critique" in result
+    # No team IDs → both None
+    assert result["p1_draft_critique"] is None
+    assert result["p2_draft_critique"] is None
+
+
+def test_critique_draft_with_team_ids_in_analyze_battle():
+    """analyze_battle passes team IDs to critique_draft."""
+    result = analyze_battle(
+        [],
+        p1_team_ids=["pikachu"],
+        species_data=_FAKE_SPECIES,
+    )
+    assert result["p1_draft_critique"] is not None
+    assert result["p1_draft_critique"]["team"] == ["Pikachu"]
+    assert result["p2_draft_critique"] is None  # no p2 team supplied

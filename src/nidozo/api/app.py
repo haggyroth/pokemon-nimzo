@@ -239,8 +239,15 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     @app.get("/api/battles/{battle_id}/analysis")
     def get_analysis(battle_id: int) -> dict[str, Any]:
         from nidozo.analysis import analyze_battle
+        from nidozo.analysis.analyzer import _load_species_data
         turns = store.get_turns_with_state(battle_id)
-        return analyze_battle(turns)
+        # Fetch drafted team IDs if this was a drafted battle
+        p1_team, p2_team = store.get_battle_teams(battle_id)
+        p1_ids: list[str] | None = p1_team.get("pokemon") if p1_team else None
+        p2_ids: list[str] | None = p2_team.get("pokemon") if p2_team else None
+        # Load species data once to share between both critique calls
+        sd = _load_species_data() if (p1_ids or p2_ids) else None
+        return analyze_battle(turns, p1_team_ids=p1_ids, p2_team_ids=p2_ids, species_data=sd)
 
     @app.get("/api/models/{model_id}/lessons")
     def get_model_lessons(model_id: int, limit: int = 10) -> list[dict[str, Any]]:
@@ -943,13 +950,21 @@ async def _generate_and_store_lessons(
     propagate — the battle pipeline must not be affected.
     """
     from nidozo.analysis import analyze_battle
+    from nidozo.analysis.analyzer import _load_species_data
     from nidozo.llm.lesson_generator import generate_lesson
 
     # Compute analysis once; pass it to each player's lesson so the LLM can
-    # ground its reflection in specific blunders and RNG events.
+    # ground its reflection in specific blunders, RNG events, and draft critique.
     turns_with_state = store.get_turns_with_state(battle_id)
+    p1_team, p2_team = store.get_battle_teams(battle_id)
+    p1_ids: list[str] | None = p1_team.get("pokemon") if p1_team else None
+    p2_ids: list[str] | None = p2_team.get("pokemon") if p2_team else None
+    sd = _load_species_data() if (p1_ids or p2_ids) else None
     try:
-        analysis: dict[str, Any] | None = analyze_battle(turns_with_state) if turns_with_state else None
+        analysis: dict[str, Any] | None = (
+            analyze_battle(turns_with_state, p1_team_ids=p1_ids, p2_team_ids=p2_ids, species_data=sd)
+            if turns_with_state else None
+        )
     except Exception as exc:
         logger.warning("Analysis failed for battle %d (lessons will proceed without it): %s", battle_id, exc)
         analysis = None
