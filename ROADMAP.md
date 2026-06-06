@@ -106,6 +106,14 @@
 - Heal / status-recovery pulse effect
 - Explore Pokémon Showdown's existing animation assets as a source
 
+**Type-themed Card Backgrounds**
+- Each Pokémon card gets a background that reflects its type combination
+- Single-type: gradient wash in that type's palette (e.g. Fire = deep orange → ember glow)
+- Dual-type: diagonal or angular gradient blending both type colours (e.g. Water/Flying = teal → sky violet)
+- 18 base type palettes map to the existing `--type-*` CSS variables; dual-type combos are generated at render time
+- Background shifts when the active Pokémon switches mid-battle (smooth CSS transition)
+- Pairs with the card glow: border and glow colour also keyed to primary type
+
 **Richer Post-game Analysis**
 - Key turning-point detection: identify the turn where win probability shifted decisively
 - Blunder annotation: flag decisions that were significantly worse than the best available option
