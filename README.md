@@ -129,21 +129,27 @@ uv run python scripts/run_battle.py --p1 lmstudio --model "ibm/granite-4-h-tiny"
 ```
 nidozo/
 ├── src/nidozo/
-│   ├── api/            FastAPI app, EventBus, /api/lmstudio/models proxy
-│   ├── analysis/       Per-turn decision quality annotator
-│   ├── battle/         LLMPlayer, StreamingPlayer, ActionParser, heuristics, serializer
+│   ├── api/            FastAPI app, EventBus, WebSocket feed, REST endpoints
+│   ├── analysis/       Post-game annotator: decision quality, blunders, RNG,
+│   │                   draft critique, variance report
+│   ├── battle/         LLMPlayer, StreamingPlayer, ActionParser, heuristics,
+│   │                   serializer, draft, team_builder, tiers
 │   ├── db/             BattleStore (SQLite), ELO, schema migrations
-│   └── llm/            ModelBackend protocol, AnthropicBackend, OpenAIBackend
+│   └── llm/            ModelBackend protocol, AnthropicBackend, OpenAIBackend,
+│       │               lesson_generator
 │       └── prompts/
 │           ├── v1/     Legacy text prompt (ACTION: move N)
-│           └── v2/     JSON structured output (default)
+│           ├── v2/     JSON structured output (default)
+│           └── v3/     Draft-aware system prompt
+├── data/
+│   └── gen3_movesets.json   153 Pokémon with Smogon ADV competitive sets
 ├── frontend/           Vite + React live battlefield visualizer
 ├── scripts/
 │   ├── serve.py        uvicorn entrypoint (port 5001)
 │   ├── tournament.py   Round-robin CLI runner
 │   ├── run_battle.py   Single-battle CLI
 │   └── start_showdown.sh
-├── tests/              154 tests, no Showdown required
+├── tests/              358 tests, no Showdown required
 └── showdown/           Cloned Showdown server (gitignored)
 ```
 
@@ -154,9 +160,10 @@ nidozo/
 | Version | Format | Default |
 |---------|--------|---------|
 | `v2` | JSON: `{"reasoning":"…","action_type":"move","identifier":"thunderbolt"}` | ✓ |
-| `v1` | Text: `ACTION: move thunderbolt` | — |
+| `v3` | Draft-aware: same JSON format with draft context + team roster in system prompt | — |
+| `v1` | Legacy text: `ACTION: move thunderbolt` | — |
 
-Pass `--prompt-version v1` to the tournament runner or API to use the legacy format.
+Pass `--prompt-version v1` to the tournament runner or API to use the legacy format. Draft battles automatically use `v3`.
 
 ---
 
