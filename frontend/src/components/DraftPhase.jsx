@@ -13,7 +13,6 @@
  * clears `draft` — this overlay disappears automatically.
  */
 
-import { useEffect, useRef } from 'react'
 
 // Pokémon type → color mapping (same palette as PokemonCard)
 const TYPE_COLORS = {
@@ -33,9 +32,9 @@ function TypeBadge({ type }) {
   )
 }
 
-function PickCard({ pick, index, animate }) {
+function PickCard({ pick, index }) {
   return (
-    <div className={`dp-pick-card ${animate ? 'dp-pick-card--in' : ''}`}
+    <div className="dp-pick-card dp-pick-card--in"
          style={{ animationDelay: `${index * 60}ms` }}>
       <span className="dp-pick-num">{index + 1}</span>
       <span className="dp-pick-species">{pick.species}</span>
@@ -49,12 +48,6 @@ function PickCard({ pick, index, animate }) {
 function PlayerColumn({ role, side, label }) {
   const picks = side?.picks ?? []
   const done = side?.done ?? false
-  const prevLen = useRef(0)
-
-  useEffect(() => {
-    prevLen.current = picks.length
-  })
-
   const emptySlots = 6 - picks.length
 
   return (
@@ -75,7 +68,6 @@ function PlayerColumn({ role, side, label }) {
             key={pick.species + i}
             pick={pick}
             index={i}
-            animate={i >= prevLen.current - 1}
           />
         ))}
         {Array.from({ length: emptySlots }).map((_, i) => (

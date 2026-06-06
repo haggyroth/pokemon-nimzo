@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from nidozo.battle.tiers import TIER_DISPLAY, TIER_TO_FORMAT, OU, UU, get_pool, is_valid_tier
 from nidozo.battle.team_builder import (
     all_species,
     build_pokemon_block,
@@ -12,7 +11,7 @@ from nidozo.battle.team_builder import (
     get_pool_info,
     load_movesets,
 )
-
+from nidozo.battle.tiers import TIER_DISPLAY, TIER_TO_FORMAT, get_pool, is_valid_tier
 
 # ---------------------------------------------------------------------------
 # Tier helpers
@@ -164,7 +163,7 @@ class TestBuildPokemonBlock:
         ms = load_movesets()
         for sid in ("tyranitar", "gengar", "blissey"):
             block = build_pokemon_block(sid, ms[sid])
-            move_lines = [l for l in block.splitlines() if l.startswith("- ")]
+            move_lines = [ln for ln in block.splitlines() if ln.startswith("- ")]
             assert len(move_lines) == 4, f"{sid!r} block has {len(move_lines)} move lines"
 
 
@@ -206,7 +205,7 @@ class TestGetPoolInfo:
 # ---------------------------------------------------------------------------
 
 class TestStoreTeams:
-    def test_save_and_retrieve_team(self, tmp_path: "pytest.TempPathFactory") -> None:
+    def test_save_and_retrieve_team(self, tmp_path: pytest.TempPathFactory) -> None:
         from nidozo.db.store import BattleStore
 
         store = BattleStore(tmp_path / "test.db")
@@ -227,7 +226,7 @@ class TestStoreTeams:
         assert teams[0]["tier"] == "ou"
         assert teams[0]["pokemon"] == ["salamence", "tyranitar", "gengar"]
 
-    def test_save_draft_session(self, tmp_path: "pytest.TempPathFactory") -> None:
+    def test_save_draft_session(self, tmp_path: pytest.TempPathFactory) -> None:
         from nidozo.db.store import BattleStore
 
         store = BattleStore(tmp_path / "test.db")
@@ -243,7 +242,7 @@ class TestStoreTeams:
         )
         assert isinstance(session_id, int)
 
-    def test_set_and_get_battle_teams(self, tmp_path: "pytest.TempPathFactory") -> None:
+    def test_set_and_get_battle_teams(self, tmp_path: pytest.TempPathFactory) -> None:
         from nidozo.db.store import BattleStore
 
         store = BattleStore(tmp_path / "test.db")
@@ -263,7 +262,7 @@ class TestStoreTeams:
         assert p2_team is not None
         assert p2_team["pokemon"] == ["tyranitar"]
 
-    def test_get_battle_teams_for_random_battle(self, tmp_path: "pytest.TempPathFactory") -> None:
+    def test_get_battle_teams_for_random_battle(self, tmp_path: pytest.TempPathFactory) -> None:
         from nidozo.db.store import BattleStore
 
         store = BattleStore(tmp_path / "test.db")
