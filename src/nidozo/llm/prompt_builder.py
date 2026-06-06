@@ -13,6 +13,7 @@ correlated with ELO changes.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
@@ -55,13 +56,13 @@ class PromptBuilder:
             )
         return Message(role="system", content=content)
 
-    def build_turn(self, battle_state: dict) -> Message:
+    def build_turn(self, battle_state: dict[str, Any]) -> Message:
         rendered = self._turn_template.render(**battle_state)
         return Message(role="user", content=rendered)
 
     def build_messages(
         self,
-        battle_state: dict,
+        battle_state: dict[str, Any],
         lessons: list[str] | None = None,
     ) -> list[Message]:
         """Return [system, turn] ready to pass to a ModelBackend.

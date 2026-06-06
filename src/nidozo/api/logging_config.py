@@ -19,6 +19,7 @@ import json
 import logging
 import sys
 from datetime import UTC, datetime
+from typing import Any
 
 _CONFIGURED = False
 
@@ -27,7 +28,7 @@ class _JsonFormatter(logging.Formatter):
     """Emit one JSON object per log record on a single line."""
 
     def format(self, record: logging.LogRecord) -> str:
-        payload: dict = {
+        payload: dict[str, Any] = {
             "ts":      datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             "level":   record.levelname,
             "logger":  record.name,

@@ -1,5 +1,7 @@
 """Anthropic (Claude) backend."""
 
+from typing import Any
+
 import anthropic
 
 from nidozo.llm.backend import Message
@@ -20,7 +22,7 @@ class AnthropicBackend:
         system = next((m["content"] for m in messages if m["role"] == "system"), None)
         turns = [m for m in messages if m["role"] != "system"]
 
-        kwargs: dict = {
+        kwargs: dict[str, Any] = {
             "model": self._model,
             "max_tokens": self._max_tokens,
             "messages": turns,

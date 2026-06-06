@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Callback type: async fn(event_dict) — injected by StreamingLLMPlayer
-ThinkingCallback = Callable[[dict[str, Any]], Coroutine] | None
+ThinkingCallback = Callable[[dict[str, Any]], Coroutine[Any, Any, None]] | None
 
 
 class LLMPlayer(Player):
@@ -46,7 +46,7 @@ class LLMPlayer(Player):
         player_role: str = "p1",
         on_thinking: ThinkingCallback = None,
         lessons: list[str] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._backend = backend

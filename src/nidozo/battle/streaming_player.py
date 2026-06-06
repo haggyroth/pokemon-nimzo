@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from poke_env.battle import AbstractBattle
 from poke_env.player.battle_order import BattleOrder
@@ -10,6 +10,9 @@ from poke_env.player.battle_order import BattleOrder
 from nidozo.battle.bots import RandomBot
 from nidozo.battle.llm_player import LLMPlayer
 from nidozo.battle.serializer import serialize_battle
+
+if TYPE_CHECKING:
+    from nidozo.api.events import EventBus
 
 
 def _battle_event(battle: AbstractBattle, action: str, player_role: str) -> dict[str, Any]:
@@ -29,10 +32,10 @@ class StreamingLLMPlayer(LLMPlayer):
 
     def __init__(
         self,
-        event_bus,
+        event_bus: EventBus,
         player_role: str = "p1",
         lessons: list[str] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(
             player_role=player_role,
@@ -40,10 +43,10 @@ class StreamingLLMPlayer(LLMPlayer):
             lessons=lessons,
             **kwargs,
         )
-        self._bus = event_bus
+        self._bus: EventBus = event_bus
         self._player_role = player_role
 
-    async def _emit_thinking(self, event: dict) -> None:
+    async def _emit_thinking(self, event: dict[str, Any]) -> None:
         await self._bus.publish(event)
 
     async def choose_move(self, battle: AbstractBattle) -> BattleOrder:
@@ -58,12 +61,12 @@ class StreamingLLMPlayer(LLMPlayer):
 class StreamingRandomBot(RandomBot):
     """RandomBot that pushes a turn event to the EventBus after each move."""
 
-    def __init__(self, event_bus, player_role: str = "p1", **kwargs) -> None:
+    def __init__(self, event_bus: EventBus, player_role: str = "p1", **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._bus = event_bus
+        self._bus: EventBus = event_bus
         self._player_role = player_role
 
-    async def choose_move(self, battle: AbstractBattle) -> BattleOrder:
+    async def choose_move(self, battle: AbstractBattle) -> BattleOrder:  # type: ignore[override]
         order = self.choose_random_move(battle)
         action_label = getattr(order, "message", str(order))
         await self._bus.publish(

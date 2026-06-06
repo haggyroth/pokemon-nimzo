@@ -7,17 +7,21 @@ import json
 import logging
 import os
 import socket
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from nidozo.api.events import EventBus
 from nidozo.db.store import BattleStore
+from nidozo.llm.backend import ModelBackend
 
 logger = logging.getLogger(__name__)
 
@@ -73,10 +77,10 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     store = BattleStore(db_path)
 
     # battle_id → asyncio.Task — lets us cancel running battles
-    _active_tasks: dict[int, asyncio.Task] = {}
+    _active_tasks: dict[int, asyncio.Task[None]] = {}
 
     @asynccontextmanager
-    async def lifespan(_app: FastAPI):
+    async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("Nidozo starting up", extra={"db": str(db_path)})
         yield
         # Graceful shutdown: cancel all in-flight battle tasks, then close DB.
@@ -106,8 +110,8 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     # Health check
     # -----------------------------------------------------------------------
 
-    @app.get("/healthz")
-    def healthz() -> dict:
+    @app.get("/healthz", response_model=None)
+    def healthz() -> dict[str, Any] | JSONResponse:
         """Liveness + readiness probe.
 
         Returns HTTP 200 with status "ok" when both the database and Showdown
@@ -139,7 +143,6 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         payload = {"status": overall, "version": "0.10.0", **checks}
 
         if overall != "ok":
-            from fastapi.responses import JSONResponse
             return JSONResponse(status_code=503, content=payload)
         return payload
 
@@ -148,22 +151,22 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
     # -----------------------------------------------------------------------
 
     @app.get("/api/leaderboard")
-    def get_leaderboard(grouped: bool = True) -> list[dict]:
+    def get_leaderboard(grouped: bool = True) -> list[dict[str, Any]]:
         return store.leaderboard(grouped=grouped)
 
     @app.get("/api/battles")
-    def get_battles(limit: int = 20) -> list[dict]:
+    def get_battles(limit: int = 20) -> list[dict[str, Any]]:
         return store.recent_battles(limit=limit)
 
     @app.get("/api/battles/{battle_id}")
-    def get_battle(battle_id: int) -> dict:
+    def get_battle(battle_id: int) -> dict[str, Any]:
         battle = store.get_battle(battle_id)
         if not battle:
             raise HTTPException(status_code=404, detail="Battle not found")
         return battle
 
     @app.post("/api/battles/{battle_id}/cancel")
-    async def cancel_battle(battle_id: int) -> dict:
+    async def cancel_battle(battle_id: int) -> dict[str, Any]:
         """Cancel a pending or running battle."""
         # Signal the running task to stop
         task = _active_tasks.get(battle_id)
@@ -198,7 +201,7 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
             return []
 
     @app.get("/api/battles/{battle_id}/replay")
-    def get_replay(battle_id: int) -> dict:
+    def get_replay(battle_id: int) -> dict[str, Any]:
         """Full turn-by-turn merged state for battle replay."""
         battle = store.get_battle(battle_id)
         if not battle:
@@ -207,7 +210,7 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         turns_raw = store.get_turns_with_state(battle_id)
 
         # Merge p1 + p2 rows into one entry per turn number
-        turns_by_num: dict[int, dict] = {}
+        turns_by_num: dict[int, dict[str, Any]] = {}
         for row in turns_raw:
             n = row["turn_number"]
             if n not in turns_by_num:
@@ -226,22 +229,22 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         return {"battle": battle, "turns": turns}
 
     @app.get("/api/battles/{battle_id}/turns")
-    def get_turns(battle_id: int) -> list[dict]:
+    def get_turns(battle_id: int) -> list[dict[str, Any]]:
         return store.get_turns_basic(battle_id)
 
     @app.get("/api/battles/{battle_id}/analysis")
-    def get_analysis(battle_id: int) -> dict:
+    def get_analysis(battle_id: int) -> dict[str, Any]:
         from nidozo.analysis import analyze_battle
         turns = store.get_turns_with_state(battle_id)
         return analyze_battle(turns)
 
     @app.get("/api/models/{model_id}/lessons")
-    def get_model_lessons(model_id: int, limit: int = 10) -> list[dict]:
+    def get_model_lessons(model_id: int, limit: int = 10) -> list[dict[str, Any]]:
         """Return the most recent post-battle lessons for a model."""
         return store.get_lessons(model_id, limit=limit)
 
     @app.get("/api/tournaments/{tournament_id}")
-    def get_tournament(tournament_id: int) -> dict:
+    def get_tournament(tournament_id: int) -> dict[str, Any]:
         t = store.get_tournament(tournament_id)
         if not t:
             raise HTTPException(status_code=404, detail="Tournament not found")
@@ -376,7 +379,7 @@ async def _run_battles(
     battle_ids: list[int],
     store: BattleStore,
     bus: EventBus,
-    active_tasks: dict[int, asyncio.Task],
+    active_tasks: dict[int, asyncio.Task[None]],
 ) -> None:
     from poke_env import LocalhostServerConfiguration
     _FORMAT = "gen3randombattle"
@@ -440,7 +443,7 @@ async def _run_battles(
             turns = store.get_turns_basic(battle_id)
             p2_label = f"{req.p2_provider}/{_model_name(req.p2_provider, p2_model)}"
             p1_label = f"{req.p1_provider}/{_model_name(req.p1_provider, p1_model)}"
-            asyncio.create_task(_generate_and_store_lessons(
+            _: asyncio.Task[None] = asyncio.create_task(_generate_and_store_lessons(
                 store, battle_id, winner, total_turns, turns,
                 p1_provider=req.p1_provider, p1_model=p1_model, p1_id=p1_id, p1_opponent=p2_label,
                 p2_provider=req.p2_provider, p2_model=p2_model, p2_id=p2_id, p2_opponent=p1_label,
@@ -466,10 +469,10 @@ async def _run_tournament(
     req: StartTournamentRequest,
     tournament_id: int,
     battle_ids: list[int],
-    player_specs: list[dict],
+    player_specs: list[dict[str, Any]],
     store: BattleStore,
     bus: EventBus,
-    active_tasks: dict[int, asyncio.Task],
+    active_tasks: dict[int, asyncio.Task[None]],
 ) -> None:
     from poke_env import LocalhostServerConfiguration
     _FORMAT = "gen3randombattle"
@@ -496,6 +499,9 @@ async def _run_tournament(
 
         # Resolve p1/p2 from the battle record
         battle_info = store.get_battle_players(battle_id)
+        if battle_info is None:
+            logger.error("Tournament %d: no player info for battle %d — skipping", tournament_id, battle_id)
+            continue
 
         p1_label = f"{battle_info['p1_provider']}/{battle_info['p1_model']}"
         p2_label = f"{battle_info['p2_provider']}/{battle_info['p2_model']}"
@@ -560,7 +566,7 @@ async def _run_tournament(
 
             # Generate lessons (fire-and-forget)
             turns = store.get_turns_basic(battle_id)
-            asyncio.create_task(_generate_and_store_lessons(
+            _t: asyncio.Task[None] = asyncio.create_task(_generate_and_store_lessons(
                 store, battle_id, winner, total_turns, turns,
                 p1_provider=t_p1_prov, p1_model=battle_info["p1_model"], p1_id=t_p1_id, p1_opponent=p2_label,
                 p2_provider=t_p2_prov, p2_model=battle_info["p2_model"], p2_id=t_p2_id, p2_opponent=p1_label,
@@ -596,7 +602,7 @@ async def _run_tournament(
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _build_backend(provider: str, model: str | None, json_mode: bool = False):
+def _build_backend(provider: str, model: str | None, json_mode: bool = False) -> ModelBackend:
     """Construct a ModelBackend for the given provider.  json_mode=False for lessons."""
     from nidozo.llm import AnthropicBackend, OpenAIBackend
 
@@ -628,10 +634,10 @@ def _build_streaming_player(
     store: BattleStore,
     battle_id: int,
     bus: EventBus,
-    cfg,
+    cfg: Any,
     fmt: str,
     lessons: list[str] | None = None,
-):
+) -> Any:
     from nidozo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
 
     if provider == "random":
@@ -663,7 +669,7 @@ async def _generate_and_store_lessons(
     battle_id: int,
     winner: int | None,
     total_turns: int,
-    turns: list[dict],
+    turns: list[dict[str, Any]],
     *,
     p1_provider: str,
     p1_model: str | None,
