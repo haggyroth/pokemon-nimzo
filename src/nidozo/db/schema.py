@@ -4,7 +4,11 @@ import sqlite3
 
 SCHEMA_VERSION = 4
 
-_DDL = """
+# Table definitions only — safe to run against any DB version via IF NOT EXISTS.
+# Indexes are kept separate because they may reference columns (e.g. tournament_id)
+# that do not yet exist in old databases.  Those columns are added by the
+# version-increment migration blocks below before the indexes are created.
+_DDL_TABLES = """
 PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys=ON;
 
@@ -78,9 +82,11 @@ CREATE TABLE IF NOT EXISTS turns (
     llm_response  TEXT,                        -- full raw response (may be large)
     state_json    TEXT                         -- serialized battle state at decision time (v2+)
 );
+"""
 
--- Indexes for hot read paths (leaderboard, replay, analysis).
--- Must appear after all CREATE TABLE statements.
+# Indexes for hot read paths — separate from _DDL_TABLES so they are only
+# applied once all required columns are guaranteed to exist.
+_DDL_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_turns_battle       ON turns(battle_id);
 CREATE INDEX IF NOT EXISTS idx_battles_finished   ON battles(finished_at);
 CREATE INDEX IF NOT EXISTS idx_battles_tournament ON battles(tournament_id);
@@ -91,12 +97,21 @@ CREATE INDEX IF NOT EXISTS idx_elohist_battle     ON elo_history(battle_id, mode
 
 
 def migrate(conn: sqlite3.Connection) -> None:
-    """Create tables if they don't exist and upgrade schema version."""
-    conn.executescript(_DDL)
+    """Create tables if they don't exist and upgrade schema version.
+
+    Running _DDL_TABLES is always safe — all statements use IF NOT EXISTS.
+    Indexes (_DDL_INDEXES) reference columns added in later migrations, so they
+    are applied only after the relevant columns are guaranteed to exist:
+    - Fresh installs: all tables include the latest columns, so indexes are safe immediately.
+    - Existing DBs: version-increment blocks below add missing columns first,
+      then the v4 block creates the indexes.
+    """
+    conn.executescript(_DDL_TABLES)
 
     cur = conn.execute("SELECT COUNT(*) FROM schema_version")
     if cur.fetchone()[0] == 0:
-        # Fresh install — schema already includes state_json column
+        # Fresh install — all columns from latest DDL are present; create indexes now.
+        conn.executescript(_DDL_INDEXES)
         conn.execute("INSERT INTO schema_version VALUES (?)", (SCHEMA_VERSION,))
         conn.commit()
         return
@@ -142,14 +157,8 @@ def migrate(conn: sqlite3.Connection) -> None:
         conn.commit()
 
     if version < 4:
-        # Add indexes for hot read paths (idempotent via IF NOT EXISTS in DDL)
-        conn.executescript("""
-            CREATE INDEX IF NOT EXISTS idx_turns_battle       ON turns(battle_id);
-            CREATE INDEX IF NOT EXISTS idx_battles_finished   ON battles(finished_at);
-            CREATE INDEX IF NOT EXISTS idx_battles_tournament ON battles(tournament_id);
-            CREATE INDEX IF NOT EXISTS idx_battles_p1         ON battles(p1_model_id);
-            CREATE INDEX IF NOT EXISTS idx_battles_p2         ON battles(p2_model_id);
-            CREATE INDEX IF NOT EXISTS idx_elohist_battle     ON elo_history(battle_id, model_id);
-        """)
+        # Add indexes for hot read paths (idempotent via IF NOT EXISTS).
+        # All required columns now exist (tournament_id added above in v3 block).
+        conn.executescript(_DDL_INDEXES)
         conn.execute("UPDATE schema_version SET version=4")
         conn.commit()
