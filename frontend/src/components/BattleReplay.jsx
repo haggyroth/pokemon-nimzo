@@ -187,6 +187,167 @@ function TurnActions({ turn, p1Label, p2Label, analysisAnns }) {
 }
 
 // ---------------------------------------------------------------------------
+// Analysis summary panel
+// ---------------------------------------------------------------------------
+
+const QUALITY_ORDER = ['optimal', 'good', 'suboptimal', 'fallback', 'switch', 'no_data']
+const QUALITY_META = {
+  optimal:    { label: 'Optimal',    cls: 'aq-optimal'  },
+  good:       { label: 'Good',       cls: 'aq-good'     },
+  suboptimal: { label: 'Suboptimal', cls: 'aq-subopt'   },
+  fallback:   { label: 'Fallback',   cls: 'aq-fallback' },
+  switch:     { label: 'Switch',     cls: 'aq-switch'   },
+  no_data:    { label: 'No data',    cls: 'aq-nodata'   },
+}
+const MOMENT_META = {
+  turning_point: { icon: '⚡', cls: 'km-tp'      },
+  blunder:       { icon: '⚠',  cls: 'km-blunder' },
+  rng:           { icon: '🎲', cls: 'km-rng'     },
+}
+
+function QualityCompare({ summary, label }) {
+  if (!summary || summary.total_turns === 0) return null
+  const total = summary.total_turns
+
+  return (
+    <div className="aq-player-col">
+      <div className="aq-player-label">{label}</div>
+
+      {/* Mini stacked bar */}
+      <div className="aq-bar">
+        {QUALITY_ORDER.map(q => {
+          const count = summary[q] ?? summary[`${q}_turns`] ?? 0
+          if (!count) return null
+          const pct = (count / total * 100).toFixed(1)
+          const meta = QUALITY_META[q]
+          return (
+            <div
+              key={q}
+              className={`aq-segment ${meta.cls}`}
+              style={{ width: `${pct}%` }}
+              title={`${meta.label}: ${count} (${pct}%)`}
+            />
+          )
+        })}
+      </div>
+
+      {/* Stats grid */}
+      <div className="aq-stats">
+        {QUALITY_ORDER.filter(q => {
+          const v = summary[q] ?? summary[`${q}_turns`] ?? 0
+          return v > 0
+        }).map(q => {
+          const count = summary[q] ?? summary[`${q}_turns`] ?? 0
+          const meta = QUALITY_META[q]
+          return (
+            <div key={q} className="aq-stat-row">
+              <span className={`aq-stat-label ${meta.cls}`}>{meta.label}</span>
+              <span className="aq-stat-val">{count}</span>
+            </div>
+          )
+        })}
+        {summary.blunders > 0 && (
+          <div className="aq-stat-row aq-stat-blunder">
+            <span className="aq-stat-label">Blunders</span>
+            <span className="aq-stat-val">{summary.blunders}</span>
+          </div>
+        )}
+        {summary.avg_heuristic_rank != null && (
+          <div className="aq-stat-row">
+            <span className="aq-stat-label aq-stat-muted">Avg rank</span>
+            <span className="aq-stat-val aq-stat-muted">{summary.avg_heuristic_rank}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AnalysisSummary({ analysis, turns, p1Label, p2Label, onSeek }) {
+  const [open, setOpen] = useState(false)
+  if (!analysis) return null
+
+  const keyMoments = analysis.key_moments ?? []
+  const hasContent = analysis.p1_summary?.total_turns > 0
+    || analysis.p2_summary?.total_turns > 0
+    || keyMoments.length > 0
+
+  if (!hasContent) return null
+
+  // Map turn_number → index in turns array for seeking
+  const turnNumToIdx = {}
+  turns.forEach((t, i) => { turnNumToIdx[t.turn] = i })
+
+  return (
+    <div className="analysis-summary">
+      <button className="analysis-toggle" onClick={() => setOpen(o => !o)}>
+        <span>📊 BATTLE ANALYSIS</span>
+        {analysis.blunders?.length > 0 && (
+          <span className="analysis-blunder-badge">
+            {analysis.blunders.length} blunder{analysis.blunders.length !== 1 ? 's' : ''}
+          </span>
+        )}
+        <span className={`drawer-chevron ${open ? 'open' : ''}`}>▼</span>
+      </button>
+
+      {open && (
+        <div className="analysis-body">
+          {/* Decision quality comparison */}
+          {(analysis.p1_summary?.total_turns > 0 || analysis.p2_summary?.total_turns > 0) && (
+            <div className="aq-section">
+              <div className="aq-title">DECISION QUALITY</div>
+              <div className="aq-compare">
+                <QualityCompare summary={analysis.p1_summary} label={p1Label} />
+                <div className="aq-vs">VS</div>
+                <QualityCompare summary={analysis.p2_summary} label={p2Label} />
+              </div>
+              <div className="aq-legend">
+                {QUALITY_ORDER.map(q => (
+                  <span key={q} className={`aq-legend-item ${QUALITY_META[q].cls}`}>
+                    ■ {QUALITY_META[q].label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Key moments */}
+          {keyMoments.length > 0 && (
+            <div className="km-section">
+              <div className="km-title">KEY MOMENTS</div>
+              <ol className="km-list">
+                {keyMoments.map((m, i) => {
+                  const meta = MOMENT_META[m.type] ?? { icon: '·', cls: '' }
+                  const turnIdx = turnNumToIdx[m.turn_number]
+                  const canSeek = turnIdx != null
+                  const playerTag = m.player_role
+                    ? (m.player_role === 'p1' ? p1Label : p2Label)
+                    : null
+                  return (
+                    <li
+                      key={i}
+                      className={`km-item ${meta.cls} ${canSeek ? 'km-clickable' : ''}`}
+                      onClick={() => canSeek && onSeek(turnIdx)}
+                      title={canSeek ? `Jump to turn ${m.turn_number}` : undefined}
+                    >
+                      <span className="km-icon">{meta.icon}</span>
+                      <span className="km-turn">T{m.turn_number}</span>
+                      {playerTag && <span className={`km-player km-${m.player_role}`}>{playerTag}</span>}
+                      <span className="km-desc">{m.description}</span>
+                      {canSeek && <span className="km-goto">→</span>}
+                    </li>
+                  )
+                })}
+              </ol>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Heuristic drawer (reused in replay for the current turn)
 // ---------------------------------------------------------------------------
 
@@ -441,6 +602,15 @@ export default function BattleReplay({ battleId, onClose }) {
         p1Label={p1Label}
         p2Label={p2Label}
         analysisAnns={analysis?.turns}
+      />
+
+      {/* ---- Analysis summary (collapsible) ---- */}
+      <AnalysisSummary
+        analysis={analysis}
+        turns={turns}
+        p1Label={p1Label}
+        p2Label={p2Label}
+        onSeek={seek}
       />
     </div>
   )

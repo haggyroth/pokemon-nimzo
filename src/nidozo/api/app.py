@@ -694,7 +694,17 @@ async def _generate_and_store_lessons(
     Runs as a fire-and-forget asyncio task.  Errors are logged but never
     propagate — the battle pipeline must not be affected.
     """
+    from nidozo.analysis import analyze_battle
     from nidozo.llm.lesson_generator import generate_lesson
+
+    # Compute analysis once; pass it to each player's lesson so the LLM can
+    # ground its reflection in specific blunders and RNG events.
+    turns_with_state = store.get_turns_with_state(battle_id)
+    try:
+        analysis: dict[str, Any] | None = analyze_battle(turns_with_state) if turns_with_state else None
+    except Exception as exc:
+        logger.warning("Analysis failed for battle %d (lessons will proceed without it): %s", battle_id, exc)
+        analysis = None
 
     for provider, model, model_id, role, opponent in (
         (p1_provider, p1_model, p1_id, "p1", p1_opponent),
@@ -711,6 +721,7 @@ async def _generate_and_store_lessons(
                 total_turns=total_turns,
                 opponent_label=opponent,
                 turns=turns,
+                analysis=analysis,
             )
             if lesson:
                 store.create_lesson(model_id, battle_id, lesson)
