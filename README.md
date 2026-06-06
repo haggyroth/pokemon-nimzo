@@ -12,7 +12,7 @@ Sibling project to [Nimzo](https://github.com/haggyroth/nimzo) (the LLM chess ar
 
 - **Gen 3 Random Battles** — fully rules-correct via a local Showdown server
 - **Pluggable LLM backends** — Anthropic, OpenAI, or any local model via LM Studio
-- **JSON structured outputs** (v2 prompt) — models respond with `{"reasoning":"…","action_type":"move","identifier":"thunderbolt"}`, grammar-sampled for 100% parse reliability
+- **JSON structured outputs** (v2 prompt) — models respond with `{"reasoning":"…","action_type":"move","identifier":"thunderbolt"}`; grammar-sampled on OpenAI/LM Studio backends for near-certain parse reliability (Anthropic uses constrained sampling)
 - **Heuristic advisory** — type effectiveness, estimated damage, priority, status scoring surfaced to the model as context (non-binding)
 - **Hidden-information enforcement** — each model sees only what a human player would legitimately know
 - **ELO rankings** — updated after every battle, persisted in SQLite
@@ -85,8 +85,8 @@ Install [LM Studio](https://lmstudio.ai/), load a model, and start the local ser
 # Terminal 1 — Showdown server
 ./scripts/start_showdown.sh
 
-# Terminal 2 — API + WebSocket server (port 5001)
-uv run python scripts/serve.py --port 5001
+# Terminal 2 — API + WebSocket server (port 5000)
+uv run python scripts/serve.py
 
 # Terminal 3 — React frontend (port 5173)
 cd frontend && npm run dev

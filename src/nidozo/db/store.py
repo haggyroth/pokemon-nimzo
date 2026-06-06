@@ -9,7 +9,7 @@ from pathlib import Path
 from nidozo.db.elo import DEFAULT_RATING, updated_ratings
 from nidozo.db.schema import migrate
 
-_DEFAULT_DB = Path(__file__).parent.parent.parent.parent / "nimzo.db"
+_DEFAULT_DB = Path(__file__).parent.parent.parent.parent / "nidozo.db"
 
 
 class BattleStore:

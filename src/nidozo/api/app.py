@@ -19,7 +19,7 @@ from nidozo.db.store import BattleStore
 
 logger = logging.getLogger(__name__)
 
-_DB_PATH = Path(os.environ.get("NIMZO_DB", "nidozo.db"))
+_DB_PATH = Path(os.environ.get("NIDOZO_DB") or os.environ.get("NIMZO_DB", "nidozo.db"))
 _FRONTEND_DIST = Path(__file__).parent.parent.parent.parent / "frontend" / "dist"
 
 

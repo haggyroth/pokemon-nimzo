@@ -16,6 +16,12 @@ Wave 2C additions:
   - score_gap field (0–1 fraction of best score "left on the table")
   - rng_flag field (possible_crit / possible_miss / None — inferred heuristically)
   - analyze_battle now returns win_probability_timeline, turning_point, blunders
+
+Action format note:
+  Production stores actions as poke-env BattleOrder.message strings, e.g.
+  "/choose move fireblast" or "/choose switch Metagross". The resolver
+  _resolve_move_slot() handles both this name-based format and the legacy
+  numeric form ("move 2") used in some tests.
 """
 
 from __future__ import annotations
@@ -25,6 +31,7 @@ import re
 from typing import Any
 
 _ORDER_RE = re.compile(r"(move|switch)\s+(\S+)", re.IGNORECASE)
+_NORMALIZE_RE = re.compile(r"[^a-z0-9]")
 
 # Fraction of best heuristic score lost before we call it a blunder.
 # 0.4 == the chosen move was worth ≤60% of the best move's composite score.
@@ -75,8 +82,45 @@ def _rank_moves(move_scores: list[dict[str, Any]]) -> list[int]:
     return ranks
 
 
+def _norm(s: str) -> str:
+    """Lowercase and strip all non-alphanumeric characters for loose matching."""
+    return _NORMALIZE_RE.sub("", s.lower())
+
+
+def _resolve_move_slot(action: str, move_scores: list[dict[str, Any]]) -> int | None:
+    """Return the 1-based slot for the chosen move, or None for switch/empty.
+
+    Accepts two formats:
+      - Numeric slot:  "move 2" or "/choose move 2"  → 2
+      - Move name:     "/choose move fireblast"       → slot whose move_id matches
+
+    The name match is normalised (lowercase, strip punctuation/spaces) so
+    "fire-blast", "fireblast", "Fire Blast" all resolve correctly.
+    """
+    m = _ORDER_RE.search(action or "")
+    if not m or m.group(1).lower() != "move":
+        return None
+    token = m.group(2)
+
+    # Numeric slot (legacy / test format)
+    if token.isdigit():
+        return int(token)
+
+    # Name-based lookup against heuristic move_scores
+    norm_token = _norm(token)
+    for i, ms in enumerate(move_scores, start=1):
+        if _norm(str(ms.get("move_id", ""))) == norm_token:
+            return i
+
+    return None
+
+
 def _parse_move_slot(action: str) -> int | None:
-    """Extract 1-based slot number from an action string like 'move 2'."""
+    """Extract 1-based slot number from a numeric action string like 'move 2'.
+
+    Kept for backward compatibility with callers that don't have move_scores.
+    Prefer _resolve_move_slot() when move_scores are available.
+    """
     m = _ORDER_RE.search(action or "")
     if m and m.group(1).lower() == "move":
         try:
@@ -151,7 +195,7 @@ def annotate_turn(turn: dict[str, Any]) -> dict[str, Any]:
         base["notes"] = "chose to switch"
         return base
 
-    slot = _parse_move_slot(action)
+    slot = _resolve_move_slot(action, move_scores)
     if slot is None or not move_scores:
         return base
 
@@ -326,11 +370,10 @@ def _infer_rng_event(
 
         # Estimated damage from the attacker's heuristic scores for the move they chose
         action = (merged_turn.get(attacker_role) or {}).get("action") or ""
-        slot = _parse_move_slot(action)
+        move_scores = curr_atk.get("heuristics", {}).get("move_scores", [])
+        slot = _resolve_move_slot(action, move_scores)
         if slot is None:
             continue  # switch or no action
-
-        move_scores = curr_atk.get("heuristics", {}).get("move_scores", [])
         if slot < 1 or slot > len(move_scores):
             continue
 

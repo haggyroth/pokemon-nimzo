@@ -31,6 +31,9 @@ showdown/
 *.log
 *.sqlite
 *.db
+*.db-wal
+*.db-shm
+*.db-journal
 nimzo.db
 
 # Frontend
