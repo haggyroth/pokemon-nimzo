@@ -10,15 +10,19 @@ Sibling project to [Nimzo](https://github.com/haggyroth/nimzo) (the LLM chess ar
 
 ## Features
 
-- **Gen 3 Random Battles** — fully rules-correct via a local Showdown server
+- **Gen 3 battles** — Random and drafted team formats; fully rules-correct via a local Showdown server
+- **8 tier formats** — Random / OU / UU / NU / LC / Ubers / Freeforall; tier badges throughout the UI
+- **Drafted teams** — LLM snake-drafts a 6-mon team from 153 Pokémon with Smogon ADV competitive sets; DraftPhase UI with animated pick reveal
 - **Pluggable LLM backends** — Anthropic, OpenAI, or any local model via LM Studio
-- **JSON structured outputs** (v2 prompt) — models respond with `{"reasoning":"…","action_type":"move","identifier":"thunderbolt"}`; grammar-sampled on OpenAI/LM Studio backends for near-certain parse reliability (Anthropic uses constrained sampling)
-- **Heuristic advisory** — type effectiveness, estimated damage, priority, status scoring surfaced to the model as context (non-binding)
+- **JSON structured outputs** (v2 prompt) — models respond with `{"reasoning":"…","action_type":"move","identifier":"thunderbolt"}`; grammar-sampled on OpenAI/LM Studio backends for near-certain parse reliability
+- **Heuristic advisory** — type effectiveness, estimated damage (accuracy-adjusted), speed-tier awareness, weather modifiers, switch quality scoring, low-PP warnings, battle-context block — all surfaced as advisory context (non-binding)
 - **Hidden-information enforcement** — each model sees only what a human player would legitimately know
-- **ELO rankings** — updated after every battle, persisted in SQLite
-- **Tournament runner** — UI or CLI round-robin across any set of models; live progress in the browser
-- **Battle Replay** — step through any completed battle turn by turn with an HP timeline and scrub controls
-- **Post-game analysis** — per-turn decision quality (optimal/good/suboptimal/fallback), blunder detection, win-probability timeline, turning-point and RNG inference
+- **Cross-battle memory** — after each battle the LLM generates a short lesson; lessons are stored per model and injected into future system prompts so models adapt strategy over time
+- **ELO rankings** — updated after every battle, persisted in SQLite; leaderboard with tier filter tabs
+- **Per-model stats page** — W/L/T history, ELO sparkline, opponent breakdown, decision-quality distribution, lesson log
+- **Tournament runner** — UI or CLI round-robin; live progress, standings overlay, battle cancel; full history page
+- **Battle Replay** — step through any completed battle turn by turn; HP timeline; scrub/keyboard nav; auto-play
+- **Post-game analysis** — decision quality (optimal/good/suboptimal/fallback), blunder detection, win-probability timeline, turning-point detection, RNG inference; key moments list (clickable, seeks replay); variance report (crit/miss tally with per-player benefit counts); draft critique (STAB coverage, shared weaknesses, execution quality)
 - **Live visualizer** — React frontend with Gen 3 sprites, type-themed card backgrounds, animated HP bars, hit/faint animations, thinking indicators, bench display, and a real-time battle log
 
 ---
