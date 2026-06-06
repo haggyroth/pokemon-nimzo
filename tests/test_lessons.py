@@ -384,3 +384,144 @@ def test_schema_v5_migration_from_v4() -> None:
     assert "idx_lessons_model" in indexes
     version = conn.execute("SELECT version FROM schema_version").fetchone()["version"]
     assert version == 5
+
+
+# ---------------------------------------------------------------------------
+# generate_lesson — analysis enrichment  (feat/richer-analysis)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_generate_lesson_with_analysis_includes_context() -> None:
+    """generate_lesson embeds analysis context when analysis dict is provided."""
+    from unittest.mock import AsyncMock
+
+    from nidozo.llm.lesson_generator import generate_lesson
+
+    backend = AsyncMock()
+    backend.complete = AsyncMock(return_value="I learned to avoid splash vs immune types.")
+
+    analysis = {
+        "p1_summary": {
+            "total_turns": 4,
+            "optimal": 2,
+            "good": 1,
+            "suboptimal": 1,
+            "fallback": 0,
+            "switch": 0,
+            "no_data": 0,
+            "blunders": 1,
+            "avg_heuristic_rank": 1.75,
+        },
+        "p2_summary": {"total_turns": 0},
+        "key_moments": [
+            {
+                "turn_number": 3,
+                "player_role": "p1",
+                "type": "blunder",
+                "description": "chose splash (rank 4/4, 62% below best); heuristic top: thunderbolt",
+            },
+        ],
+        "turning_point": 3,
+    }
+
+    turns: list[dict] = [
+        {"turn_number": 1, "player_role": "p1", "action_chosen": "/choose move thunderbolt", "parse_success": 1},
+        {"turn_number": 2, "player_role": "p1", "action_chosen": "/choose move thunderbolt", "parse_success": 1},
+        {"turn_number": 3, "player_role": "p1", "action_chosen": "/choose move splash",      "parse_success": 1},
+        {"turn_number": 4, "player_role": "p1", "action_chosen": "/choose move tackle",       "parse_success": 1},
+    ]
+
+    lesson = await generate_lesson(
+        backend=backend,
+        player_role="p1",
+        winner=1,
+        total_turns=4,
+        opponent_label="random/random",
+        turns=turns,
+        analysis=analysis,
+    )
+
+    assert lesson == "I learned to avoid splash vs immune types."
+
+    # The prompt passed to backend.complete should contain analysis context
+    call_args = backend.complete.call_args
+    prompt_messages = call_args[0][0]
+    user_msg = next(m["content"] for m in prompt_messages if m["role"] == "user")
+    assert "Post-battle analysis" in user_msg
+    assert "blunder" in user_msg.lower() or "Blunder" in user_msg
+    assert "Turn 3" in user_msg
+    assert "splash" in user_msg.lower()
+
+
+@pytest.mark.asyncio
+async def test_generate_lesson_without_analysis_unchanged() -> None:
+    """generate_lesson works as before when analysis=None."""
+    from unittest.mock import AsyncMock
+
+    from nidozo.llm.lesson_generator import generate_lesson
+
+    backend = AsyncMock()
+    backend.complete = AsyncMock(return_value="Keep attacking.")
+
+    lesson = await generate_lesson(
+        backend=backend,
+        player_role="p2",
+        winner=2,
+        total_turns=5,
+        opponent_label="lmstudio/llama",
+        turns=[
+            {"turn_number": 1, "player_role": "p2", "action_chosen": "/choose move tackle", "parse_success": 1},
+        ],
+        analysis=None,
+    )
+
+    assert lesson == "Keep attacking."
+    call_args = backend.complete.call_args
+    prompt_messages = call_args[0][0]
+    user_msg = next(m["content"] for m in prompt_messages if m["role"] == "user")
+    assert "Post-battle analysis" not in user_msg
+
+
+def test_format_analysis_context_empty_summary() -> None:
+    """_format_analysis_context returns '' for a zero-turn summary."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {"total_turns": 0},
+        "key_moments": [],
+        "turning_point": None,
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    assert ctx == ""
+
+
+def test_format_analysis_context_includes_rng() -> None:
+    """RNG events are included in the analysis context."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {
+            "total_turns": 2,
+            "optimal": 2,
+            "good": 0,
+            "suboptimal": 0,
+            "fallback": 0,
+            "switch": 0,
+            "no_data": 0,
+            "blunders": 0,
+            "avg_heuristic_rank": 1.0,
+        },
+        "key_moments": [
+            {
+                "turn_number": 5,
+                "player_role": "p1",
+                "type": "rng",
+                "description": "Possible Crit — may have shifted battle outcome",
+            }
+        ],
+        "turning_point": 5,
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    assert "RNG" in ctx
+    assert "Turn 5" in ctx
+    assert "Crit" in ctx

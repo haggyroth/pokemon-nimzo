@@ -50,6 +50,73 @@ def _format_turns(turns: list[dict[str, Any]], player_role: str) -> str:
     return "\n".join(lines)
 
 
+def _format_analysis_context(analysis: dict[str, Any], player_role: str) -> str:
+    """Render the key analysis data for this player into readable text.
+
+    Includes:
+      - Decision quality summary (optimal/good/suboptimal/fallback/blunders)
+      - Top blunders (up to 3) with turn number and explanation
+      - RNG events that touched this player (crits or misses)
+      - Turning point turn number
+
+    Returns "" when there is nothing interesting to surface.
+    """
+    summary_key = f"{player_role}_summary"
+    summary: dict[str, Any] = analysis.get(summary_key) or {}
+    key_moments: list[dict[str, Any]] = analysis.get("key_moments") or []
+
+    lines: list[str] = []
+
+    # ---- Decision quality summary ----
+    total = summary.get("total_turns", 0)
+    if total > 0:
+        optimal = summary.get("optimal", 0)
+        good = summary.get("good", 0)
+        subopt = summary.get("suboptimal", 0)
+        fallback = summary.get("fallback", 0)
+        blunders = summary.get("blunders", 0)
+        avg_rank = summary.get("avg_heuristic_rank")
+
+        lines.append("Decision quality this battle:")
+        lines.append(
+            f"  {optimal} optimal, {good} good, {subopt} suboptimal"
+            + (f", {fallback} fallback (parse failures)" if fallback else "")
+        )
+        if avg_rank is not None:
+            lines.append(f"  Average heuristic rank: {avg_rank:.1f}")
+        if blunders:
+            lines.append(f"  Blunders (moves ≥40% below best option): {blunders}")
+
+    # ---- Top blunders for this player ----
+    my_blunders = [
+        m for m in key_moments
+        if m.get("type") == "blunder" and m.get("player_role") == player_role
+    ]
+    if my_blunders:
+        lines.append("\nYour worst decisions:")
+        for m in my_blunders[:3]:
+            lines.append(f"  Turn {m['turn_number']}: {m['description']}")
+
+    # ---- RNG events touching this player ----
+    my_rng = [
+        m for m in key_moments
+        if m.get("type") == "rng" and m.get("player_role") == player_role
+    ]
+    if my_rng:
+        lines.append("\nRNG events affecting you:")
+        for m in my_rng[:4]:
+            lines.append(f"  Turn {m['turn_number']}: {m['description']}")
+
+    # ---- Turning point ----
+    turning_point = analysis.get("turning_point")
+    if turning_point is not None:
+        lines.append(
+            f"\nTurning point: turn {turning_point} had the largest win-probability swing."
+        )
+
+    return "\n".join(lines)
+
+
 async def generate_lesson(
     backend: ModelBackend,
     player_role: str,
@@ -57,6 +124,7 @@ async def generate_lesson(
     total_turns: int,
     opponent_label: str,
     turns: list[dict[str, Any]],
+    analysis: dict[str, Any] | None = None,
 ) -> str:
     """Ask the LLM to reflect on the battle and return a 2-3 sentence lesson.
 
@@ -67,6 +135,8 @@ async def generate_lesson(
         total_turns:    Total turns played.
         opponent_label: Human-readable opponent identifier (e.g. "random/random").
         turns:          Full turn log from BattleStore.get_turns_basic().
+        analysis:       Optional output from analyze_battle(); enriches the lesson
+                        prompt with quality annotations, blunders, and RNG events.
 
     Returns:
         A plain-text lesson string, or "" if the backend fails.
@@ -74,11 +144,19 @@ async def generate_lesson(
     result = _result_label(winner, player_role)
     turn_summary = _format_turns(turns, player_role)
 
+    analysis_block = ""
+    if analysis:
+        ctx = _format_analysis_context(analysis, player_role)
+        if ctx:
+            analysis_block = f"\nPost-battle analysis:\n{ctx}\n"
+
     user_content = (
         f"You just played a Gen 3 random battle.\n"
-        f"Result: {result} in {total_turns} turns against {opponent_label}.\n\n"
+        f"Result: {result} in {total_turns} turns against {opponent_label}.\n"
+        f"{analysis_block}\n"
         f"Your decisions this battle:\n{turn_summary}\n\n"
         f"Write 2-3 sentences about the single most important lesson from this battle. "
+        f"If analysis data is available, ground your lesson in a specific turn or mistake. "
         f"Focus on type matchups, speed, switching, HP management, or a strategic mistake. "
         f"Write in first person. Plain text only — no JSON, no bullet points, no headers."
     )

@@ -6,6 +6,7 @@ import pytest
 
 from nidozo.analysis.analyzer import (
     BLUNDER_GAP_THRESHOLD,
+    _build_key_moments,
     _composite_score,
     _detect_turning_point,
     _merge_turns,
@@ -514,3 +515,110 @@ def test_analyze_battle_blunders_list_populated():
     assert blunder["player_role"] == "p1"
     assert blunder["turn_number"] == 1
     assert blunder["score_gap"] is not None
+
+
+# ---------------------------------------------------------------------------
+# key_moments — new in feat/richer-analysis
+# ---------------------------------------------------------------------------
+
+
+def test_key_moments_turning_point_only():
+    """Turning point alone produces one 'turning_point' moment with no player_role."""
+    annotations: list[dict] = []
+    moments = _build_key_moments(annotations, turning_point=5)
+    assert len(moments) == 1
+    assert moments[0]["type"] == "turning_point"
+    assert moments[0]["turn_number"] == 5
+    assert moments[0]["player_role"] is None
+
+
+def test_key_moments_blunder_included():
+    """A blunder annotation surfaces as a 'blunder' moment."""
+    annotations = [
+        {
+            "turn_number": 3,
+            "player_role": "p1",
+            "is_blunder": True,
+            "score_gap": 0.6,
+            "rng_flag": None,
+            "notes": "chose tackle (rank 4/4, 60% below best); heuristic top: thunderbolt",
+        }
+    ]
+    moments = _build_key_moments(annotations, turning_point=None)
+    blunders = [m for m in moments if m["type"] == "blunder"]
+    assert len(blunders) == 1
+    assert blunders[0]["turn_number"] == 3
+    assert blunders[0]["player_role"] == "p1"
+    assert "tackle" in blunders[0]["description"]
+
+
+def test_key_moments_rng_included():
+    """An rng_flag annotation surfaces as an 'rng' moment."""
+    annotations = [
+        {
+            "turn_number": 7,
+            "player_role": "p2",
+            "is_blunder": False,
+            "score_gap": None,
+            "rng_flag": "possible_crit",
+            "notes": None,
+        }
+    ]
+    moments = _build_key_moments(annotations, turning_point=None)
+    rng_moments = [m for m in moments if m["type"] == "rng"]
+    assert len(rng_moments) == 1
+    assert rng_moments[0]["turn_number"] == 7
+    assert rng_moments[0]["player_role"] == "p2"
+    assert "Crit" in rng_moments[0]["description"]
+
+
+def test_key_moments_sorted_by_turn():
+    """Moments appear in ascending turn order."""
+    annotations = [
+        {"turn_number": 8, "player_role": "p1", "is_blunder": True, "score_gap": 0.5, "rng_flag": None, "notes": "blunder"},
+        {"turn_number": 2, "player_role": "p2", "is_blunder": False, "score_gap": None, "rng_flag": "possible_miss", "notes": None},
+    ]
+    moments = _build_key_moments(annotations, turning_point=5)
+    turn_nums = [m["turn_number"] for m in moments]
+    assert turn_nums == sorted(turn_nums)
+
+
+def test_key_moments_deduplicated():
+    """Identical (turn, player_role, type) pairs appear only once."""
+    annotations = [
+        {"turn_number": 4, "player_role": "p1", "is_blunder": True, "score_gap": 0.5, "rng_flag": None, "notes": "a"},
+        {"turn_number": 4, "player_role": "p1", "is_blunder": True, "score_gap": 0.5, "rng_flag": None, "notes": "a"},
+    ]
+    moments = _build_key_moments(annotations, turning_point=None)
+    blunders = [m for m in moments if m["type"] == "blunder" and m["player_role"] == "p1" and m["turn_number"] == 4]
+    assert len(blunders) == 1
+
+
+def test_analyze_battle_includes_key_moments():
+    """analyze_battle result dict includes key_moments list.
+
+    Uses 4 moves so the last-place choice is 'suboptimal' (rank 4/4),
+    which triggers the blunder flag when score_gap >= BLUNDER_GAP_THRESHOLD.
+    """
+    subopt_state = json.dumps({
+        "my_team": [{"species": "Pikachu", "hp_fraction": 1.0}],
+        "my_active": {"species": "Pikachu", "hp_fraction": 1.0},
+        "heuristics": {
+            "move_scores": [
+                {"move_id": "thunderbolt", "type_multiplier": 2.0, "estimated_damage_pct": "~55%", "is_status": False, "priority": 0},
+                {"move_id": "surf",        "type_multiplier": 1.0, "estimated_damage_pct": "~40%", "is_status": False, "priority": 0},
+                {"move_id": "tackle",      "type_multiplier": 1.0, "estimated_damage_pct": "~25%", "is_status": False, "priority": 0},
+                {"move_id": "splash",      "type_multiplier": 0.0, "estimated_damage_pct": "0%",   "is_status": False, "priority": 0},
+            ],
+        },
+    })
+    turns = [
+        {"turn_number": 1, "player_role": "p1", "action_chosen": "/choose move splash",
+         "parse_success": 1, "state_json": subopt_state},
+    ]
+    result = analyze_battle(turns)
+    assert "key_moments" in result
+    assert isinstance(result["key_moments"], list)
+    # Choosing immune splash (rank 4/4) is a clear blunder — should appear in key_moments
+    blunders = [m for m in result["key_moments"] if m["type"] == "blunder"]
+    assert len(blunders) >= 1

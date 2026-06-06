@@ -450,6 +450,75 @@ def _player_summary(annotations: list[dict[str, Any]], role: str) -> dict[str, A
     }
 
 
+# ---------------------------------------------------------------------------
+# Key moments synthesis
+# ---------------------------------------------------------------------------
+
+def _build_key_moments(
+    annotations: list[dict[str, Any]],
+    turning_point: int | None,
+) -> list[dict[str, Any]]:
+    """Build a chronological list of the most significant events in the battle.
+
+    Each item has:
+      turn_number  : int
+      player_role  : "p1" | "p2" | None   (None for neutral events like turning_point)
+      type         : "turning_point" | "blunder" | "rng"
+      description  : human-readable one-liner
+    """
+    moments: list[dict[str, Any]] = []
+
+    # Turning point is neutral — neither player's "fault"
+    if turning_point is not None:
+        moments.append({
+            "turn_number": turning_point,
+            "player_role": None,
+            "type": "turning_point",
+            "description": "Largest win-probability swing of the battle",
+        })
+
+    for ann in annotations:
+        # Blunders
+        if ann.get("is_blunder"):
+            gap_pct = f"{round((ann.get('score_gap') or 0.0) * 100)}%"
+            moments.append({
+                "turn_number": ann["turn_number"],
+                "player_role": ann["player_role"],
+                "type": "blunder",
+                "description": ann.get("notes") or f"Suboptimal move ({gap_pct} below best)",
+            })
+
+        # RNG events — separate moment for each player flagged on this turn
+        if ann.get("rng_flag"):
+            flag = ann["rng_flag"]
+            label = flag.replace("_", " ").title()
+            moments.append({
+                "turn_number": ann["turn_number"],
+                "player_role": ann["player_role"],
+                "type": "rng",
+                "description": f"{label} — may have shifted battle outcome",
+            })
+
+    # Sort by turn number; for equal turns order: turning_point < blunder < rng
+    _TYPE_ORDER = {"turning_point": 0, "blunder": 1, "rng": 2}
+    moments.sort(key=lambda m: (m["turn_number"], _TYPE_ORDER.get(m["type"], 9)))
+
+    # Deduplicate identical (turn, player_role, type) triples
+    seen: set[tuple[int, str | None, str]] = set()
+    deduped: list[dict[str, Any]] = []
+    for m in moments:
+        key = (m["turn_number"], m.get("player_role"), m["type"])
+        if key not in seen:
+            seen.add(key)
+            deduped.append(m)
+
+    return deduped
+
+
+# ---------------------------------------------------------------------------
+# Battle-level analysis
+# ---------------------------------------------------------------------------
+
 def analyze_battle(turns: list[dict[str, Any]]) -> dict[str, Any]:
     """Annotate all turns and produce per-player summaries.
 
@@ -463,6 +532,7 @@ def analyze_battle(turns: list[dict[str, Any]]) -> dict[str, Any]:
           - win_probability_timeline [{turn_number, p1_win_prob}]
           - turning_point (turn_number int or None)
           - blunders [{turn_number, player_role, action, score_gap, notes}]
+          - key_moments [{turn_number, player_role, type, description}]
     """
     annotations = [annotate_turn(t) for t in turns]
 
@@ -494,6 +564,8 @@ def analyze_battle(turns: list[dict[str, Any]]) -> dict[str, Any]:
         if a.get("is_blunder")
     ]
 
+    key_moments = _build_key_moments(annotations, turning_point)
+
     return {
         "p1_summary": _player_summary(annotations, "p1"),
         "p2_summary": _player_summary(annotations, "p2"),
@@ -501,4 +573,5 @@ def analyze_battle(turns: list[dict[str, Any]]) -> dict[str, Any]:
         "win_probability_timeline": win_prob_timeline,
         "turning_point": turning_point,
         "blunders": blunders,
+        "key_moments": key_moments,
     }
