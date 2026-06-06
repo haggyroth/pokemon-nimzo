@@ -42,7 +42,7 @@ async def test_echo_backend_empty_messages() -> None:
 # AnthropicBackend
 # ---------------------------------------------------------------------------
 
-def _make_anthropic_backend(model: str = "claude-test") -> "AnthropicBackend":
+def _make_anthropic_backend(model: str = "claude-test"):
     """Create AnthropicBackend with a stubbed client so no real network calls occur."""
     from nidozo.llm.anthropic import AnthropicBackend
 
@@ -131,7 +131,7 @@ async def test_anthropic_backend_passes_model_and_max_tokens() -> None:
 # OpenAIBackend
 # ---------------------------------------------------------------------------
 
-def _make_openai_backend(json_mode: bool = False) -> "OpenAIBackend":
+def _make_openai_backend(json_mode: bool = False):
     """Create OpenAIBackend with a stubbed client."""
     from nidozo.llm.openai import OpenAIBackend
 
