@@ -73,6 +73,19 @@
 - **RNG inference**: possible crit / possible miss inferred from actual vs expected HP drop; badges in replay and analysis log
 - 154 tests; parser fix for `"switch 1"` identifier form
 
+### v0.10 — Hardening, Quality & Technical Debt
+- **Wave R1 — Critical correctness fixes**: test suite stabilised; port 5001 enforced consistently across serve.py, vite config, and README
+- **Wave R2 — Frontend lint + CI gate**: all 16 ESLint v10 / react-hooks v7 errors resolved; `npm run lint` added to CI; pytest coverage gate at 65%; `uv.lock` committed for reproducible builds
+- **Wave R3 — Robustness**: `failed` battle status wired end-to-end; Pydantic `Field(ge/le)` bounds on all API inputs (422 on bad requests); 6 DB indexes for hot read paths; `finish_battle` + ELO update made fully atomic; CORS restricted to known origins; EventBus queues bounded (256) with drop-oldest overflow; events list capped at 500 in frontend
+- **Wave R4 — Test coverage**: 35 new tests across `LLMPlayer`, `StreamingLLMPlayer`, `StreamingRandomBot`, `AnthropicBackend`, `OpenAIBackend`, `BattleStore`, and schema migrations; overall coverage 85%; schema migration bug found and fixed (`migrate()` would crash on v1 databases due to index creation before column existed)
+- **Technical debt cleared**:
+  - Heuristic status-move annotation replaced with exact `frozenset` lookups; bogus tokens (`"lovecaster"`, `"darkv"`) and Gen 6/7 moves removed
+  - `AnthropicBackend` now iterates all content blocks — fixes crash on thinking-model responses where `content[0]` is a thinking block with no `.text`
+  - Opponent `ability` field in serializer guarded against `"unknown"` sentinel (matching existing `item` guard)
+  - Inline `store._conn.execute()` calls in `app.py` replaced with `BattleStore` methods (`get_turns_basic`, `get_battle_players`, `update_battle_tag`)
+  - `serve.py --reload` fixed — now uses `factory=True` + import string so uvicorn hot-reload actually works
+- 203 tests
+
 ---
 
 ## Upcoming
@@ -143,21 +156,21 @@
 ---
 
 ### Technical Debt & Housekeeping
-*Items identified in the v0.9 code review. Not blocking but should be addressed before they compound.*
+*Cleared in v0.10 (marked ✅). Remaining items below.*
 
 **Refactoring**
-- Move inline SQL from `app.py` (`get_turns`, tournament runner) into `BattleStore` methods — keeps the persistence boundary clean and improves testability
-- Split `app.py` into routing / orchestration / WebSocket layers as the file grows
-- Replace `serve.py --reload` flag (currently silently broken — uvicorn requires an import string, not an app instance, for reload mode)
+- ✅ Move inline SQL from `app.py` into `BattleStore` methods
+- ✅ Replace `serve.py --reload` (now uses `factory=True` + import string)
+- Split `app.py` into routing / orchestration / WebSocket layers — still growing
 
 **Correctness**
-- Heuristic status-move keyword list contains bogus tokens (`"lovecaster"`, `"darkv"`) and uses substring matching that can misfire — replace with exact `move.id` checks
-- `AnthropicBackend` assumes `content[0].text`; multi-block or thinking responses would raise — iterate blocks and join text parts
-- Opponent `ability` field in serializer is not guarded the same way `item` is; add guard + hidden-info test
+- ✅ Heuristic status-move bogus tokens fixed; exact `frozenset` lookups
+- ✅ `AnthropicBackend` multi-block / thinking-response crash fixed
+- ✅ Opponent `ability` hidden-info guard added
 
 **Infrastructure**
-- Add `CHANGELOG.md` and automate release notes generation (Phase 5 milestone)
-- Add Dependabot for Python and npm dependency updates
-- Add structured logging + a `/healthz` endpoint with graceful runner shutdown
+- Add structured logging + `/healthz` endpoint with graceful runner shutdown
+- Add `mypy` / type-check gate to CI (types are already thorough)
 - Add E2E smoke tests (Playwright) covering start → watch → replay → analyze
-- Add `mypy`/type-check gate to CI (types are already thorough)
+- Add Dependabot for Python and npm dependency updates
+- Add `CHANGELOG.md` (Phase 5 milestone)
