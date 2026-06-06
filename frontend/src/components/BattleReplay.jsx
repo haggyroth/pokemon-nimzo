@@ -1,16 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import PokemonCard from './PokemonCard'
-import BattleLog from './BattleLog'
 
 // ---------------------------------------------------------------------------
-// HP Timeline SVG — shows both players' active HP across all turns
+// HP Timeline SVG — HP lines + win probability overlay + analysis markers
 // ---------------------------------------------------------------------------
 
-function HPTimeline({ turns, currentIdx, p1Label, p2Label }) {
+function HPTimeline({ turns, currentIdx, p1Label, p2Label, analysis }) {
   if (turns.length < 2) return null
 
   const W = 1000
-  const H = 56
+  const H = 64
 
   const xOf = (i) => (i / (turns.length - 1)) * W
   const yOf = (hp) => hp == null ? null : H - hp * H
@@ -28,17 +27,43 @@ function HPTimeline({ turns, currentIdx, p1Label, p2Label }) {
   const p2Path = buildPath(t => t.p2?.state?.my_active?.hp_fraction ?? null)
   const markerX = xOf(currentIdx)
 
+  // Win probability overlay from analysis data
+  const wpTimeline = analysis?.win_probability_timeline ?? []
+  const wpByTurn = {}
+  wpTimeline.forEach(t => { wpByTurn[t.turn_number] = t.p1_win_prob })
+
+  // Map wp to turns array indices (turns are sorted by .turn field)
+  const wpPts = turns
+    .map((t, i) => {
+      const prob = wpByTurn[t.turn]
+      return prob != null ? `${xOf(i).toFixed(1)},${(H - prob * H).toFixed(1)}` : null
+    })
+    .filter(Boolean)
+  const wpPath = wpPts.length > 1 ? `M ${wpPts.join(' L ')}` : ''
+
+  // Turning point
+  const tp = analysis?.turning_point
+  const tpTurnIdx = tp != null ? turns.findIndex(t => t.turn === tp) : -1
+
+  // Blunder markers: which turn indices have blunders?
+  const blunderTurnNums = new Set((analysis?.blunders ?? []).map(b => b.turn_number))
+  const blunderIdxs = turns
+    .map((t, i) => (blunderTurnNums.has(t.turn) ? i : null))
+    .filter(i => i != null)
+
   return (
     <div className="hp-timeline">
       <div className="hp-timeline-labels">
-        <span className="htl-p1">■ {p1Label}</span>
-        <span className="htl-p2">■ {p2Label}</span>
-        <span className="htl-axis-note">Active HP over battle</span>
+        <span className="htl-p1">■ {p1Label} HP</span>
+        <span className="htl-p2">■ {p2Label} HP</span>
+        {wpPath && <span className="htl-wp">◇ Win prob</span>}
+        <span className="htl-axis-note">Active HP / win probability over battle</span>
       </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
         className="hp-timeline-svg"
+        style={{ height: '64px' }}
       >
         {/* 50 % grid line */}
         <line x1="0" y1={H / 2} x2={W} y2={H / 2}
@@ -47,17 +72,40 @@ function HPTimeline({ turns, currentIdx, p1Label, p2Label }) {
         <line x1="0" y1={H * 0.75} x2={W} y2={H * 0.75}
           stroke="rgba(255,68,85,0.12)" strokeDasharray="4 6" />
 
+        {/* Turning point band */}
+        {tpTurnIdx >= 0 && (
+          <rect x={xOf(tpTurnIdx) - 2} y="0" width="4" height={H}
+            fill="var(--accent-amber)" opacity="0.18" rx="1" />
+        )}
+
+        {/* Blunder markers (small orange triangles on top axis) */}
+        {blunderIdxs.map(i => (
+          <polygon
+            key={i}
+            points={`${xOf(i)},0 ${xOf(i) - 4},8 ${xOf(i) + 4},8`}
+            fill="var(--accent-amber)" opacity="0.7"
+          />
+        ))}
+
+        {/* Win probability overlay (dashed white line) */}
+        {wpPath && (
+          <path d={wpPath} fill="none"
+            stroke="rgba(255,255,255,0.35)" strokeWidth="1"
+            strokeDasharray="4 3"
+            strokeLinecap="round" strokeLinejoin="round" />
+        )}
+
         {/* P1 HP */}
         {p1Path && (
           <path d={p1Path} fill="none"
             stroke="var(--accent-cyan)" strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
+            strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
         )}
         {/* P2 HP */}
         {p2Path && (
           <path d={p2Path} fill="none"
             stroke="var(--accent-amber)" strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
+            strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
         )}
 
         {/* Current-turn marker */}
@@ -68,6 +116,13 @@ function HPTimeline({ turns, currentIdx, p1Label, p2Label }) {
         <circle cx={markerX} cy={yOf(turns[currentIdx]?.p2?.state?.my_active?.hp_fraction) ?? H / 2}
           r="4" fill="var(--accent-amber)" />
       </svg>
+
+      {/* Turning point callout */}
+      {tpTurnIdx >= 0 && (
+        <div className="htl-turning-point">
+          ⚡ Turning point — largest swing at turn {tp}
+        </div>
+      )}
     </div>
   )
 }
@@ -76,12 +131,28 @@ function HPTimeline({ turns, currentIdx, p1Label, p2Label }) {
 // Turn action display — what each model chose this turn
 // ---------------------------------------------------------------------------
 
-function TurnActions({ turn, p1Label, p2Label }) {
+const RNG_META = {
+  possible_crit: { icon: '⚡', label: 'POSSIBLE CRIT', cls: 'rng-crit' },
+  possible_miss: { icon: '✕',  label: 'POSSIBLE MISS', cls: 'rng-miss' },
+}
+
+function TurnActions({ turn, p1Label, p2Label, analysisAnns }) {
   if (!turn) return null
+
+  // Find analysis annotations for this turn
+  const annsByRole = {}
+  if (analysisAnns) {
+    for (const a of analysisAnns) {
+      if (a.turn_number === turn.turn) annsByRole[a.player_role] = a
+    }
+  }
 
   function ActionRow({ role, label, data }) {
     if (!data) return null
     const action = data.action?.replace(/^\/choose\s+/, '') ?? '—'
+    const ann = annsByRole[role]
+    const rng = ann?.rng_flag ? RNG_META[ann.rng_flag] : null
+
     return (
       <div className="tap-row">
         <span className={`tap-player ${role}`}>{label}</span>
@@ -91,6 +162,17 @@ function TurnActions({ turn, p1Label, p2Label }) {
             <span className="tap-fallback"> · random fallback</span>
           )}
         </span>
+        {ann && ann.decision_quality !== 'no_data' && (
+          <span className={`tap-quality tap-q-${ann.decision_quality}`}>
+            {ann.decision_quality.toUpperCase()}
+            {ann.is_blunder && ' ⚠'}
+          </span>
+        )}
+        {rng && (
+          <span className={`tap-rng ${rng.cls}`} title={rng.label}>
+            {rng.icon} {rng.label}
+          </span>
+        )}
       </div>
     )
   }
@@ -148,11 +230,12 @@ function HeuristicDrawer({ heuristics }) {
 const PLAY_SPEED_MS = 1800
 
 export default function BattleReplay({ battleId, onClose }) {
-  const [data,    setData]    = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState(null)
-  const [idx,     setIdx]     = useState(0)
-  const [playing, setPlaying] = useState(false)
+  const [data,     setData]     = useState(null)
+  const [analysis, setAnalysis] = useState(null)
+  const [loading,  setLoading]  = useState(true)
+  const [error,    setError]    = useState(null)
+  const [idx,      setIdx]      = useState(0)
+  const [playing,  setPlaying]  = useState(false)
 
   // Keyboard navigation
   const handleKey = useCallback((e) => {
@@ -175,13 +258,20 @@ export default function BattleReplay({ battleId, onClose }) {
     return () => window.removeEventListener('keydown', handleKey)
   }, [handleKey])
 
-  // Fetch replay data
+  // Fetch replay data + analysis in parallel
   useEffect(() => {
     setLoading(true)
     setError(null)
-    fetch(`/api/battles/${battleId}/replay`)
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json() })
-      .then(d => { setData(d); setIdx(0); setLoading(false) })
+    Promise.all([
+      fetch(`/api/battles/${battleId}/replay`).then(r => { if (!r.ok) throw new Error(r.status); return r.json() }),
+      fetch(`/api/battles/${battleId}/analysis`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ])
+      .then(([replayData, analysisData]) => {
+        setData(replayData)
+        setAnalysis(analysisData)
+        setIdx(0)
+        setLoading(false)
+      })
       .catch(e => { setError(e.message); setLoading(false) })
   }, [battleId])
 
@@ -296,6 +386,7 @@ export default function BattleReplay({ battleId, onClose }) {
         currentIdx={idx}
         p1Label={p1Label}
         p2Label={p2Label}
+        analysis={analysis}
       />
 
       {/* ---- Controls ---- */}
@@ -333,7 +424,12 @@ export default function BattleReplay({ battleId, onClose }) {
       </div>
 
       {/* ---- Turn actions ---- */}
-      <TurnActions turn={turn} p1Label={p1Label} p2Label={p2Label} />
+      <TurnActions
+        turn={turn}
+        p1Label={p1Label}
+        p2Label={p2Label}
+        analysisAnns={analysis?.turns}
+      />
     </div>
   )
 }

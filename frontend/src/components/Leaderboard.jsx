@@ -425,7 +425,13 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
                       )}
                     </div>
                   </div>
-                  {isOpen && <BattleAnalysis battleId={b.id} />}
+                  {isOpen && (
+                    <BattleAnalysis
+                      battleId={b.id}
+                      p1Label={b.p1?.split('/').pop() ?? 'P1'}
+                      p2Label={b.p2?.split('/').pop() ?? 'P2'}
+                    />
+                  )}
                 </div>
               )
             })
