@@ -297,7 +297,7 @@ function TournamentForm({ onTournamentStarted, lmModels, lmLoading }) {
 // Main Leaderboard component
 // ---------------------------------------------------------------------------
 
-export default function Leaderboard({ onBattleStarted, onTournamentStarted }) {
+export default function Leaderboard({ onBattleStarted, onTournamentStarted, onReplaySelected }) {
   const [rows, setRows]           = useState([])
   const [battles, setBattles]     = useState([])
   const [analyzing, setAnalyzing] = useState(null)
@@ -414,6 +414,15 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted }) {
                       >
                         {isOpen ? '▲ HIDE' : '▼ ANALYZE'}
                       </button>
+                      {b.status === 'completed' && (
+                        <button
+                          className="btn-replay"
+                          onClick={() => onReplaySelected?.(b.id)}
+                          title="Watch replay"
+                        >
+                          ▶ REPLAY
+                        </button>
+                      )}
                     </div>
                   </div>
                   {isOpen && <BattleAnalysis battleId={b.id} />}

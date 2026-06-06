@@ -372,3 +372,71 @@ async def test_turns_empty_battle(client: AsyncClient, no_battle_runner) -> None
     resp = await client.get(f"/api/battles/{battle_id}/turns")
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+# ---------------------------------------------------------------------------
+# GET /api/battles/{id}/replay
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_replay_empty_battle(client: AsyncClient, no_battle_runner) -> None:
+    """Replay endpoint returns battle metadata and empty turns list for a fresh battle."""
+    start_resp = await client.post(
+        "/api/battles/start",
+        json={"p1_provider": "random", "p2_provider": "random"},
+    )
+    battle_id = start_resp.json()["battle_ids"][0]
+
+    resp = await client.get(f"/api/battles/{battle_id}/replay")
+    assert resp.status_code == 200
+
+    data = resp.json()
+    assert "battle" in data
+    assert "turns" in data
+    assert data["battle"]["id"] == battle_id
+    assert isinstance(data["turns"], list)
+    assert data["turns"] == []   # no turns recorded yet
+
+
+@pytest.mark.asyncio
+async def test_replay_not_found(client: AsyncClient) -> None:
+    """Replay endpoint returns 404 for a non-existent battle."""
+    resp = await client.get("/api/battles/99999/replay")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_replay_merges_turns_by_number(app, client: AsyncClient, no_battle_runner) -> None:
+    """Replay endpoint merges p1 and p2 rows into a single dict per turn number."""
+    import json as _json
+
+    start_resp = await client.post(
+        "/api/battles/start",
+        json={"p1_provider": "random", "p2_provider": "random"},
+    )
+    battle_id = start_resp.json()["battle_ids"][0]
+
+    # Manually insert two turn rows (p1 and p2) for the same turn number via the app's store
+    store = app.state.store
+    state_p1 = _json.dumps({"my_active": {"species": "Pikachu", "hp_fraction": 0.8}})
+    state_p2 = _json.dumps({"my_active": {"species": "Squirtle", "hp_fraction": 0.9}})
+    store.log_turn(battle_id, 1, "p1", "v1", "/choose move thunderbolt", True, "", state_p1)
+    store.log_turn(battle_id, 1, "p2", "v1", "/choose move tackle",      True, "", state_p2)
+
+    resp = await client.get(f"/api/battles/{battle_id}/replay")
+    assert resp.status_code == 200
+
+    data = resp.json()
+    assert len(data["turns"]) == 1
+
+    turn = data["turns"][0]
+    assert turn["turn"] == 1
+    assert "p1" in turn
+    assert "p2" in turn
+    # p1 side
+    assert turn["p1"]["action"] == "/choose move thunderbolt"
+    assert turn["p1"]["parse_success"] is True
+    assert turn["p1"]["state"]["my_active"]["species"] == "Pikachu"
+    # p2 side
+    assert turn["p2"]["action"] == "/choose move tackle"
+    assert turn["p2"]["state"]["my_active"]["species"] == "Squirtle"

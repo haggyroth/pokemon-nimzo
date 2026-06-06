@@ -1586,3 +1586,307 @@ body::after {
   margin-left: 0.4rem;
   vertical-align: middle;
 }
+
+/* ============================================================
+   REPLAY BUTTON (Recent Battles panel)
+   ============================================================ */
+.btn-replay {
+  background: none;
+  border: 1px solid rgba(0,230,255,0.3);
+  color: var(--accent-cyan);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.45rem;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+  border-radius: 2px;
+  opacity: 0.75;
+  transition: opacity 0.15s, border-color 0.15s;
+  letter-spacing: 0.03em;
+}
+.btn-replay:hover {
+  opacity: 1;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 8px rgba(0,230,255,0.15);
+}
+
+/* ============================================================
+   BATTLE REPLAY — full page
+   ============================================================ */
+.replay-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: calc(100vh - 80px);
+  background: var(--bg-deep);
+}
+
+/* Header */
+.replay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  gap: 1rem;
+}
+.replay-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.replay-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.65rem;
+  color: var(--accent-cyan);
+  letter-spacing: 0.08em;
+}
+.replay-battle-id {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+}
+.replay-matchup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+}
+.replay-p1  { color: var(--accent-cyan); }
+.replay-p2  { color: var(--accent-amber); }
+.replay-vs  { color: var(--text-dim); font-size: 0.6rem; }
+.replay-winner-badge {
+  background: rgba(0,230,255,0.08);
+  border: 1px solid rgba(0,230,255,0.2);
+  color: var(--accent-cyan);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 2px;
+}
+.btn-close-replay {
+  background: none;
+  border: 1px solid rgba(255,68,85,0.3);
+  color: var(--accent-red);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  border-radius: 2px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.btn-close-replay:hover { opacity: 1; border-color: var(--accent-red); }
+
+/* Arena section */
+.replay-arena-wrap {
+  padding: 1rem 1.5rem 0.5rem;
+}
+.replay-weather {
+  text-align: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}
+
+/* HP Timeline */
+.hp-timeline {
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.hp-timeline-labels {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.4rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+}
+.htl-p1 { color: var(--accent-cyan); }
+.htl-p2 { color: var(--accent-amber); }
+.htl-axis-note {
+  color: var(--text-dim);
+  font-size: 0.55rem;
+  margin-left: auto;
+}
+.hp-timeline-svg {
+  display: block;
+  width: 100%;
+  height: 56px;
+  border-radius: 4px;
+  overflow: visible;
+}
+
+/* Controls */
+.replay-controls {
+  padding: 0.85rem 1.5rem 0.6rem;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.replay-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.replay-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.6rem;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  min-width: 2.4rem;
+  text-align: center;
+}
+.replay-btn:hover:not(:disabled) {
+  background: var(--border);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+.replay-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.replay-play-btn {
+  background: rgba(0,230,255,0.08);
+  border-color: rgba(0,230,255,0.35);
+  color: var(--accent-cyan);
+  min-width: 3rem;
+}
+.replay-play-btn.playing {
+  background: rgba(255,170,0,0.08);
+  border-color: rgba(255,170,0,0.4);
+  color: var(--accent-amber);
+}
+.replay-scrub-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.replay-turn-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.45rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.replay-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  cursor: pointer;
+  outline: none;
+}
+.replay-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(0,230,255,0.4);
+}
+.replay-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  border: none;
+  cursor: pointer;
+}
+.replay-turn-counter {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--accent-cyan);
+  white-space: nowrap;
+  min-width: 4.5rem;
+  text-align: right;
+}
+.replay-kbd-hint {
+  text-align: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.55rem;
+  color: var(--text-dim);
+  opacity: 0.6;
+}
+
+/* Turn actions panel */
+.turn-actions-panel {
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+.tap-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.45rem;
+  color: var(--text-dim);
+  margin-bottom: 0.6rem;
+  letter-spacing: 0.06em;
+}
+.tap-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(30,58,95,0.25);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+}
+.tap-row:last-child { border-bottom: none; }
+.tap-player {
+  font-weight: 600;
+  white-space: nowrap;
+  font-size: 0.65rem;
+  min-width: 8rem;
+}
+.tap-player.p1 { color: var(--accent-cyan); }
+.tap-player.p2 { color: var(--accent-amber); }
+.tap-action { color: var(--text-primary); }
+.tap-fallback { color: var(--accent-red); font-size: 0.6rem; }
+
+/* Loading / error overlay */
+.replay-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 80px);
+  background: var(--bg-deep);
+}
+.replay-loading-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.55rem;
+  color: var(--text-dim);
+}
+.replay-loading-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  animation: dot-bounce 1.2s infinite ease-in-out;
+  margin: 0 3px;
+}
+.replay-loading-dot:nth-child(2) { animation-delay: 0.2s; }
+.replay-loading-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40%           { transform: translateY(-6px); opacity: 1; }
+}

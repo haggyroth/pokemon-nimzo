@@ -134,6 +134,34 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
             logger.debug("LM Studio not reachable at %s: %s", base_url, exc)
             return []
 
+    @app.get("/api/battles/{battle_id}/replay")
+    def get_replay(battle_id: int) -> dict:
+        """Full turn-by-turn merged state for battle replay."""
+        battle = store.get_battle(battle_id)
+        if not battle:
+            raise HTTPException(status_code=404, detail="Battle not found")
+
+        turns_raw = store.get_turns_with_state(battle_id)
+
+        # Merge p1 + p2 rows into one entry per turn number
+        turns_by_num: dict[int, dict] = {}
+        for row in turns_raw:
+            n = row["turn_number"]
+            if n not in turns_by_num:
+                turns_by_num[n] = {}
+            state = json.loads(row["state_json"]) if row["state_json"] else None
+            turns_by_num[n][row["player_role"]] = {
+                "state":         state,
+                "action":        row["action_chosen"],
+                "parse_success": bool(row["parse_success"]),
+            }
+
+        turns = [
+            {"turn": n, **turns_by_num[n]}
+            for n in sorted(turns_by_num.keys())
+        ]
+        return {"battle": battle, "turns": turns}
+
     @app.get("/api/battles/{battle_id}/turns")
     def get_turns(battle_id: int) -> list[dict]:
         rows = store._conn.execute(

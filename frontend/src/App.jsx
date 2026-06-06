@@ -2,11 +2,13 @@ import { useState } from 'react'
 import './styles/main.css'
 import Leaderboard from './components/Leaderboard'
 import BattleField from './components/BattleField'
+import BattleReplay from './components/BattleReplay'
 import { useBattleStream } from './hooks/useBattleStream'
 
 function App() {
-  const [view, setView] = useState('home')
-  const [dismissed, setDismissed] = useState(false)
+  const [view, setView]                 = useState('home')
+  const [dismissed, setDismissed]       = useState(false)
+  const [replayBattleId, setReplayBattleId] = useState(null)
   const {
     events, isConnected, p1State, p2State, battleInfo, battleResult,
     thinking, tournament, reset, clearTournament,
@@ -25,6 +27,16 @@ function App() {
     clearTournament()
     setDismissed(false)
     setView('battle')
+  }
+
+  function handleReplaySelected(battleId) {
+    setReplayBattleId(battleId)
+    setView('replay')
+  }
+
+  function handleReplayClose() {
+    setReplayBattleId(null)
+    setView('home')
   }
 
   return (
@@ -59,6 +71,7 @@ function App() {
           <Leaderboard
             onBattleStarted={handleBattleStarted}
             onTournamentStarted={handleTournamentStarted}
+            onReplaySelected={handleReplaySelected}
           />
         )}
         {view === 'battle' && (
@@ -71,6 +84,12 @@ function App() {
             thinking={thinking}
             tournament={tournament}
             onDismiss={() => setDismissed(true)}
+          />
+        )}
+        {view === 'replay' && replayBattleId != null && (
+          <BattleReplay
+            battleId={replayBattleId}
+            onClose={handleReplayClose}
           />
         )}
       </main>
