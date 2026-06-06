@@ -17,6 +17,13 @@ Wave 2C additions:
   - rng_flag field (possible_crit / possible_miss / None — inferred heuristically)
   - analyze_battle now returns win_probability_timeline, turning_point, blunders
 
+Richer analysis additions:
+  - variance_report: structured tally of all RNG events (crits, misses) with
+    per-player benefit counts and a plain-English verdict.
+  - critique_draft: team composition analysis for drafted battles — offensive
+    type spread (STAB), shared defensive weaknesses, and execution quality.
+  - analyze_battle accepts optional p1/p2 team_ids to populate both fields.
+
 Action format note:
   Production stores actions as poke-env BattleOrder.message strings, e.g.
   "/choose move fireblast" or "/choose switch Metagross". The resolver
@@ -27,6 +34,7 @@ Action format note:
 from __future__ import annotations
 
 import json
+import os
 import re
 from typing import Any
 
@@ -39,6 +47,69 @@ BLUNDER_GAP_THRESHOLD = 0.40
 
 # If actual HP drop / expected HP drop exceeds this, flag possible crit.
 CRIT_MULTIPLIER_THRESHOLD = 1.45
+
+# ---------------------------------------------------------------------------
+# Draft critique — type chart + species data
+# ---------------------------------------------------------------------------
+
+# Gen 3 type chart: defending type → attacking types that deal 2× damage.
+# Fairy type does not exist in Gen 3.
+_TYPE_WEAKNESSES: dict[str, list[str]] = {
+    "FIRE":     ["WATER", "GROUND", "ROCK"],
+    "WATER":    ["ELECTRIC", "GRASS"],
+    "GRASS":    ["FIRE", "ICE", "POISON", "FLYING", "BUG"],
+    "ELECTRIC": ["GROUND"],
+    "ICE":      ["FIRE", "FIGHTING", "ROCK", "STEEL"],
+    "FIGHTING": ["FLYING", "PSYCHIC"],
+    "POISON":   ["GROUND", "PSYCHIC"],
+    "GROUND":   ["WATER", "GRASS", "ICE"],
+    "FLYING":   ["ELECTRIC", "ICE", "ROCK"],
+    "PSYCHIC":  ["BUG", "GHOST", "DARK"],
+    "BUG":      ["FIRE", "FLYING", "ROCK"],
+    "ROCK":     ["WATER", "GRASS", "FIGHTING", "GROUND", "STEEL"],
+    "GHOST":    ["GHOST", "DARK"],
+    "DRAGON":   ["ICE", "DRAGON"],
+    "DARK":     ["FIGHTING", "BUG"],
+    "STEEL":    ["FIRE", "FIGHTING", "GROUND"],
+    "NORMAL":   ["FIGHTING"],
+}
+
+# Attacking types that deal 0× to a defending type (immunities).
+_TYPE_IMMUNITIES: dict[str, list[str]] = {
+    "NORMAL":   ["GHOST"],
+    "GHOST":    ["NORMAL", "FIGHTING"],
+    "STEEL":    ["POISON"],
+    "GROUND":   ["ELECTRIC"],
+    "DARK":     ["PSYCHIC"],
+    "FLYING":   ["GROUND"],
+}
+
+
+def _load_species_data() -> dict[str, dict[str, Any]]:
+    """Load gen3_movesets.json keyed by species ID, returning {} on error."""
+    data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data")
+    path = os.path.join(data_dir, "gen3_movesets.json")
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _mon_weaknesses(types: list[str]) -> set[str]:
+    """Return attacking types that hit this Pokémon for ≥2× damage.
+
+    Handles dual-typing and immunities correctly for Gen 3.
+    """
+    mult: dict[str, float] = {}
+    immunities: set[str] = set()
+    for t in types:
+        t_up = t.upper()
+        for imm in _TYPE_IMMUNITIES.get(t_up, []):
+            immunities.add(imm)
+        for atk in _TYPE_WEAKNESSES.get(t_up, []):
+            mult[atk] = mult.get(atk, 1.0) * 2.0
+    return {atk for atk, m in mult.items() if m >= 2.0 and atk not in immunities}
 
 
 # ---------------------------------------------------------------------------
@@ -413,6 +484,172 @@ def _infer_rng_event(
 
 
 # ---------------------------------------------------------------------------
+# Draft critique
+# ---------------------------------------------------------------------------
+
+def critique_draft(
+    team_pokemon_ids: list[str] | None,
+    role: str,
+    annotations: list[dict[str, Any]],
+    species_data: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Analyse a drafted team's composition and execution quality.
+
+    Args:
+        team_pokemon_ids: Species IDs from the teams table (e.g. ["pikachu"]).
+        role: "p1" or "p2" — used to filter annotations.
+        annotations: All annotated turns from annotate_turn().
+        species_data: Optional pre-loaded moveset dict. Loaded from file if None.
+
+    Returns a dict or None when no team data is available:
+        team             : list of display names
+        offensive_types  : STAB types the team fields (one per Pokémon type)
+        shared_weaknesses: attacking types that hit ≥2 team members for 2×
+        coverage_gaps    : types the team has no STAB representation for
+        execution        : blunders, decision_quality_pct, deviation_turns
+    """
+    if not team_pokemon_ids:
+        return None
+
+    if species_data is None:
+        species_data = _load_species_data()
+
+    # Resolve each species ID to display name + types
+    team_info: list[dict[str, Any]] = []
+    for sid in team_pokemon_ids:
+        entry = species_data.get(sid, {})
+        if not entry:
+            continue
+        team_info.append({
+            "species_id": sid,
+            "species": entry.get("species", sid.title()),
+            "types": [t.upper() for t in entry.get("types", [])],
+        })
+
+    if not team_info:
+        return None
+
+    # Offensive type spread (STAB proxy — Pokémon's own types)
+    offensive_types: set[str] = set()
+    for info in team_info:
+        for t in info["types"]:
+            offensive_types.add(t)
+
+    # Weakness tally: how many team members are weak to each attacking type
+    weakness_counts: dict[str, int] = {}
+    for info in team_info:
+        for atk_type in _mon_weaknesses(info["types"]):
+            weakness_counts[atk_type] = weakness_counts.get(atk_type, 0) + 1
+
+    shared_weaknesses = sorted(t for t, cnt in weakness_counts.items() if cnt >= 2)
+
+    # Coverage gaps: Gen 3 types with no STAB on the team
+    all_types = set(_TYPE_WEAKNESSES.keys())
+    coverage_gaps = sorted(all_types - offensive_types)
+
+    # Execution analysis — filter to this player's annotated turns
+    player_anns = [a for a in annotations if a["player_role"] == role]
+    ranked_turns = [a for a in player_anns if a.get("heuristic_rank") is not None]
+    ranked_total = len(ranked_turns)
+    blunder_turns = [a for a in player_anns if a.get("is_blunder")]
+    optimal_count = sum(1 for a in player_anns if a.get("decision_quality") == "optimal")
+    good_count    = sum(1 for a in player_anns if a.get("decision_quality") == "good")
+
+    quality_pct: float | None = (
+        round((optimal_count + good_count) / ranked_total * 100, 1)
+        if ranked_total > 0 else None
+    )
+    optimal_rate: float | None = (
+        round(optimal_count / ranked_total * 100, 1)
+        if ranked_total > 0 else None
+    )
+
+    # Turns where model deviated from heuristic top (rank > 1) — up to 10
+    deviation_turns = [
+        {
+            "turn_number": a["turn_number"],
+            "chose": a.get("action_chosen"),
+            "best":  a.get("best_action"),
+            "gap_pct": round((a.get("score_gap") or 0.0) * 100),
+            "was_blunder": bool(a.get("is_blunder")),
+        }
+        for a in player_anns
+        if (a.get("heuristic_rank") or 0) > 1
+    ][:10]
+
+    return {
+        "team": [info["species"] for info in team_info],
+        "offensive_types": sorted(offensive_types),
+        "shared_weaknesses": shared_weaknesses,
+        "coverage_gaps": coverage_gaps,
+        "execution": {
+            "total_turns": len(player_anns),
+            "blunders": len(blunder_turns),
+            "decision_quality_pct": quality_pct,
+            "optimal_rate": optimal_rate,
+            "deviation_turns": deviation_turns,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Variance report
+# ---------------------------------------------------------------------------
+
+def _build_variance_report(annotations: list[dict[str, Any]]) -> dict[str, Any]:
+    """Tally all inferred RNG events (crits, misses) and summarize net impact.
+
+    Crits benefit the attacker; misses benefit the defender (hurt the attacker).
+    Returns:
+        total_events      : int
+        crits             : list of {turn_number, attacker}
+        misses            : list of {turn_number, attacker}
+        p1_benefit_events : count of events that favored p1
+        p2_benefit_events : count of events that favored p2
+        verdict           : plain-English summary
+    """
+    crits:  list[dict[str, Any]] = []
+    misses: list[dict[str, Any]] = []
+
+    for ann in annotations:
+        flag = ann.get("rng_flag")
+        if flag == "possible_crit":
+            crits.append({"turn_number": ann["turn_number"], "attacker": ann["player_role"]})
+        elif flag == "possible_miss":
+            misses.append({"turn_number": ann["turn_number"], "attacker": ann["player_role"]})
+
+    total = len(crits) + len(misses)
+
+    # A crit helps the attacker; a miss helps the defender (opposite role)
+    p1_benefit = (
+        sum(1 for c in crits  if c["attacker"] == "p1") +
+        sum(1 for m in misses if m["attacker"] == "p2")
+    )
+    p2_benefit = (
+        sum(1 for c in crits  if c["attacker"] == "p2") +
+        sum(1 for m in misses if m["attacker"] == "p1")
+    )
+
+    if total == 0:
+        verdict = "No notable RNG events detected"
+    elif p1_benefit == p2_benefit:
+        verdict = "Variance was roughly even between both players"
+    elif p1_benefit > p2_benefit:
+        verdict = f"Variance slightly favored p1 ({p1_benefit} vs {p2_benefit} beneficial events)"
+    else:
+        verdict = f"Variance slightly favored p2 ({p2_benefit} vs {p1_benefit} beneficial events)"
+
+    return {
+        "total_events": total,
+        "crits": crits,
+        "misses": misses,
+        "p1_benefit_events": p1_benefit,
+        "p2_benefit_events": p2_benefit,
+        "verdict": verdict,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Battle-level summary
 # ---------------------------------------------------------------------------
 
@@ -519,20 +756,29 @@ def _build_key_moments(
 # Battle-level analysis
 # ---------------------------------------------------------------------------
 
-def analyze_battle(turns: list[dict[str, Any]]) -> dict[str, Any]:
+def analyze_battle(
+    turns: list[dict[str, Any]],
+    p1_team_ids: list[str] | None = None,
+    p2_team_ids: list[str] | None = None,
+    species_data: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Annotate all turns and produce per-player summaries.
 
     Args:
         turns: List of DB row dicts from get_turns_with_state().
+        p1_team_ids: Optional list of species IDs for p1's drafted team.
+        p2_team_ids: Optional list of species IDs for p2's drafted team.
+        species_data: Optional pre-loaded moveset dict (avoids re-loading file).
 
-    Returns:
-        Dict with:
-          - p1_summary, p2_summary
-          - turns (annotated per-player list)
-          - win_probability_timeline [{turn_number, p1_win_prob}]
-          - turning_point (turn_number int or None)
-          - blunders [{turn_number, player_role, action, score_gap, notes}]
-          - key_moments [{turn_number, player_role, type, description}]
+    Returns dict with:
+      - p1_summary, p2_summary
+      - turns (annotated per-player list)
+      - win_probability_timeline [{turn_number, p1_win_prob}]
+      - turning_point (turn_number int or None)
+      - blunders [{turn_number, player_role, action, score_gap, notes}]
+      - key_moments [{turn_number, player_role, type, description}]
+      - variance_report: structured RNG tally (always present)
+      - p1_draft_critique, p2_draft_critique: team analysis (None when no draft)
     """
     annotations = [annotate_turn(t) for t in turns]
 
@@ -566,6 +812,14 @@ def analyze_battle(turns: list[dict[str, Any]]) -> dict[str, Any]:
 
     key_moments = _build_key_moments(annotations, turning_point)
 
+    # Variance report — always computed from RNG-annotated turns
+    variance_report = _build_variance_report(annotations)
+
+    # Draft critique — only when team IDs are provided
+    sd = species_data  # allow caller to pass pre-loaded data
+    p1_critique = critique_draft(p1_team_ids, "p1", annotations, sd)
+    p2_critique = critique_draft(p2_team_ids, "p2", annotations, sd)
+
     return {
         "p1_summary": _player_summary(annotations, "p1"),
         "p2_summary": _player_summary(annotations, "p2"),
@@ -574,4 +828,7 @@ def analyze_battle(turns: list[dict[str, Any]]) -> dict[str, Any]:
         "turning_point": turning_point,
         "blunders": blunders,
         "key_moments": key_moments,
+        "variance_report": variance_report,
+        "p1_draft_critique": p1_critique,
+        "p2_draft_critique": p2_critique,
     }
