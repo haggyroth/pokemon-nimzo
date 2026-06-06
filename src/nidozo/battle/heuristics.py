@@ -126,19 +126,48 @@ def _score_move(
     return score
 
 
+# Exact poke-env move IDs for common status effects.
+# Using exact sets avoids substring false-positives (e.g. "stun" matching
+# "stunspore" was fine but "sing" or "poison" as substrings could misfire on
+# future moves). Bogus tokens like "lovecaster"/"darkv" have been removed.
+_SLEEP_MOVES: frozenset[str] = frozenset({
+    "spore", "sleeppowder", "hypnosis", "sing", "grasswhistle",
+    "lovelykiss", "yawn",
+})
+_POISON_MOVES: frozenset[str] = frozenset({
+    "toxic", "poisonpowder", "poisongas",
+})
+_PARA_MOVES: frozenset[str] = frozenset({
+    "thunderwave", "stunspore", "glare", "bodyslam", "lick",
+    "zappycannon",  # included for future-proofing; safe if absent
+})
+_BURN_MOVES: frozenset[str] = frozenset({
+    "willowisp",
+})
+_BOOST_MOVES: frozenset[str] = frozenset({
+    "swordsdance", "nastyplot", "calmmind", "dragondance",
+    "bulkup", "workup", "agility", "amnesia", "batonpass",
+    "growth", "meditate", "sharpen",
+})
+_DROP_MOVES: frozenset[str] = frozenset({
+    "screech", "charm", "growl", "leer", "tickle",
+    "stringshot", "featherdance", "sweetscent",
+})
+
+
 def _annotate_status_move(move: Move, score: dict[str, Any]) -> None:
-    move_id = move.id.lower()
-    if any(x in move_id for x in ("sleep", "spore", "hypnosis", "sing", "yawn", "lovecaster", "darkv")):
+    mid = move.id
+    if mid in _SLEEP_MOVES:
         score["notes"].append("inflicts Sleep")
-    elif any(x in move_id for x in ("toxic", "poison", "poisonpowder")):
+    elif mid in _POISON_MOVES:
         score["notes"].append("inflicts Poison/Toxic")
-    elif any(x in move_id for x in ("thunderwave", "stun", "glare", "nuzzle")):
+    elif mid in _PARA_MOVES:
         score["notes"].append("inflicts Paralysis")
-    elif any(x in move_id for x in ("willowisp", "burnup")):
+    elif mid in _BURN_MOVES:
         score["notes"].append("inflicts Burn")
-    elif any(x in move_id for x in ("swordsdance", "nastyplot", "calmmind", "dragondance", "bulkup", "workup")):
+    elif mid in _BOOST_MOVES:
         score["notes"].append("boosts own stats")
-    elif any(x in move_id for x in ("screech", "charm", "growl", "leer", "tickle")):
+    elif mid in _DROP_MOVES:
         score["notes"].append("drops opponent stats")
 
 

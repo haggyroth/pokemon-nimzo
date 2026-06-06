@@ -29,4 +29,11 @@ class AnthropicBackend:
             kwargs["system"] = system
 
         response = await self._client.messages.create(**kwargs)
-        return response.content[0].text
+        # Iterate all content blocks and join text parts.  Assuming content[0]
+        # crashes on multi-block responses and thinking-model output where the
+        # first block is a "thinking" block with no .text attribute.
+        return "".join(
+            block.text
+            for block in response.content
+            if getattr(block, "type", None) == "text"
+        )

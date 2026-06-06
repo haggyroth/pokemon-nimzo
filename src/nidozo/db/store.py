@@ -235,6 +235,36 @@ class BattleStore:
         )
         self._conn.commit()
 
+    def get_turns_basic(self, battle_id: int) -> list[dict]:
+        """Return per-turn summary rows (no state_json) ordered by turn number."""
+        cur = self._conn.execute(
+            """SELECT turn_number, player_role, prompt_version,
+                      action_chosen, parse_success
+               FROM turns WHERE battle_id=? ORDER BY turn_number""",
+            (battle_id,),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+    def get_battle_players(self, battle_id: int) -> dict | None:
+        """Return provider and model_name for both players of a battle, or None."""
+        row = self._conn.execute(
+            """SELECT p1.provider AS p1_provider, p1.model_name AS p1_model,
+                      p2.provider AS p2_provider, p2.model_name AS p2_model
+               FROM battles b
+               JOIN models p1 ON p1.id = b.p1_model_id
+               JOIN models p2 ON p2.id = b.p2_model_id
+               WHERE b.id=?""",
+            (battle_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def update_battle_tag(self, battle_id: int, battle_tag: str) -> None:
+        """Overwrite the battle_tag once the real Showdown tag is known."""
+        self._conn.execute(
+            "UPDATE battles SET battle_tag=? WHERE id=?", (battle_tag, battle_id)
+        )
+        self._conn.commit()
+
     def get_turns_with_state(self, battle_id: int) -> list[dict]:
         """Return all turns for a battle including state_json, ordered by turn then player."""
         cur = self._conn.execute(
