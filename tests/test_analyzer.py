@@ -5,18 +5,17 @@ import json
 import pytest
 
 from nidozo.analysis.analyzer import (
+    BLUNDER_GAP_THRESHOLD,
     _composite_score,
+    _detect_turning_point,
     _merge_turns,
     _parse_move_slot,
     _rank_moves,
     _score_gap,
     _team_hp_score,
     _win_prob,
-    _build_win_prob_timeline,
-    _detect_turning_point,
     analyze_battle,
     annotate_turn,
-    BLUNDER_GAP_THRESHOLD,
 )
 
 # ---------------------------------------------------------------------------
