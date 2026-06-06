@@ -104,6 +104,104 @@ class BattleStore:
         ).fetchone()
         return dict(row) if row else None
 
+    def list_tournaments(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Return recent tournaments, newest first, with battles_completed count."""
+        rows = self._conn.execute(
+            """SELECT t.id, t.players, t.rounds, t.prompt_version,
+                      t.total_battles, t.status, t.created_at, t.finished_at,
+                      COUNT(CASE WHEN b.status='completed' THEN 1 END) AS battles_completed
+               FROM tournaments t
+               LEFT JOIN battles b ON b.tournament_id = t.id
+               GROUP BY t.id
+               ORDER BY t.created_at DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_tournament_standings(self, tournament_id: int) -> list[dict[str, Any]]:
+        """Per-player standings within a single tournament.
+
+        Returns one row per model that has at least one battle in this
+        tournament, sorted by points (3×win + tie) descending, then wins.
+
+        Columns: model_id, provider, model_name, wins, losses, ties,
+                 battles_played, points, elo_delta
+        """
+        rows = self._conn.execute(
+            """WITH tm AS (
+                 SELECT DISTINCT m.id, m.provider, m.model_name
+                 FROM models m
+                 JOIN battles b ON (b.p1_model_id = m.id OR b.p2_model_id = m.id)
+                 WHERE b.tournament_id = ?
+               ),
+               results AS (
+                 SELECT tm.id AS model_id, tm.provider, tm.model_name,
+                   SUM(CASE WHEN (b.p1_model_id=tm.id AND b.winner=1)
+                              OR (b.p2_model_id=tm.id AND b.winner=2) THEN 1 ELSE 0 END) AS wins,
+                   SUM(CASE WHEN b.winner IS NULL THEN 1 ELSE 0 END) AS ties,
+                   SUM(CASE WHEN (b.p1_model_id=tm.id AND b.winner=2)
+                              OR (b.p2_model_id=tm.id AND b.winner=1) THEN 1 ELSE 0 END) AS losses,
+                   COUNT(b.id) AS battles_played
+                 FROM tm
+                 JOIN battles b ON (b.p1_model_id=tm.id OR b.p2_model_id=tm.id)
+                 WHERE b.tournament_id = ? AND b.status='completed'
+                 GROUP BY tm.id
+               ),
+               elo_deltas AS (
+                 SELECT eh.model_id,
+                   COALESCE(SUM(eh.delta), 0.0) AS elo_delta
+                 FROM elo_history eh
+                 JOIN battles b ON b.id = eh.battle_id
+                 WHERE b.tournament_id = ?
+                 GROUP BY eh.model_id
+               )
+               SELECT r.*, COALESCE(ed.elo_delta, 0.0) AS elo_delta,
+                      r.wins * 3 + r.ties AS points
+               FROM results r
+               LEFT JOIN elo_deltas ed ON ed.model_id = r.model_id
+               ORDER BY points DESC, wins DESC, r.model_id""",
+            (tournament_id, tournament_id, tournament_id),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_tournament_battles(self, tournament_id: int) -> list[dict[str, Any]]:
+        """All battles for a tournament in scheduled order with results."""
+        rows = self._conn.execute(
+            """SELECT b.id, b.status, b.winner, b.total_turns,
+                      b.started_at, b.finished_at,
+                      p1.provider || '/' || p1.model_name AS p1,
+                      p2.provider || '/' || p2.model_name AS p2,
+                      p1.model_name AS p1_model, p2.model_name AS p2_model,
+                      p1.provider AS p1_provider, p2.provider AS p2_provider
+               FROM battles b
+               JOIN models p1 ON p1.id = b.p1_model_id
+               JOIN models p2 ON p2.id = b.p2_model_id
+               WHERE b.tournament_id = ?
+               ORDER BY b.id""",
+            (tournament_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def cancel_tournament(self, tournament_id: int) -> bool:
+        """Mark a running tournament as cancelled.
+
+        Returns False if the tournament is already finished or doesn't exist.
+        """
+        row = self._conn.execute(
+            "SELECT status FROM tournaments WHERE id=?", (tournament_id,)
+        ).fetchone()
+        if not row or row["status"] != "running":
+            return False
+        self._conn.execute(
+            """UPDATE tournaments SET status='cancelled',
+               finished_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+               WHERE id=?""",
+            (tournament_id,),
+        )
+        self._conn.commit()
+        return True
+
     # ------------------------------------------------------------------
     # Battles
     # ------------------------------------------------------------------

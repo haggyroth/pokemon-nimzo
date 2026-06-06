@@ -259,3 +259,161 @@ def test_get_model_stats_lessons(store) -> None:
     assert stats is not None
     assert len(stats["lessons"]) == 1
     assert stats["lessons"][0]["content"] == "Always use Water-type moves."
+
+
+# ---------------------------------------------------------------------------
+# Tournament store methods  (feat/tournament-mode)
+# ---------------------------------------------------------------------------
+
+def _make_tournament(store, n_players: int = 3, rounds: int = 1) -> tuple[int, list[int]]:
+    """Helper: create a tournament with n_players and register it in the store."""
+    players = [{"provider": "random", "model_name": f"bot{i}"} for i in range(n_players)]
+    tid = store.create_tournament(players=players, rounds=rounds, prompt_version="v2", total_battles=n_players * (n_players - 1) * rounds)
+    model_ids = [store.get_or_create_model("random", f"bot{i}", "v2") for i in range(n_players)]
+    return tid, model_ids
+
+
+def test_list_tournaments_empty(store) -> None:
+    result = store.list_tournaments()
+    assert isinstance(result, list)
+    assert len(result) == 0
+
+
+def test_list_tournaments_returns_rows(store) -> None:
+    tid, _ = _make_tournament(store)
+    rows = store.list_tournaments()
+    assert len(rows) >= 1
+    t = next(r for r in rows if r["id"] == tid)
+    assert t["status"] == "running"
+    assert t["rounds"] == 1
+    assert "battles_completed" in t
+
+
+def test_list_tournaments_battles_completed_count(store) -> None:
+    tid, mids = _make_tournament(store, n_players=2)
+    bid = store.create_battle("tag-lsbc", "gen3randombattle", mids[0], mids[1], tournament_id=tid)
+    store.finish_battle(bid, winner=1, total_turns=5)
+    store.set_battle_status(bid, "completed")
+
+    rows = store.list_tournaments()
+    t = next(r for r in rows if r["id"] == tid)
+    assert t["battles_completed"] == 1
+
+
+def test_get_tournament_standings_empty(store) -> None:
+    """Standings are empty when no battles have been completed."""
+    tid, _ = _make_tournament(store)
+    standings = store.get_tournament_standings(tid)
+    assert standings == []
+
+
+def test_get_tournament_standings_wins_losses(store) -> None:
+    """Wins and losses are correctly attributed within the tournament."""
+    tid, mids = _make_tournament(store, n_players=2)
+    a_id, b_id = mids[0], mids[1]
+
+    bid = store.create_battle("tag-wl", "gen3randombattle", a_id, b_id, tournament_id=tid)
+    store.finish_battle(bid, winner=1, total_turns=10)
+    store.set_battle_status(bid, "completed")
+
+    standings = store.get_tournament_standings(tid)
+    a_row = next(r for r in standings if r["model_id"] == a_id)
+    b_row = next(r for r in standings if r["model_id"] == b_id)
+
+    assert a_row["wins"] == 1
+    assert a_row["losses"] == 0
+    assert b_row["wins"] == 0
+    assert b_row["losses"] == 1
+
+
+def test_get_tournament_standings_ties(store) -> None:
+    tid, mids = _make_tournament(store, n_players=2)
+    bid = store.create_battle("tag-tie", "gen3randombattle", mids[0], mids[1], tournament_id=tid)
+    store.finish_battle(bid, winner=None, total_turns=50)
+    store.set_battle_status(bid, "completed")
+
+    standings = store.get_tournament_standings(tid)
+    for row in standings:
+        assert row["ties"] == 1
+        assert row["wins"] == 0
+
+
+def test_get_tournament_standings_points(store) -> None:
+    """Points = 3 × wins + 1 × ties."""
+    tid, mids = _make_tournament(store, n_players=2)
+
+    # Game 1: a wins
+    b1 = store.create_battle("tag-pts1", "gen3randombattle", mids[0], mids[1], tournament_id=tid)
+    store.finish_battle(b1, winner=1, total_turns=8)
+    store.set_battle_status(b1, "completed")
+
+    # Game 2: tie
+    b2 = store.create_battle("tag-pts2", "gen3randombattle", mids[0], mids[1], tournament_id=tid)
+    store.finish_battle(b2, winner=None, total_turns=20)
+    store.set_battle_status(b2, "completed")
+
+    standings = store.get_tournament_standings(tid)
+    a_row = next(r for r in standings if r["model_id"] == mids[0])
+    # 1 win (3 pts) + 1 tie (1 pt) = 4 pts
+    assert a_row["points"] == 4
+
+
+def test_get_tournament_standings_sorted_by_points(store) -> None:
+    """Standings are sorted descending by points."""
+    tid, mids = _make_tournament(store, n_players=3)
+    a, b, c = mids
+
+    # a beats b; a beats c; b beats c
+    for winner_idx, (p1, p2) in [(1, (a, b)), (1, (a, c)), (1, (b, c))]:
+        tag = f"tag-sort-{p1}-{p2}"
+        bid = store.create_battle(tag, "gen3randombattle", p1, p2, tournament_id=tid)
+        store.finish_battle(bid, winner=winner_idx, total_turns=5)
+        store.set_battle_status(bid, "completed")
+
+    standings = store.get_tournament_standings(tid)
+    pts = [r["points"] for r in standings]
+    assert pts == sorted(pts, reverse=True)
+
+
+def test_get_tournament_battles_returns_all(store) -> None:
+    tid, mids = _make_tournament(store, n_players=2)
+    b1 = store.create_battle("tag-gb1", "gen3randombattle", mids[0], mids[1], tournament_id=tid)
+    b2 = store.create_battle("tag-gb2", "gen3randombattle", mids[1], mids[0], tournament_id=tid)
+
+    battles = store.get_tournament_battles(tid)
+    battle_ids = {b["id"] for b in battles}
+    assert b1 in battle_ids
+    assert b2 in battle_ids
+    assert len(battles) == 2
+
+
+def test_get_tournament_battles_not_mixed_with_other_tournaments(store) -> None:
+    tid1, mids1 = _make_tournament(store, n_players=2)
+    tid2, mids2 = _make_tournament(store, n_players=2)
+    b1 = store.create_battle("tag-mx1", "gen3randombattle", mids1[0], mids1[1], tournament_id=tid1)
+    b2 = store.create_battle("tag-mx2", "gen3randombattle", mids2[0], mids2[1], tournament_id=tid2)
+
+    battles1 = store.get_tournament_battles(tid1)
+    assert any(b["id"] == b1 for b in battles1)
+    assert all(b["id"] != b2 for b in battles1)
+
+
+def test_cancel_tournament_running(store) -> None:
+    tid, _ = _make_tournament(store)
+    result = store.cancel_tournament(tid)
+    assert result is True
+    t = store.get_tournament(tid)
+    assert t is not None
+    assert t["status"] == "cancelled"
+
+
+def test_cancel_tournament_already_finished_returns_false(store) -> None:
+    tid, _ = _make_tournament(store)
+    store.finish_tournament(tid, status="completed")
+    result = store.cancel_tournament(tid)
+    assert result is False
+
+
+def test_cancel_tournament_nonexistent_returns_false(store) -> None:
+    result = store.cancel_tournament(99999)
+    assert result is False

@@ -574,3 +574,121 @@ async def test_leaderboard_grouped_has_model_id(app, client: AsyncClient) -> Non
     assert len(claude_rows) == 1
     assert "model_id" in claude_rows[0]
     assert claude_rows[0]["model_id"] == mid
+
+
+# ---------------------------------------------------------------------------
+# Tournament API endpoints  (feat/tournament-mode)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_list_tournaments_empty(client: AsyncClient) -> None:
+    resp = await client.get("/api/tournaments")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_tournaments_returns_created(app, client: AsyncClient) -> None:
+    store = app.state.store
+    tid = store.create_tournament(
+        players=[{"provider": "random", "model_name": "bot0"}, {"provider": "random", "model_name": "bot1"}],
+        rounds=1,
+        prompt_version="v2",
+        total_battles=2,
+    )
+    resp = await client.get("/api/tournaments")
+    assert resp.status_code == 200
+    ids = [t["id"] for t in resp.json()]
+    assert tid in ids
+
+
+@pytest.mark.asyncio
+async def test_get_tournament_not_found(client: AsyncClient) -> None:
+    resp = await client.get("/api/tournaments/99999")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_tournament_standings_not_found(client: AsyncClient) -> None:
+    resp = await client.get("/api/tournaments/99999/standings")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_tournament_standings_empty_before_battles(app, client: AsyncClient) -> None:
+    store = app.state.store
+    tid = store.create_tournament(
+        players=[{"provider": "random", "model_name": "bot0"}, {"provider": "random", "model_name": "bot1"}],
+        rounds=1, prompt_version="v2", total_battles=2,
+    )
+    resp = await client.get(f"/api/tournaments/{tid}/standings")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+@pytest.mark.asyncio
+async def test_tournament_standings_populated(app, client: AsyncClient) -> None:
+    store = app.state.store
+    tid = store.create_tournament(
+        players=[{"provider": "random", "model_name": "bot0"}, {"provider": "random", "model_name": "bot1"}],
+        rounds=1, prompt_version="v2", total_battles=2,
+    )
+    a_id = store.get_or_create_model("random", "bot0", "v2")
+    b_id = store.get_or_create_model("random", "bot1", "v2")
+    bid = store.create_battle("tag-api-s", "gen3randombattle", a_id, b_id, tournament_id=tid)
+    store.finish_battle(bid, winner=1, total_turns=7)
+    store.set_battle_status(bid, "completed")
+
+    resp = await client.get(f"/api/tournaments/{tid}/standings")
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 2
+    winner = next(r for r in rows if r["model_id"] == a_id)
+    assert winner["wins"] == 1
+    assert winner["points"] == 3
+
+
+@pytest.mark.asyncio
+async def test_tournament_battles_not_found(client: AsyncClient) -> None:
+    resp = await client.get("/api/tournaments/99999/battles")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_tournament_battles_returns_list(app, client: AsyncClient) -> None:
+    store = app.state.store
+    tid = store.create_tournament(
+        players=[{"provider": "random", "model_name": "bot0"}, {"provider": "random", "model_name": "bot1"}],
+        rounds=1, prompt_version="v2", total_battles=1,
+    )
+    a_id = store.get_or_create_model("random", "bot0", "v2")
+    b_id = store.get_or_create_model("random", "bot1", "v2")
+    bid = store.create_battle("tag-api-tb", "gen3randombattle", a_id, b_id, tournament_id=tid)
+
+    resp = await client.get(f"/api/tournaments/{tid}/battles")
+    assert resp.status_code == 200
+    battles = resp.json()
+    assert len(battles) == 1
+    assert battles[0]["id"] == bid
+    assert "p1" in battles[0]
+    assert "p2" in battles[0]
+
+
+@pytest.mark.asyncio
+async def test_cancel_tournament_not_found(client: AsyncClient) -> None:
+    resp = await client.post("/api/tournaments/99999/cancel")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_cancel_tournament_running(app, client: AsyncClient) -> None:
+    store = app.state.store
+    tid = store.create_tournament(
+        players=[{"provider": "random", "model_name": "bot0"}, {"provider": "random", "model_name": "bot1"}],
+        rounds=1, prompt_version="v2", total_battles=2,
+    )
+    resp = await client.post(f"/api/tournaments/{tid}/cancel")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["cancelled"] is True
+    assert data["status"] == "cancelled"

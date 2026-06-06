@@ -59,6 +59,7 @@ async function cancelBattle(battleId) {
 
 export default function BattleField({
   p1State, p2State, battleInfo, battleResult, events, thinking, onDismiss, tournament,
+  onTournamentScoreboard,
 }) {
   const p1Mon   = p1State?.state?.my_active ?? null
   const p2Mon   = p2State?.state?.my_active ?? null
@@ -80,7 +81,7 @@ export default function BattleField({
     <div className="battlefield-wrapper">
       {/* Tournament progress bar — shows when a tournament is running */}
       {tournament && tournament.status !== 'completed' && (
-        <TournamentBar tournament={tournament} />
+        <TournamentBar tournament={tournament} onScoreboard={onTournamentScoreboard} />
       )}
 
       {/* Header row */}
@@ -173,13 +174,13 @@ export default function BattleField({
   )
 }
 
-function TournamentBar({ tournament }) {
+function TournamentBar({ tournament, onScoreboard }) {
   const pct = tournament.total > 0
     ? Math.round((tournament.done / tournament.total) * 100)
     : 0
 
   return (
-    <div className="tournament-bar">
+    <div className="tournament-bar" onClick={onScoreboard} style={{ cursor: onScoreboard ? 'pointer' : 'default' }} title={onScoreboard ? 'View scoreboard' : undefined}>
       <div className="tournament-bar-info">
         <span className="tournament-bar-label">TOURNAMENT</span>
         <span className="tournament-bar-progress">
@@ -190,6 +191,9 @@ function TournamentBar({ tournament }) {
         </span>
         {tournament.status === 'cancelled' && (
           <span className="tournament-bar-cancelled">CANCELLED</span>
+        )}
+        {onScoreboard && (
+          <span className="tournament-bar-scores-hint">SCORES →</span>
         )}
       </div>
       <div className="tournament-progress-track">
