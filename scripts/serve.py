@@ -20,7 +20,7 @@ from nidozo.api.app import create_app
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Start the Nidozo API server")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--port", type=int, default=5001)
     parser.add_argument("--db", default=None)
     parser.add_argument("--reload", action="store_true")
     args = parser.parse_args()

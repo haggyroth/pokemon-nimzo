@@ -85,7 +85,7 @@ Install [LM Studio](https://lmstudio.ai/), load a model, and start the local ser
 # Terminal 1 — Showdown server
 ./scripts/start_showdown.sh
 
-# Terminal 2 — API + WebSocket server (port 5000)
+# Terminal 2 — API + WebSocket server (port 5001)
 uv run python scripts/serve.py
 
 # Terminal 3 — React frontend (port 5173)
@@ -135,7 +135,7 @@ nidozo/
 │           └── v2/     JSON structured output (default)
 ├── frontend/           Vite + React live battlefield visualizer
 ├── scripts/
-│   ├── serve.py        uvicorn entrypoint (port 5000)
+│   ├── serve.py        uvicorn entrypoint (port 5001)
 │   ├── tournament.py   Round-robin CLI runner
 │   ├── run_battle.py   Single-battle CLI
 │   └── start_showdown.sh
