@@ -24,9 +24,22 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`. Keep the sub
 
 ## Code style
 
-- Python 3.12+, formatted with `ruff` (run `uv run ruff format .` before committing).
+- Python 3.12+, formatted and linted with `ruff` (run `uv run ruff format . && uv run ruff check src/` before committing).
+- Types: all source modules are fully typed; CI runs `mypy --strict`. Run `uv run mypy --strict src/` before pushing.
 - No secrets, `.env` files, or credentials committed.
 - The battle engine layer (`src/nidozo/battle/`) must remain correct with respect to Showdown mechanics — bugs there corrupt every downstream result.
+
+## Running the checks locally
+
+```bash
+uv run ruff check src/          # lint
+uv run mypy --strict src/       # type check
+uv run pytest                   # 358 tests, no Showdown required
+cd frontend && npm run lint      # frontend ESLint
+cd frontend && npm run build     # frontend build
+```
+
+CI runs all five gates in parallel on every PR.
 
 ## Hidden information
 
