@@ -149,3 +149,113 @@ def test_leaderboard_sorted_by_elo(store) -> None:
     assert rows[0]["model_name"] == "strong-model"
     assert rows[1]["model_name"] == "weak-model"
     assert rows[0]["rating"] > rows[1]["rating"]
+
+# ------------------------------------------------------------------
+# Model stats
+# ------------------------------------------------------------------
+
+def test_leaderboard_grouped_includes_model_id(store) -> None:
+    """Grouped leaderboard rows include a model_id field."""
+    mid = store.get_or_create_model("anthropic", "claude-test", "v2")
+    opp = store.get_or_create_model("random", "random", "v2")
+    bid = store.create_battle("tag-1", "gen3randombattle", mid, opp)
+    store.finish_battle(bid, winner=1, total_turns=10)
+    rows = store.leaderboard(grouped=True)
+    claude_row = next(r for r in rows if r["model_name"] == "claude-test")
+    assert "model_id" in claude_row
+    assert claude_row["model_id"] == mid
+
+
+def test_get_model_stats_returns_none_for_missing(store) -> None:
+    assert store.get_model_stats(99999) is None
+
+
+def test_get_model_stats_identity_fields(store) -> None:
+    mid = store.get_or_create_model("anthropic", "claude-test", "v2")
+    stats = store.get_model_stats(mid)
+    assert stats is not None
+    assert stats["model"]["provider"] == "anthropic"
+    assert stats["model"]["model_name"] == "claude-test"
+    assert stats["model"]["prompt_version"] == "v2"
+    assert "rating" in stats["model"]
+
+
+def test_get_model_stats_win_loss_counts(store) -> None:
+    mid = store.get_or_create_model("anthropic", "claude-test", "v2")
+    opp = store.get_or_create_model("random", "random", "v2")
+
+    bid1 = store.create_battle("t1", "gen3randombattle", mid, opp)
+    store.finish_battle(bid1, winner=1, total_turns=10)   # win (p1)
+
+    bid2 = store.create_battle("t2", "gen3randombattle", opp, mid)
+    store.finish_battle(bid2, winner=1, total_turns=8)    # loss (p2, opp won)
+
+    bid3 = store.create_battle("t3", "gen3randombattle", mid, opp)
+    store.finish_battle(bid3, winner=None, total_turns=50) # tie
+
+    stats = store.get_model_stats(mid)
+    assert stats is not None
+    m = stats["model"]
+    assert m["wins"] == 1
+    assert m["losses"] == 1
+    assert m["ties"] == 1
+
+
+def test_get_model_stats_elo_history(store) -> None:
+    mid = store.get_or_create_model("anthropic", "claude-test", "v2")
+    opp = store.get_or_create_model("random", "random", "v2")
+    for i in range(3):
+        bid = store.create_battle(f"h{i}", "gen3randombattle", mid, opp)
+        store.finish_battle(bid, winner=1, total_turns=10)
+
+    stats = store.get_model_stats(mid)
+    assert stats is not None
+    assert len(stats["elo_history"]) == 3
+    row = stats["elo_history"][0]
+    assert "rating_before" in row
+    assert "rating_after" in row
+    assert "delta" in row
+
+
+def test_get_model_stats_battle_history(store) -> None:
+    mid = store.get_or_create_model("anthropic", "claude-test", "v2")
+    opp = store.get_or_create_model("random", "random", "v2")
+    bid = store.create_battle("t1", "gen3randombattle", mid, opp)
+    store.finish_battle(bid, winner=1, total_turns=15)
+
+    stats = store.get_model_stats(mid)
+    assert stats is not None
+    assert len(stats["battle_history"]) == 1
+    b = stats["battle_history"][0]
+    assert b["result"] == "win"
+    assert "opponent" in b
+    assert b["total_turns"] == 15
+
+
+def test_get_model_stats_turn_stats(store) -> None:
+    mid = store.get_or_create_model("anthropic", "claude-test", "v2")
+    opp = store.get_or_create_model("random", "random", "v2")
+    bid = store.create_battle("t1", "gen3randombattle", mid, opp)
+    store.log_turn(bid, 1, "p1", "v2", "surf", True)
+    store.log_turn(bid, 2, "p1", "v2", None, False)
+    store.log_turn(bid, 1, "p2", "v2", "flamethrower", True)  # opponent — should not count
+
+    stats = store.get_model_stats(mid)
+    assert stats is not None
+    ts = stats["turn_stats"]
+    assert ts["total_turns"] == 2   # only p1 turns
+    assert ts["parse_ok"] == 1
+    assert ts["parse_fail"] == 1
+    assert ts["parse_success_rate"] == 50.0
+
+
+def test_get_model_stats_lessons(store) -> None:
+    mid = store.get_or_create_model("anthropic", "claude-test", "v2")
+    opp = store.get_or_create_model("random", "random", "v2")
+    bid = store.create_battle("t1", "gen3randombattle", mid, opp)
+    store.create_lesson(mid, bid, "Always use Water-type moves.")
+
+    stats = store.get_model_stats(mid)
+    assert stats is not None
+    assert len(stats["lessons"]) == 1
+    assert stats["lessons"][0]["content"] == "Always use Water-type moves."

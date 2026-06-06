@@ -301,7 +301,7 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
 // Main Leaderboard component
 // ---------------------------------------------------------------------------
 
-export default function Leaderboard({ onBattleStarted, onTournamentStarted, onReplaySelected }) {
+export default function Leaderboard({ onBattleStarted, onTournamentStarted, onReplaySelected, onModelSelected }) {
   const [rows, setRows]           = useState([])
   const [battles, setBattles]     = useState([])
   const [analyzing, setAnalyzing] = useState(null)
@@ -360,7 +360,7 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
             <table className="leaderboard-table">
               <thead>
                 <tr>
-                  <th>#</th><th>MODEL</th><th>ELO</th><th>GAMES</th><th>W / L / T</th>
+                  <th>#</th><th>MODEL</th><th>ELO</th><th>GAMES</th><th>W / L / T</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -388,6 +388,17 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
                       <span className="l">{r.losses}L</span>
                       {' / '}
                       {r.ties}T
+                    </td>
+                    <td>
+                      {r.model_id != null && (
+                        <button
+                          className="btn-stats"
+                          onClick={() => onModelSelected?.(r.model_id)}
+                          title="View model stats"
+                        >
+                          STATS →
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -2026,3 +2026,367 @@ body::after {
   margin-top: 0.3rem;
   opacity: 0.85;
 }
+
+/* ============================================================
+   LEADERBOARD — STATS button
+   ============================================================ */
+.btn-stats {
+  font-family: var(--font-pixel);
+  font-size: 0.38rem;
+  padding: 0.3rem 0.55rem;
+  background: transparent;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  color: var(--accent-cyan);
+  cursor: pointer;
+  letter-spacing: 0.08em;
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+.btn-stats:hover {
+  background: rgba(0, 170, 255, 0.12);
+  border-color: var(--border-glow);
+}
+
+/* ============================================================
+   MODEL STATS PAGE
+   ============================================================ */
+
+.stats-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  animation: fade-in 0.25s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.stats-back {
+  align-self: flex-start;
+  font-family: var(--font-pixel);
+  font-size: 0.45rem;
+  padding: 0.4rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  letter-spacing: 0.1em;
+  transition: color var(--transition), border-color var(--transition);
+}
+.stats-back:hover {
+  color: var(--accent-cyan);
+  border-color: var(--border-bright);
+}
+
+/* Header: identity + KPIs */
+.stats-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.25rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.stats-identity {
+  flex: 1;
+  min-width: 180px;
+}
+
+.stats-model-name {
+  font-family: var(--font-pixel);
+  font-size: 0.7rem;
+  color: var(--text-primary);
+  letter-spacing: 0.08em;
+  margin-bottom: 0.4rem;
+}
+
+.stats-provider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stats-kpis {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.kpi-block {
+  text-align: center;
+}
+
+.kpi-value {
+  font-family: var(--font-pixel);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.3rem;
+}
+
+.kpi-label {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stats-panel {
+  padding: 1rem 1.25rem;
+}
+
+.panel-subtitle {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 0.75rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.stats-loading,
+.stats-error {
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+.stats-error { color: var(--accent-red); }
+
+/* Two-column grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+@media (max-width: 640px) {
+  .stats-grid { grid-template-columns: 1fr; }
+}
+
+/* ---- ELO Sparkline ---- */
+.sparkline-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sparkline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sparkline-label {
+  font-family: var(--font-pixel);
+  font-size: 0.42rem;
+  color: var(--accent-cyan);
+  letter-spacing: 0.12em;
+}
+
+.sparkline-delta {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+.sparkline-delta.elo-delta-up   { color: var(--accent-green); }
+.sparkline-delta.elo-delta-down { color: var(--accent-red); }
+
+.sparkline-svg {
+  width: 100%;
+  height: 90px;
+  display: block;
+}
+
+.sparkline-empty {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  padding: 1rem 0;
+  text-align: center;
+}
+
+/* ---- Quality bar ---- */
+.quality-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.quality-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.7rem;
+}
+
+.quality-label { color: var(--text-dim); }
+.quality-value { font-weight: 600; }
+
+.quality-bar-empty {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  padding: 0.5rem 0;
+}
+
+.parse-bar-wrap {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-deep);
+  display: flex;
+  overflow: hidden;
+  margin-top: 0.25rem;
+}
+
+.parse-bar-ok {
+  height: 100%;
+  background: var(--accent-green);
+  transition: width 0.6s ease;
+}
+
+.parse-bar-fail {
+  height: 100%;
+  background: var(--accent-red);
+  opacity: 0.7;
+  transition: width 0.6s ease;
+}
+
+.parse-bar-legend {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+.parse-legend-ok   { color: var(--accent-green); }
+.parse-legend-fail { color: var(--accent-red); }
+
+/* ---- Battle history table ---- */
+.stats-battle-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.7rem;
+}
+
+.stats-battle-table th {
+  font-family: var(--font-pixel);
+  font-size: 0.36rem;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.stats-battle-table td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid rgba(30, 58, 95, 0.4);
+  vertical-align: middle;
+}
+
+.result-badge {
+  font-family: var(--font-pixel);
+  font-size: 0.38rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 2px;
+  letter-spacing: 0.06em;
+}
+.result-win  { background: rgba(0,255,136,0.15); color: var(--accent-green); border: 1px solid rgba(0,255,136,0.3); }
+.result-loss { background: rgba(255,68,85,0.15);  color: var(--accent-red);   border: 1px solid rgba(255,68,85,0.3); }
+.result-tie  { background: rgba(255,204,0,0.12);  color: var(--accent-amber); border: 1px solid rgba(255,204,0,0.25); }
+
+.opponent-cell {
+  color: var(--text-dim);
+  font-size: 0.65rem;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.turns-cell { color: var(--text-dim); text-align: right; }
+.date-cell  { color: var(--text-muted); font-size: 0.62rem; }
+
+.btn-replay-sm {
+  font-size: 0.55rem;
+  padding: 0.2rem 0.4rem;
+}
+
+/* ---- Lessons log ---- */
+.lessons-empty {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  line-height: 1.6;
+  padding: 0.5rem 0;
+}
+
+.lessons-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lesson-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.85rem;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.lesson-item:hover {
+  border-color: var(--border-bright);
+  background: var(--bg-raised);
+}
+
+.lesson-item.expanded {
+  border-color: var(--border-bright);
+}
+
+.lesson-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.6rem;
+  margin-bottom: 0.35rem;
+}
+
+.lesson-num {
+  font-family: var(--font-pixel);
+  font-size: 0.38rem;
+  color: var(--accent-cyan);
+}
+
+.lesson-date {
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.lesson-expand {
+  color: var(--text-muted);
+  font-size: 0.5rem;
+}
+
+.lesson-preview {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.lesson-body {
+  font-size: 0.72rem;
+  color: var(--text-primary);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  padding-top: 0.25rem;
+}

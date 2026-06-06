@@ -528,3 +528,49 @@ async def test_replay_merges_turns_by_number(app, client: AsyncClient, no_battle
     # p2 side
     assert turn["p2"]["action"] == "/choose move tackle"
     assert turn["p2"]["state"]["my_active"]["species"] == "Squirtle"
+
+
+# ---------------------------------------------------------------------------
+# Model stats endpoint
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_model_stats_not_found(client: AsyncClient) -> None:
+    resp = await client.get("/api/models/99999/stats")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_model_stats_returns_data(app, client: AsyncClient) -> None:
+    store = app.state.store
+    mid = store.get_or_create_model("anthropic", "claude-test", "v2")
+    opp = store.get_or_create_model("random", "random", "v2")
+    bid = store.create_battle("t1", "gen3randombattle", mid, opp)
+    store.finish_battle(bid, winner=1, total_turns=12)
+
+    resp = await client.get(f"/api/models/{mid}/stats")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["model"]["model_name"] == "claude-test"
+    assert data["model"]["wins"] == 1
+    assert "elo_history" in data
+    assert "battle_history" in data
+    assert "turn_stats" in data
+    assert "lessons" in data
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_grouped_has_model_id(app, client: AsyncClient) -> None:
+    store = app.state.store
+    mid = store.get_or_create_model("anthropic", "claude-test", "v2")
+    opp = store.get_or_create_model("random", "random", "v2")
+    bid = store.create_battle("t1", "gen3randombattle", mid, opp)
+    store.finish_battle(bid, winner=1, total_turns=10)
+
+    resp = await client.get("/api/leaderboard?grouped=true")
+    assert resp.status_code == 200
+    rows = resp.json()
+    claude_rows = [r for r in rows if r.get("model_name") == "claude-test"]
+    assert len(claude_rows) == 1
+    assert "model_id" in claude_rows[0]
+    assert claude_rows[0]["model_id"] == mid

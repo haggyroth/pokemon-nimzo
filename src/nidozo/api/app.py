@@ -243,6 +243,15 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         """Return the most recent post-battle lessons for a model."""
         return store.get_lessons(model_id, limit=limit)
 
+    @app.get("/api/models/{model_id}/stats")
+    def get_model_stats(model_id: int) -> dict[str, Any]:
+        """Comprehensive per-model stats: identity, ELO history, battle history,
+        turn quality, and lessons."""
+        stats = store.get_model_stats(model_id)
+        if stats is None:
+            raise HTTPException(status_code=404, detail="Model not found")
+        return stats
+
     @app.get("/api/tournaments/{tournament_id}")
     def get_tournament(tournament_id: int) -> dict[str, Any]:
         t = store.get_tournament(tournament_id)
