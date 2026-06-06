@@ -61,63 +61,21 @@
 - Leaderboard grouped by model (aggregates across prompt versions; `v1`/`v2` pill tags)
 - First meaningful ELO results: gemma-4-e2b 7-3 vs ministral-3-3b
 
+### v0.9 — Live Pipeline, Replay, Visual Polish & Richer Analysis
+- **Live pipeline**: all battles (UI or CLI) routed through the shared EventBus; tournament progress visible in real time
+- **Tournament UI**: configure N players and rounds in the browser; cancel individual battles mid-run; live progress bar + final standings overlay
+- **Battle Replay**: step through any completed battle turn by turn; HP timeline SVG; scrub slider; keyboard nav (← → Space Esc); auto-play
+- **Type-themed card backgrounds**: 18-type colour map; single-type corner wash; dual-type diagonal gradient split
+- **Battle animations**: hit flash, sprite shake, heal pulse, faint fade — driven by HP delta tracking with `useRef`
+- **Win probability timeline**: team HP ratio per turn; sparkline in analysis drawer and replay HP chart
+- **Turning-point detection**: turn with the largest single-turn win-prob swing, highlighted in both replay and analysis
+- **Blunder flagging**: suboptimal moves where score gap ≥ 40% of best option flagged with `⚠`; blunders panel in analysis
+- **RNG inference**: possible crit / possible miss inferred from actual vs expected HP drop; badges in replay and analysis log
+- 154 tests; parser fix for `"switch 1"` identifier form
+
 ---
 
 ## Upcoming
-
----
-
-### Phase 1 — Live Pipeline & UI Foundation
-*Goal: the GUI becomes the single point of entry. No terminal required to run or watch battles.*
-
-**Live Battles** (pipeline integration)
-- `tournament.py` routes battles through `POST /api/battles/start` instead of running directly
-- All battles — scripted or UI-triggered — publish events to the shared WebSocket bus
-- Tournament results visible live in the battlefield view, not just in the leaderboard after the fact
-- Fix: handle `"identifier":"switch 1"` (model outputs full command string instead of slot number)
-
-**UI as primary interface**
-- Tournament launcher in the UI: configure N players, rounds, and format; start from the browser
-- All settings and options accessible from the GUI (no CLI required for standard use)
-- CLI scripts remain and stay in sync with GUI features, but are the secondary path
-
-**Pause / Cancel Battle**
-- Stop button in the battlefield view cancels a running battle gracefully
-- Cancelled battles recorded in DB with `status=cancelled`; excluded from ELO
-
----
-
-### Phase 2 — Replay, Analysis & Visibility
-*Goal: every completed battle is fully reviewable and annotated.*
-
-**Battle Replay**
-- Step forward/backward through any completed battle turn by turn
-- Battlefield view rehydrates from stored `state_json` — same visual layout as live
-- Accessible from the Recent Battles panel with a ▶ REPLAY button
-
-**RNG Annotation**
-- Flag crits, misses, and secondary effect rolls in the turn log
-- Post-game analysis distinguishes "model made a poor call" from "model got unlucky"
-- RNG events highlighted in the replay timeline
-
-**Battle Animations**
-- Damage flash, shake, and faint animation for the active Pokémon cards
-- Animated HP bar drains (smooth transition, not instant snap)
-- Heal / status-recovery pulse effect
-- Explore Pokémon Showdown's existing animation assets as a source
-
-**Type-themed Card Backgrounds**
-- Each Pokémon card gets a background that reflects its type combination
-- Single-type: gradient wash in that type's palette (e.g. Fire = deep orange → ember glow)
-- Dual-type: diagonal or angular gradient blending both type colours (e.g. Water/Flying = teal → sky violet)
-- 18 base type palettes map to the existing `--type-*` CSS variables; dual-type combos are generated at render time
-- Background shifts when the active Pokémon switches mid-battle (smooth CSS transition)
-- Pairs with the card glow: border and glow colour also keyed to primary type
-
-**Richer Post-game Analysis**
-- Key turning-point detection: identify the turn where win probability shifted decisively
-- Blunder annotation: flag decisions that were significantly worse than the best available option
-- RNG-adjusted quality score: penalise bad decisions, not bad luck
 
 ---
 

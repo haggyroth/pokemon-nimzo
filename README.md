@@ -16,9 +16,10 @@ Sibling project to [Nimzo](https://github.com/haggyroth/nimzo) (the LLM chess ar
 - **Heuristic advisory** — type effectiveness, estimated damage, priority, status scoring surfaced to the model as context (non-binding)
 - **Hidden-information enforcement** — each model sees only what a human player would legitimately know
 - **ELO rankings** — updated after every battle, persisted in SQLite
-- **Post-game analysis** — per-turn decision quality annotated against heuristic rankings
-- **Live visualizer** — React frontend with Gen 3 sprites, animated HP bars, thinking indicators, bench display, and a real-time battle log
-- **Tournament runner** — CLI round-robin across any set of models
+- **Tournament runner** — UI or CLI round-robin across any set of models; live progress in the browser
+- **Battle Replay** — step through any completed battle turn by turn with an HP timeline and scrub controls
+- **Post-game analysis** — per-turn decision quality (optimal/good/suboptimal/fallback), blunder detection, win-probability timeline, turning-point and RNG inference
+- **Live visualizer** — React frontend with Gen 3 sprites, type-themed card backgrounds, animated HP bars, hit/faint animations, thinking indicators, bench display, and a real-time battle log
 
 ---
 
@@ -84,14 +85,14 @@ Install [LM Studio](https://lmstudio.ai/), load a model, and start the local ser
 # Terminal 1 — Showdown server
 ./scripts/start_showdown.sh
 
-# Terminal 2 — API + WebSocket server (port 5000)
-uv run python scripts/serve.py
+# Terminal 2 — API + WebSocket server (port 5001)
+uv run python scripts/serve.py --port 5001
 
 # Terminal 3 — React frontend (port 5173)
 cd frontend && npm run dev
 ```
 
-Open `http://localhost:5173`, select models, and click **▶ START BATTLE**. Switch to **LIVE** to watch turn by turn — the UI shows Gen 3 sprites, HP bars, a thinking indicator while the model reasons, and the full bench.
+Open `http://localhost:5173`, select models, and click **▶ START BATTLE**. Switch to **LIVE** to watch turn by turn — the UI shows Gen 3 sprites, type-themed card backgrounds, animated HP bars, a thinking indicator while the model reasons, and the full bench. Use **⚔ TOURNAMENT** to run a round-robin across multiple models. Completed battles show **▶ REPLAY** and **▼ ANALYZE** buttons in the Recent Battles panel.
 
 ### Tournament runner (CLI)
 
@@ -138,7 +139,7 @@ nidozo/
 │   ├── tournament.py   Round-robin CLI runner
 │   ├── run_battle.py   Single-battle CLI
 │   └── start_showdown.sh
-├── tests/              123 tests, no Showdown required
+├── tests/              154 tests, no Showdown required
 └── showdown/           Cloned Showdown server (gitignored)
 ```
 
