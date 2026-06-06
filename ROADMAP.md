@@ -139,3 +139,25 @@
 - Speed tie and priority bracket resolution visible in the battle log
 - Weather and terrain strategies tracked in analysis
 - Item usage annotated in turn logs
+
+---
+
+### Technical Debt & Housekeeping
+*Items identified in the v0.9 code review. Not blocking but should be addressed before they compound.*
+
+**Refactoring**
+- Move inline SQL from `app.py` (`get_turns`, tournament runner) into `BattleStore` methods — keeps the persistence boundary clean and improves testability
+- Split `app.py` into routing / orchestration / WebSocket layers as the file grows
+- Replace `serve.py --reload` flag (currently silently broken — uvicorn requires an import string, not an app instance, for reload mode)
+
+**Correctness**
+- Heuristic status-move keyword list contains bogus tokens (`"lovecaster"`, `"darkv"`) and uses substring matching that can misfire — replace with exact `move.id` checks
+- `AnthropicBackend` assumes `content[0].text`; multi-block or thinking responses would raise — iterate blocks and join text parts
+- Opponent `ability` field in serializer is not guarded the same way `item` is; add guard + hidden-info test
+
+**Infrastructure**
+- Add `CHANGELOG.md` and automate release notes generation (Phase 5 milestone)
+- Add Dependabot for Python and npm dependency updates
+- Add structured logging + a `/healthz` endpoint with graceful runner shutdown
+- Add E2E smoke tests (Playwright) covering start → watch → replay → analyze
+- Add `mypy`/type-check gate to CI (types are already thorough)
