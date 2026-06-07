@@ -57,6 +57,56 @@ function HeuristicDrawer({ heuristics }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Win-probability bar
+// ---------------------------------------------------------------------------
+
+function teamHpScore(state) {
+  if (!state) return null
+  const team = state.my_team ?? []
+  if (team.length > 0) {
+    return team.reduce((acc, m) => acc + Math.max(0, m.hp_fraction ?? 0), 0)
+  }
+  const active = state.my_active
+  return active ? Math.max(0, active.hp_fraction ?? 0.5) : null
+}
+
+function WinProbBar({ p1State, p2State, p1Label, p2Label }) {
+  const s1 = teamHpScore(p1State?.state)
+  const s2 = teamHpScore(p2State?.state)
+
+  if (s1 === null || s2 === null) return null
+
+  const total = s1 + s2
+  const p1Prob = total === 0 ? 0.5 : s1 / total
+  const p1Pct  = Math.round(p1Prob * 100)
+  const p2Pct  = 100 - p1Pct
+
+  const p1Name = p1Label?.split('/').pop() ?? 'P1'
+  const p2Name = p2Label?.split('/').pop() ?? 'P2'
+
+  return (
+    <div className="win-prob-bar">
+      <div className="win-prob-pcts">
+        <span className="win-prob-pct win-prob-pct--p1">
+          <span className="win-prob-name">{p1Name}</span>
+          <span className="win-prob-num">{p1Pct}%</span>
+        </span>
+        <span className="win-prob-mid-label">WIN PROB</span>
+        <span className="win-prob-pct win-prob-pct--p2">
+          <span className="win-prob-num">{p2Pct}%</span>
+          <span className="win-prob-name">{p2Name}</span>
+        </span>
+      </div>
+      <div className="win-prob-track">
+        <div className="win-prob-fill win-prob-fill--p1" style={{ width: `${p1Pct}%` }} />
+        <div className="win-prob-fill win-prob-fill--p2" style={{ width: `${p2Pct}%` }} />
+        <div className="win-prob-midline" />
+      </div>
+    </div>
+  )
+}
+
 function ThinkingBadge({ role }) {
   if (!role) return null
   return (
@@ -150,6 +200,14 @@ export default function BattleField({
           )}
         </div>
       </div>
+
+      {/* Win-probability bar — shown once both players have emitted at least one turn */}
+      <WinProbBar
+        p1State={p1State}
+        p2State={p2State}
+        p1Label={battleInfo?.p1}
+        p2Label={battleInfo?.p2}
+      />
 
       {/* Arena */}
       <div className="arena">
