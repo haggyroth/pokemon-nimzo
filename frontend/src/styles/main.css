@@ -1341,6 +1341,23 @@ body::after {
 .thinking-badge-dot:nth-child(2) { animation-delay: 0.2s; }
 .thinking-badge-dot:nth-child(3) { animation-delay: 0.4s; }
 
+/* Coach variant — distinct teal accent */
+.thinking-badge--coach {
+  background: rgba(0, 220, 180, 0.08);
+  border-color: rgba(0, 220, 180, 0.28);
+  animation: thinking-coach-pulse 1.8s ease-in-out infinite;
+}
+
+.thinking-badge-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+@keyframes thinking-coach-pulse {
+  0%, 100% { border-color: rgba(0, 220, 180, 0.28); box-shadow: none; }
+  50%       { border-color: rgba(0, 220, 180, 0.6);  box-shadow: 0 0 10px rgba(0, 220, 180, 0.18); }
+}
+
 /* ============================================================
    BENCH ROW (reserve Pokémon)
    ============================================================ */
@@ -1477,6 +1494,28 @@ body::after {
 .model-presets-status.offline {
   color: var(--accent-red);
   opacity: 0.6;
+}
+
+/* ============================================================
+   COACH SELECTOR
+   ============================================================ */
+.coach-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  background: rgba(0, 220, 180, 0.04);
+  border: 1px solid rgba(0, 220, 180, 0.15);
+  border-radius: var(--radius-sm);
+  margin-top: 0.15rem;
+}
+
+.coach-selector-label {
+  font-family: var(--font-pixel);
+  font-size: 0.42rem;
+  letter-spacing: 0.08em;
+  color: rgba(0, 220, 180, 0.75);
+  text-transform: uppercase;
 }
 
 /* ============================================================
@@ -1940,6 +1979,53 @@ body::after {
 .tap-player.p2 { color: var(--accent-amber); }
 .tap-action { color: var(--text-primary); }
 .tap-fallback { color: var(--accent-red); font-size: 0.6rem; }
+
+.tap-row-wrap {
+  border-bottom: 1px solid rgba(30,58,95,0.25);
+}
+.tap-row-wrap:last-child { border-bottom: none; }
+.tap-row-wrap .tap-row { border-bottom: none; }
+
+.tap-coach-toggle {
+  margin-left: auto;
+  background: none;
+  border: 1px solid rgba(0, 220, 180, 0.25);
+  border-radius: 2px;
+  color: rgba(0, 220, 180, 0.7);
+  font-size: 0.55rem;
+  padding: 0.15rem 0.4rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.tap-coach-toggle:hover {
+  border-color: rgba(0, 220, 180, 0.6);
+  color: rgba(0, 220, 180, 1);
+}
+
+.tap-coach-advice {
+  padding: 0.5rem 0.75rem 0.6rem;
+  margin: 0 0 0.35rem;
+  background: rgba(0, 220, 180, 0.05);
+  border-left: 2px solid rgba(0, 220, 180, 0.35);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.tap-coach-label {
+  display: block;
+  font-family: var(--font-pixel);
+  font-size: 0.38rem;
+  letter-spacing: 0.08em;
+  color: rgba(0, 220, 180, 0.65);
+  margin-bottom: 0.35rem;
+}
+.tap-coach-text {
+  margin: 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
 
 /* Loading / error overlay */
 .replay-loading {

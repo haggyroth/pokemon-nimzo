@@ -10,13 +10,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Multi-agent coach mode** — before each turn, a configurable "coach" model receives the same battle state (same hidden-information rules) and returns free-form strategic analysis in plain English; that advice is then injected into the player model's prompt before it chooses an action. Configurable per player in both the battle form and the tournament form. Coach advice is stored in the `turns` table (`coach_advice TEXT`), surfaced in the battle-replay turn panel (🎓 toggle), and emitted as typed WebSocket events (`agent: "coach" | "player"`) so the live battlefield shows a distinct teal "COACH ANALYZING" badge. Supports any provider (Anthropic, OpenAI, LM Studio) independently of the player's provider (#50)
 - **Tournament brackets** — single-elimination and double-elimination formats alongside existing round-robin. SE: correctly seeded bracket (seed 1 meets seed 2 only in the final) with bye handling for non-power-of-2 player counts. DE: winners bracket + losers bracket with correct WB→LB loser routing, LB survivor vs WB-loser pairing per round, grand final + bracket-reset match (GFR activated if the LB player wins the GF). Brackets are created lazily (one round at a time) so future matchups aren't pre-committed. Champion identity included in `tournament_end` event. Bracket state persisted to SQLite and surfaced via API; `bracket_update` WebSocket event after each match. 27 new bracket unit tests (#51)
 - **Bracket visualizer** in TournamentView — "BRACKET" tab (default for elim formats) shows a scrollable match-card grid: seeds, player names, live-pulsing highlight for the running match, winner ✓ / loser dimming, replay button per match. Double-elim shows WB, LB, and Grand Final as separate sections
 - **Format selector** in the tournament form — three chips: Round Robin / Single Elimination / Double Elimination; rounds-per-matchup field hidden for elimination formats; battle count estimate updates instantly
 - Live win-probability bar in the BattleField view — updates each turn from team HP data; animates with a smooth CSS transition (#48)
 
 ### Changed
-- DB schema bumped to v7 (non-breaking: adds `tournament_format TEXT DEFAULT 'round_robin'` and `bracket_state TEXT` columns to `tournaments`)
+- DB schema bumped to v8 (non-breaking: v7 adds `tournament_format`/`bracket_state` to `tournaments`; v8 adds `coach_advice TEXT` to `turns`)
 - `api/app.py` (1009 lines) split into focused modules: `models.py`, `helpers.py`, `orchestration.py`, `routes.py`, `ws.py`; `app.py` is now a slim factory (#47)
 
 ---

@@ -138,29 +138,49 @@ const RNG_META = {
 
 // Declared outside TurnActions so it's not recreated on every render.
 function ActionRow({ role, label, data, ann }) {
+  const [coachOpen, setCoachOpen] = useState(false)
   if (!data) return null
   const action = data.action?.replace(/^\/choose\s+/, '') ?? '—'
   const rng = ann?.rng_flag ? RNG_META[ann.rng_flag] : null
+  const coachAdvice = data.coach_advice ?? null
 
   return (
-    <div className="tap-row">
-      <span className={`tap-player ${role}`}>{label}</span>
-      <span className="tap-action">
-        {action}
-        {!data.parse_success && (
-          <span className="tap-fallback"> · random fallback</span>
+    <div className="tap-row-wrap">
+      <div className="tap-row">
+        <span className={`tap-player ${role}`}>{label}</span>
+        <span className="tap-action">
+          {action}
+          {!data.parse_success && (
+            <span className="tap-fallback"> · random fallback</span>
+          )}
+        </span>
+        {ann && ann.decision_quality !== 'no_data' && (
+          <span className={`tap-quality tap-q-${ann.decision_quality}`}>
+            {ann.decision_quality.toUpperCase()}
+            {ann.is_blunder && ' ⚠'}
+          </span>
         )}
-      </span>
-      {ann && ann.decision_quality !== 'no_data' && (
-        <span className={`tap-quality tap-q-${ann.decision_quality}`}>
-          {ann.decision_quality.toUpperCase()}
-          {ann.is_blunder && ' ⚠'}
-        </span>
-      )}
-      {rng && (
-        <span className={`tap-rng ${rng.cls}`} title={rng.label}>
-          {rng.icon} {rng.label}
-        </span>
+        {rng && (
+          <span className={`tap-rng ${rng.cls}`} title={rng.label}>
+            {rng.icon} {rng.label}
+          </span>
+        )}
+        {coachAdvice && (
+          <button
+            className="tap-coach-toggle"
+            type="button"
+            onClick={() => setCoachOpen(o => !o)}
+            title={coachOpen ? 'Hide coach analysis' : 'Show coach analysis'}
+          >
+            🎓 {coachOpen ? '▲' : '▼'}
+          </button>
+        )}
+      </div>
+      {coachAdvice && coachOpen && (
+        <div className="tap-coach-advice">
+          <span className="tap-coach-label">COACH ANALYSIS</span>
+          <p className="tap-coach-text">{coachAdvice}</p>
+        </div>
       )}
     </div>
   )

@@ -37,6 +37,7 @@ class StreamingLLMPlayer(LLMPlayer):
         lessons: list[str] | None = None,
         **kwargs: Any,
     ) -> None:
+        # coach is forwarded to LLMPlayer via **kwargs
         super().__init__(
             player_role=player_role,
             on_thinking=self._emit_thinking,
