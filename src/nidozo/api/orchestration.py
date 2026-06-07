@@ -442,3 +442,239 @@ async def generate_and_store_lessons(
                 "Failed to generate/store lesson for model %d battle %d: %s",
                 model_id, battle_id, exc,
             )
+
+
+async def run_bracket_tournament(
+    req: StartTournamentRequest,
+    tournament_id: int,
+    player_specs: list[dict[str, Any]],
+    store: Any,
+    bus: Any,
+    active_tasks: dict[int, asyncio.Task[None]],
+) -> None:
+    """Run a single-elim or double-elim tournament round by round.
+
+    Unlike round-robin (where all battles are pre-created), bracket
+    tournaments create battles lazily — we only know future matchups
+    after earlier rounds resolve.
+    """
+    from poke_env import LocalhostServerConfiguration
+
+    from nidozo.battle.tiers import TIER_TO_FORMAT
+    from nidozo.tournament.bracket import (
+        build_bracket,
+        get_pending_matches,
+        record_result,
+        resolve_seed,
+    )
+
+    do_draft = req.tier != "random" and req.draft
+    showdown_format = (
+        "gen3randombattle" if req.tier == "random"
+        else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+    )
+    effective_prompt = "v3" if do_draft else req.prompt_version
+    cfg = LocalhostServerConfiguration
+
+    # Build initial bracket state
+    bracket_state = build_bracket(player_specs, req.tournament_format)
+    store.update_bracket_state(tournament_id, bracket_state)
+
+    # Estimate total battles: SE = n-1, DE = 2n-2 or 2n-1 (approx)
+    n = len(player_specs)
+    if req.tournament_format == "single_elim":
+        estimated_total = n - 1
+    else:
+        estimated_total = 2 * n - 1  # may vary with bracket reset
+
+    await bus.publish({
+        "type": "tournament_start",
+        "tournament_id": tournament_id,
+        "players": player_specs,
+        "total_battles": estimated_total,
+        "rounds": 0,
+        "tier": req.tier,
+        "tournament_format": req.tournament_format,
+    })
+    await bus.publish({
+        "type": "bracket_update",
+        "tournament_id": tournament_id,
+        "bracket": bracket_state,
+    })
+
+    battle_num = 0
+    cancelled = False
+
+    try:
+        while True:
+            pending = get_pending_matches(bracket_state)
+            if not pending:
+                break
+
+            for match in pending:
+                match_id = match["match_id"]
+                p1_seed  = match["p1_seed"]
+                p2_seed  = match["p2_seed"]
+                p1_info  = resolve_seed(bracket_state, p1_seed)
+                p2_info  = resolve_seed(bracket_state, p2_seed)
+
+                if p1_info is None or p2_info is None:
+                    logger.error(
+                        "Bracket %d: match %s missing player info — skipping",
+                        tournament_id, match_id,
+                    )
+                    continue
+
+                p1_prov  = p1_info["provider"]
+                p1_model = p1_info["model_name"]
+                p2_prov  = p2_info["provider"]
+                p2_model = p2_info["model_name"]
+
+                p1_label = f"{p1_prov}/{p1_model}"
+                p2_label = f"{p2_prov}/{p2_model}"
+                battle_num += 1
+
+                # Create battle row
+                p1_db_id = store.get_or_create_model(p1_prov, p1_model, effective_prompt)
+                p2_db_id = store.get_or_create_model(p2_prov, p2_model, effective_prompt)
+                battle_id = store.create_battle(
+                    f"bracket-{tournament_id}-{match_id}",
+                    showdown_format, p1_db_id, p2_db_id,
+                    tournament_id=tournament_id,
+                )
+                match["battle_id"] = battle_id
+                match["status"] = "running"
+                store.update_bracket_state(tournament_id, bracket_state)
+
+                task = asyncio.current_task()
+                if task:
+                    active_tasks[battle_id] = task
+
+                await bus.publish({
+                    "type": "tournament_progress",
+                    "tournament_id": tournament_id,
+                    "battle_num": battle_num,
+                    "total_battles": estimated_total,
+                    "battle_id": battle_id,
+                    "p1": p1_label,
+                    "p2": p2_label,
+                    "match_id": match_id,
+                })
+
+                try:
+                    t_p1_id = p1_db_id
+                    t_p2_id = p2_db_id
+                    t_p1_lessons = (
+                        [r["content"] for r in store.get_lessons(t_p1_id)]
+                        if p1_prov != "random" else None
+                    )
+                    t_p2_lessons = (
+                        [r["content"] for r in store.get_lessons(t_p2_id)]
+                        if p2_prov != "random" else None
+                    )
+
+                    p1 = _build_streaming_player(
+                        p1_prov, p1_model, "p1",
+                        effective_prompt, store, battle_id, bus, cfg, showdown_format,
+                        lessons=t_p1_lessons,
+                    )
+                    p2 = _build_streaming_player(
+                        p2_prov, p2_model, "p2",
+                        effective_prompt, store, battle_id, bus, cfg, showdown_format,
+                        lessons=t_p2_lessons,
+                    )
+
+                    store.set_battle_status(battle_id, "running")
+                    await bus.publish({
+                        "type": "battle_start",
+                        "battle_id": battle_id,
+                        "tournament_id": tournament_id,
+                        "p1": p1_label,
+                        "p2": p2_label,
+                        "format": showdown_format,
+                        "tier": req.tier,
+                        "drafted": do_draft,
+                        "match_id": match_id,
+                    })
+
+                    await p1.battle_against(p2, n_battles=1)
+
+                    winner_slot = 1 if p1.n_won_battles > 0 else 2
+                    real_tag = next(iter(p1.battles), f"battle-{battle_id}")
+                    battle_obj = p1.battles.get(real_tag)
+                    total_turns = battle_obj.turn if battle_obj else 0
+
+                    store.update_battle_tag(battle_id, real_tag)
+                    store.finish_battle(battle_id, winner_slot, total_turns)
+                    store.set_battle_status(battle_id, "completed")
+
+                    await bus.publish({
+                        "type": "battle_end",
+                        "battle_id": battle_id,
+                        "tournament_id": tournament_id,
+                        "winner": winner_slot,
+                        "total_turns": total_turns,
+                        "match_id": match_id,
+                    })
+
+                    # Advance bracket
+                    record_result(bracket_state, match_id, winner_slot, battle_id)
+                    store.update_bracket_state(tournament_id, bracket_state)
+
+                    await bus.publish({
+                        "type": "bracket_update",
+                        "tournament_id": tournament_id,
+                        "bracket": bracket_state,
+                    })
+
+                    turns = store.get_turns_basic(battle_id)
+                    _t: asyncio.Task[None] = asyncio.create_task(
+                        generate_and_store_lessons(
+                            store, battle_id, winner_slot, total_turns, turns,
+                            p1_provider=p1_prov, p1_model=p1_model,
+                            p1_id=t_p1_id, p1_opponent=p2_label,
+                            p2_provider=p2_prov, p2_model=p2_model,
+                            p2_id=t_p2_id, p2_opponent=p1_label,
+                        )
+                    )
+
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    logger.error(
+                        "Bracket %d match %s failed: %s", tournament_id, match_id, exc
+                    )
+                    store.set_battle_status(battle_id, "failed")
+                    await bus.publish({
+                        "type": "error", "battle_id": battle_id, "message": str(exc),
+                    })
+                finally:
+                    active_tasks.pop(battle_id, None)
+
+            # Check if champion is known
+            if bracket_state.get("champion_seed") is not None:
+                break
+
+    except asyncio.CancelledError:
+        logger.info("Bracket tournament %d cancelled at battle %d", tournament_id, battle_num)
+        store.finish_tournament(tournament_id, status="cancelled")
+        await bus.publish({
+            "type": "tournament_cancelled",
+            "tournament_id": tournament_id,
+            "battles_completed": battle_num,
+        })
+        cancelled = True
+        raise
+
+    if not cancelled:
+        store.finish_tournament(tournament_id, status="completed")
+        champion_seed = bracket_state.get("champion_seed")
+        champion_info = resolve_seed(bracket_state, champion_seed) if champion_seed else None
+        leaderboard = store.leaderboard()
+        await bus.publish({
+            "type": "tournament_end",
+            "tournament_id": tournament_id,
+            "leaderboard": leaderboard,
+            "bracket": bracket_state,
+            "champion": champion_info,
+        })

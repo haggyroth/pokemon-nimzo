@@ -78,17 +78,46 @@ class BattleStore:
         prompt_version: str,
         total_battles: int,
         tier: str = "random",
+        tournament_format: str = "round_robin",
+        bracket_state: dict[str, Any] | None = None,
     ) -> int:
         """Insert a tournament row and return its id."""
         cur = self._conn.execute(
-            """INSERT INTO tournaments (players, rounds, prompt_version, total_battles, tier)
-               VALUES (?,?,?,?,?)""",
-            (json.dumps(players), rounds, prompt_version, total_battles, tier),
+            """INSERT INTO tournaments
+               (players, rounds, prompt_version, total_battles, tier,
+                tournament_format, bracket_state)
+               VALUES (?,?,?,?,?,?,?)""",
+            (
+                json.dumps(players), rounds, prompt_version, total_battles, tier,
+                tournament_format,
+                json.dumps(bracket_state) if bracket_state is not None else None,
+            ),
         )
         self._conn.commit()
         row_id = cur.lastrowid
         assert row_id is not None
         return row_id
+
+    def update_bracket_state(
+        self,
+        tournament_id: int,
+        bracket_state: dict[str, Any],
+    ) -> None:
+        """Persist the current bracket state JSON."""
+        self._conn.execute(
+            "UPDATE tournaments SET bracket_state=? WHERE id=?",
+            (json.dumps(bracket_state), tournament_id),
+        )
+        self._conn.commit()
+
+    def get_bracket_state(self, tournament_id: int) -> dict[str, Any] | None:
+        """Return parsed bracket_state dict, or None if absent."""
+        row = self._conn.execute(
+            "SELECT bracket_state FROM tournaments WHERE id=?", (tournament_id,)
+        ).fetchone()
+        if not row or not row["bracket_state"]:
+            return None
+        return json.loads(row["bracket_state"])  # type: ignore[no-any-return]
 
     def finish_tournament(self, tournament_id: int, status: str = "completed") -> None:
         self._conn.execute(
@@ -111,6 +140,7 @@ class BattleStore:
             """SELECT t.id, t.players, t.rounds, t.prompt_version,
                       t.total_battles, t.status, t.created_at, t.finished_at,
                       COALESCE(t.tier, 'random') AS tier,
+                      COALESCE(t.tournament_format, 'round_robin') AS tournament_format,
                       COUNT(CASE WHEN b.status='completed' THEN 1 END) AS battles_completed
                FROM tournaments t
                LEFT JOIN battles b ON b.tournament_id = t.id

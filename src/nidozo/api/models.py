@@ -33,6 +33,7 @@ class StartTournamentRequest(BaseModel):
     prompt_version: str = "v2"
     tier: str = "random"   # "random" | "ou" | "ubers" | "uu" | "nu" | "lc" | "freeforall"
     draft: bool = False    # If True and tier != "random", run LLM draft phase before each battle
+    tournament_format: str = "round_robin"  # "round_robin" | "single_elim" | "double_elim"
 
 
 class StartTournamentResponse(BaseModel):

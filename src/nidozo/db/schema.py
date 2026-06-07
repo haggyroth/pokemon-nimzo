@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # Table definitions only — safe to run against any DB version via IF NOT EXISTS.
 # Indexes are kept separate because they may reference columns (e.g. tournament_id)
@@ -35,15 +35,17 @@ CREATE TABLE IF NOT EXISTS elo_ratings (
 
 -- Round-robin or bracket tournament sessions
 CREATE TABLE IF NOT EXISTS tournaments (
-    id             INTEGER PRIMARY KEY,
-    players        TEXT    NOT NULL,  -- JSON array of {provider, model_name}
-    rounds         INTEGER NOT NULL DEFAULT 1,
-    prompt_version TEXT    NOT NULL DEFAULT 'v2',
-    total_battles  INTEGER NOT NULL DEFAULT 0,
-    tier           TEXT    NOT NULL DEFAULT 'random',  -- 'random' | 'ou' | 'ubers' | ...
-    status         TEXT    NOT NULL DEFAULT 'running',  -- running|completed|cancelled
-    created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-    finished_at    TEXT
+    id                INTEGER PRIMARY KEY,
+    players           TEXT    NOT NULL,  -- JSON array of {provider, model_name}
+    rounds            INTEGER NOT NULL DEFAULT 1,
+    prompt_version    TEXT    NOT NULL DEFAULT 'v2',
+    total_battles     INTEGER NOT NULL DEFAULT 0,
+    tier              TEXT    NOT NULL DEFAULT 'random',  -- 'random' | 'ou' | 'ubers' | ...
+    status            TEXT    NOT NULL DEFAULT 'running',  -- running|completed|cancelled
+    tournament_format TEXT    NOT NULL DEFAULT 'round_robin',  -- 'round_robin'|'single_elim'|'double_elim'
+    bracket_state     TEXT,   -- JSON bracket state (NULL for round_robin)
+    created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    finished_at       TEXT
 );
 
 -- One row per completed battle
@@ -264,4 +266,17 @@ def migrate(conn: sqlite3.Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_teams_model ON teams(model_id, created_at)
         """)
         conn.execute("UPDATE schema_version SET version=6")
+        conn.commit()
+
+    if version < 7:
+        # Add tournament_format and bracket_state columns for bracket tournament support
+        for col, defn in (
+            ("tournament_format", "TEXT NOT NULL DEFAULT 'round_robin'"),
+            ("bracket_state",     "TEXT"),
+        ):
+            try:
+                conn.execute(f"ALTER TABLE tournaments ADD COLUMN {col} {defn}")
+            except sqlite3.OperationalError:
+                pass  # column already exists
+        conn.execute("UPDATE schema_version SET version=7")
         conn.commit()
