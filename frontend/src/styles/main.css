@@ -409,6 +409,89 @@ body::after {
   color: var(--text-dim);
 }
 
+/* Win-probability bar */
+.win-prob-bar {
+  padding: 0.3rem 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(to bottom, var(--bg-panel), transparent);
+}
+
+.win-prob-pcts {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.3rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+}
+
+.win-prob-pct {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.win-prob-pct--p1 { color: var(--border-glow); }
+.win-prob-pct--p2 { color: var(--accent-red); }
+
+.win-prob-name {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  opacity: 0.7;
+  letter-spacing: 0.04em;
+  max-width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.win-prob-num {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.win-prob-mid-label {
+  font-size: 0.5rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.win-prob-track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-raised);
+  display: flex;
+}
+
+.win-prob-fill {
+  height: 100%;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.win-prob-fill--p1 {
+  background: linear-gradient(to right, #0066cc, var(--border-glow));
+}
+
+.win-prob-fill--p2 {
+  background: linear-gradient(to left, #cc2233, var(--accent-red));
+  margin-left: auto;
+}
+
+.win-prob-midline {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+}
+
 /* Arena */
 .arena {
   display: grid;
