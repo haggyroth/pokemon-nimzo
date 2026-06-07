@@ -188,6 +188,7 @@ Vite 8 requires Node 20.19+ or 22.12+. Showdown works with Node 18–22. Check w
 
 ## See also
 
+- [CHANGELOG.md](CHANGELOG.md) — version history
 - [ROADMAP.md](ROADMAP.md) — planned features
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute
 - [poke-env docs](https://poke-env.readthedocs.io/)
