@@ -3836,3 +3836,247 @@ body::after {
 .dc-blunder-val {
   color: var(--accent-amber) !important;
 }
+
+/* ============================================================
+   TOURNAMENT FORMAT CHIPS (Leaderboard form)
+   ============================================================ */
+.format-chips {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.format-chip {
+  font-family: var(--font-pixel);
+  font-size: 0.38rem;
+  padding: 0.3rem 0.7rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text-dim);
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: all var(--transition);
+}
+.format-chip:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+.format-chip.active {
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
+  background: rgba(255, 176, 0, 0.07);
+}
+
+/* ============================================================
+   BRACKET VIEW
+   ============================================================ */
+.bracket-container {
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+}
+
+.bracket-section-label {
+  font-family: var(--font-pixel);
+  font-size: 0.45rem;
+  letter-spacing: 0.1em;
+  color: var(--accent-cyan);
+  padding: 0.6rem 0 0.4rem;
+  text-transform: uppercase;
+}
+.bracket-section-label--losers {
+  color: var(--accent-amber);
+}
+.bracket-section-label--gf {
+  color: var(--accent-green);
+}
+
+.bracket-track {
+  display: flex;
+  flex-direction: row;
+  gap: 1.5rem;
+  align-items: flex-start;
+  padding-bottom: 0.5rem;
+}
+.bracket-track--losers,
+.bracket-track--gf {
+  margin-top: 0.25rem;
+}
+
+/* Round column */
+.bracket-round {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 140px;
+}
+
+.bracket-round-label {
+  font-family: var(--font-pixel);
+  font-size: 0.38rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-align: center;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.bracket-round-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* Individual match card */
+.bracket-match {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  min-width: 140px;
+  transition: border-color var(--transition);
+}
+
+.bracket-match.bm-running {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 8px rgba(0, 220, 255, 0.15);
+  animation: bracket-match-pulse 2s ease-in-out infinite;
+}
+
+@keyframes bracket-match-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(0, 220, 255, 0.15); }
+  50%       { box-shadow: 0 0 14px rgba(0, 220, 255, 0.3); }
+}
+
+.bracket-match.bm-done {
+  border-color: rgba(0, 255, 136, 0.25);
+}
+
+.bracket-match.bm-bye {
+  opacity: 0.45;
+  border-style: dashed;
+}
+
+.bm-slot {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.bm-slot-p2 { border-bottom: none; }
+
+.bm-slot.bm-winner {
+  background: rgba(0, 255, 136, 0.07);
+  color: var(--accent-green);
+}
+.bm-slot.bm-loser {
+  opacity: 0.45;
+}
+
+.bm-seed {
+  font-size: 0.5rem;
+  color: var(--text-muted);
+  min-width: 1.2rem;
+  text-align: right;
+}
+.bm-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.62rem;
+}
+.bm-crown {
+  color: var(--accent-green);
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.bm-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.5rem;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.bm-id {
+  font-size: 0.42rem;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  flex: 1;
+}
+
+.bm-live-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  animation: thinking-badge-pulse 1.2s ease-in-out infinite;
+}
+
+.bm-replay-btn {
+  font-size: 0.48rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  transition: all var(--transition);
+}
+.bm-replay-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* Champion banner */
+.bracket-champion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 1rem 1.5rem;
+  background: rgba(255, 176, 0, 0.06);
+  border: 1px solid rgba(255, 176, 0, 0.3);
+  border-radius: var(--radius-sm);
+  margin-top: 0.75rem;
+  min-width: 140px;
+}
+
+.bracket-champion-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+.bracket-champion-name {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--accent-amber);
+  font-weight: 600;
+}
+.bracket-champion-label {
+  font-family: var(--font-pixel);
+  font-size: 0.38rem;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+}
+
+/* Empty state */
+.bracket-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+.bracket-empty-msg {
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}

@@ -20,7 +20,7 @@ from nidozo.api.models import (
     StartTournamentRequest,
     StartTournamentResponse,
 )
-from nidozo.api.orchestration import run_battles, run_tournament
+from nidozo.api.orchestration import run_battles, run_bracket_tournament, run_tournament
 from nidozo.db.store import BattleStore
 
 logger = logging.getLogger(__name__)
@@ -188,9 +188,16 @@ def create_router(
 
     @router.get("/api/tournaments/{tournament_id}")
     def get_tournament(tournament_id: int) -> dict[str, Any]:
+        import json as _json
         t = store.get_tournament(tournament_id)
         if not t:
             raise HTTPException(status_code=404, detail="Tournament not found")
+        # Parse bracket_state JSON so the client receives an object, not a string
+        if t.get("bracket_state") and isinstance(t["bracket_state"], str):
+            try:
+                t["bracket_state"] = _json.loads(t["bracket_state"])
+            except Exception:
+                t["bracket_state"] = None
         return t
 
     @router.get("/api/tournaments/{tournament_id}/standings")
@@ -324,6 +331,12 @@ def create_router(
             raise HTTPException(status_code=400, detail="Need at least 2 players")
         if not is_valid_tier(req.tier) and req.tier != "random":
             raise HTTPException(status_code=400, detail=f"Unknown tier: {req.tier!r}")
+        valid_formats = {"round_robin", "single_elim", "double_elim"}
+        if req.tournament_format not in valid_formats:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown tournament format: {req.tournament_format!r}",
+            )
 
         showdown_format = (
             "gen3randombattle" if req.tier == "random"
@@ -331,13 +344,43 @@ def create_router(
         )
         effective_prompt = "v3" if (req.tier != "random" and req.draft) else req.prompt_version
 
-        pairs = list(itertools.combinations(range(len(req.players)), 2))
-        total = len(pairs) * req.rounds * 2
-
         player_specs = [
             {"provider": p.provider, "model_name": _model_name(p.provider, p.model)}
             for p in req.players
         ]
+
+        # --- Bracket formats (single_elim / double_elim) ---
+        if req.tournament_format in ("single_elim", "double_elim"):
+            n = len(player_specs)
+            estimated_total = n - 1 if req.tournament_format == "single_elim" else 2 * n - 1
+
+            tournament_id = store.create_tournament(
+                players=player_specs,
+                rounds=1,
+                prompt_version=effective_prompt,
+                total_battles=estimated_total,
+                tier=req.tier,
+                tournament_format=req.tournament_format,
+            )
+
+            background_tasks.add_task(
+                run_bracket_tournament,
+                req, tournament_id, player_specs, store, bus, active_tasks,
+            )
+
+            return StartTournamentResponse(
+                tournament_id=tournament_id,
+                battle_ids=[],
+                total_battles=estimated_total,
+                message=(
+                    f"{req.tournament_format.replace('_', ' ').title()} tournament started: "
+                    f"{n} players, ~{estimated_total} battles."
+                ),
+            )
+
+        # --- Round-robin ---
+        pairs = list(itertools.combinations(range(len(req.players)), 2))
+        total = len(pairs) * req.rounds * 2
 
         tournament_id = store.create_tournament(
             players=player_specs,
@@ -345,6 +388,7 @@ def create_router(
             prompt_version=effective_prompt,
             total_battles=total,
             tier=req.tier,
+            tournament_format="round_robin",
         )
 
         battle_ids = []
@@ -374,7 +418,7 @@ def create_router(
             battle_ids=battle_ids,
             total_battles=total,
             message=(
-                f"Tournament started: {len(req.players)} players, "
+                f"Round-robin tournament started: {len(req.players)} players, "
                 f"{req.rounds} round(s), {total} battles."
             ),
         )

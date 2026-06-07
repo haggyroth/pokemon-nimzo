@@ -1,4 +1,5 @@
 import { useState, useEffect, useReducer } from 'react'
+import BracketView from './BracketView'
 
 // ---------------------------------------------------------------------------
 // Shared tier badge (mirrors BattleField palette)
@@ -230,7 +231,7 @@ export default function TournamentView({ tournamentId, tournament: liveTournamen
   const [{ loading, error, meta, battles }, dispatch] = useReducer(fetchReducer, {
     loading: true, error: null, meta: null, battles: [],
   })
-  const [standingsTab, setStandingsTab] = useState(true)
+  const [activeTab, setActiveTab] = useState(null)  // null = auto
 
   useEffect(() => {
     if (tournamentId == null) return
@@ -253,6 +254,12 @@ export default function TournamentView({ tournamentId, tournament: liveTournamen
   const totalBattles = meta?.total_battles ?? 0
   const battlesCompleted = liveTournament?.done ?? battles.filter(b => b.status === 'completed').length
   const tier = liveTournament?.tier ?? meta?.tier ?? 'random'
+  const tournamentFormat = liveTournament?.tournament_format ?? meta?.tournament_format ?? 'round_robin'
+  const isBracket = tournamentFormat === 'single_elim' || tournamentFormat === 'double_elim'
+  // Bracket state: prefer live (most recent) over fetched meta
+  const bracketState = liveTournament?.bracket ?? (
+    meta?.bracket_state && typeof meta.bracket_state === 'object' ? meta.bracket_state : null
+  )
 
   // Enrich battle list: if liveTournament.currentBattleId matches, mark it as running
   const enrichedBattles = battles.map(b => {
@@ -331,15 +338,23 @@ export default function TournamentView({ tournamentId, tournament: liveTournamen
 
       {/* Tab switcher */}
       <div className="ts-tabs">
+        {isBracket && (
+          <button
+            className={`ts-tab ${activeTab === 'bracket' ? 'active' : ''}`}
+            onClick={() => setActiveTab('bracket')}
+          >
+            BRACKET
+          </button>
+        )}
         <button
-          className={`ts-tab ${standingsTab ? 'active' : ''}`}
-          onClick={() => setStandingsTab(true)}
+          className={`ts-tab ${activeTab === 'standings' ? 'active' : ''}`}
+          onClick={() => setActiveTab('standings')}
         >
           STANDINGS
         </button>
         <button
-          className={`ts-tab ${!standingsTab ? 'active' : ''}`}
-          onClick={() => setStandingsTab(false)}
+          className={`ts-tab ${activeTab === 'battles' ? 'active' : ''}`}
+          onClick={() => setActiveTab('battles')}
         >
           BATTLES ({battles.length})
         </button>
@@ -347,14 +362,23 @@ export default function TournamentView({ tournamentId, tournament: liveTournamen
 
       {/* Content */}
       <div className="ts-content">
-        {standingsTab ? (
+        {(activeTab === 'bracket' || (activeTab === null && isBracket)) && isBracket && (
+          <BracketView
+            bracket={bracketState}
+            onReplaySelected={onReplaySelected}
+          />
+        )}
+        {(activeTab === 'standings' || (activeTab === null && !isBracket)) && (
           <div className="ts-standings-wrap">
             <StandingsTable standings={standings} />
-            <div className="ts-pts-note">
-              Points: 3 per win · 1 per tie · 0 per loss
-            </div>
+            {!isBracket && (
+              <div className="ts-pts-note">
+                Points: 3 per win · 1 per tie · 0 per loss
+              </div>
+            )}
           </div>
-        ) : (
+        )}
+        {activeTab === 'battles' && activeTab !== null && (
           <BattleGrid
             battles={enrichedBattles}
             onReplaySelected={onReplaySelected}

@@ -466,9 +466,9 @@ async def test_failed_battle_sets_failed_status(app) -> None:
     'failed', not 'completed', and ELO is unchanged."""
     from unittest.mock import patch
 
+    from nidozo.api.events import EventBus
     from nidozo.api.models import StartBattleRequest
     from nidozo.api.orchestration import run_battles as _run_battles
-    from nidozo.api.events import EventBus
 
     store = app.state.store
     bus = EventBus()
