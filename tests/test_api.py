@@ -116,8 +116,8 @@ def no_battle_runner():
     trying to connect to Pokémon Showdown (which is not running in CI)."""
     async def _noop(*args, **kwargs):
         pass
-    with patch("nidozo.api.app._run_battles", side_effect=_noop), \
-         patch("nidozo.api.app._run_tournament", side_effect=_noop):
+    with patch("nidozo.api.routes.run_battles", side_effect=_noop), \
+         patch("nidozo.api.routes.run_tournament", side_effect=_noop):
         yield
 
 
@@ -186,7 +186,7 @@ async def test_lmstudio_models_offline_returns_empty(client: AsyncClient) -> Non
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.get = AsyncMock(side_effect=ConnectionRefusedError("LM Studio not running"))
 
-    with patch("nidozo.api.app.httpx.AsyncClient", return_value=mock_client):
+    with patch("nidozo.api.routes.httpx.AsyncClient", return_value=mock_client):
         resp = await client.get("/api/lmstudio/models")
 
     assert resp.status_code == 200
@@ -211,7 +211,7 @@ async def test_lmstudio_models_online_returns_ids(client: AsyncClient) -> None:
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.get = AsyncMock(return_value=mock_response)
 
-    with patch("nidozo.api.app.httpx.AsyncClient", return_value=mock_client):
+    with patch("nidozo.api.routes.httpx.AsyncClient", return_value=mock_client):
         resp = await client.get("/api/lmstudio/models")
 
     assert resp.status_code == 200
@@ -228,7 +228,7 @@ async def test_lmstudio_models_error_returns_empty(client: AsyncClient) -> None:
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.get = AsyncMock(side_effect=Exception("connection refused"))
 
-    with patch("nidozo.api.app.httpx.AsyncClient", return_value=mock_client):
+    with patch("nidozo.api.routes.httpx.AsyncClient", return_value=mock_client):
         resp = await client.get("/api/lmstudio/models")
 
     assert resp.status_code == 200
@@ -466,7 +466,8 @@ async def test_failed_battle_sets_failed_status(app) -> None:
     'failed', not 'completed', and ELO is unchanged."""
     from unittest.mock import patch
 
-    from nidozo.api.app import StartBattleRequest, _run_battles
+    from nidozo.api.models import StartBattleRequest
+    from nidozo.api.orchestration import run_battles as _run_battles
     from nidozo.api.events import EventBus
 
     store = app.state.store
@@ -480,7 +481,7 @@ async def test_failed_battle_sets_failed_status(app) -> None:
     bid = store.create_battle("test-fail", "gen3randombattle", m_id, m_id)
     req = StartBattleRequest(p1_provider="random", p2_provider="random")
 
-    with patch("nidozo.api.app._build_streaming_player", side_effect=RuntimeError("boom")):
+    with patch("nidozo.api.orchestration._build_streaming_player", side_effect=RuntimeError("boom")):
         await _run_battles(req, [bid], store, bus, {})
 
     battle = store.get_battle(bid)
