@@ -361,15 +361,16 @@ class BattleStore:
         parse_success: bool,
         llm_response: str | None = None,
         state_json: str | None = None,
+        coach_advice: str | None = None,
     ) -> None:
         self._conn.execute(
             """INSERT INTO turns
                (battle_id, turn_number, player_role, prompt_version,
-                action_chosen, parse_success, llm_response, state_json)
-               VALUES (?,?,?,?,?,?,?,?)""",
+                action_chosen, parse_success, llm_response, state_json, coach_advice)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
             (
                 battle_id, turn_number, player_role, prompt_version,
-                action_chosen, int(parse_success), llm_response, state_json,
+                action_chosen, int(parse_success), llm_response, state_json, coach_advice,
             ),
         )
         self._conn.commit()
@@ -412,10 +413,10 @@ class BattleStore:
         self._conn.commit()
 
     def get_turns_with_state(self, battle_id: int) -> list[dict[str, Any]]:
-        """Return all turns for a battle including state_json, ordered by turn then player."""
+        """Return all turns for a battle including state_json and coach_advice, ordered by turn then player."""
         cur = self._conn.execute(
             """SELECT turn_number, player_role, prompt_version,
-                      action_chosen, parse_success, llm_response, state_json
+                      action_chosen, parse_success, llm_response, state_json, coach_advice
                FROM turns WHERE battle_id=?
                ORDER BY turn_number, player_role""",
             (battle_id,),

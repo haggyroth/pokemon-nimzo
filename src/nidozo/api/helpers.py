@@ -42,6 +42,19 @@ def _build_backend(provider: str, model: str | None, json_mode: bool = False) ->
     )
 
 
+def _build_coach(
+    coach_provider: str | None,
+    coach_model: str | None,
+) -> Any | None:
+    """Build a CoachAgent if a coach provider is configured, else return None."""
+    if not coach_provider:
+        return None
+    from nidozo.llm.coach import CoachAgent
+
+    backend = _build_backend(coach_provider, coach_model, json_mode=False)
+    return CoachAgent(backend=backend)
+
+
 def _build_streaming_player(
     provider: str,
     model: str | None,
@@ -54,6 +67,8 @@ def _build_streaming_player(
     fmt: str,
     lessons: list[str] | None = None,
     team: str | None = None,
+    coach_provider: str | None = None,
+    coach_model: str | None = None,
 ) -> Any:
     from nidozo.battle.streaming_player import StreamingLLMPlayer, StreamingRandomBot
 
@@ -67,6 +82,7 @@ def _build_streaming_player(
 
     use_json_mode = prompt_version in ("v2", "v3") and provider in ("lmstudio", "openai")
     backend = _build_backend(provider, model, json_mode=use_json_mode)
+    coach = _build_coach(coach_provider, coach_model)
 
     kwargs: dict[str, Any] = {
         "backend": backend,
@@ -78,6 +94,7 @@ def _build_streaming_player(
         "battle_format": fmt,
         "server_configuration": cfg,
         "lessons": lessons,
+        "coach": coach,
     }
     if team is not None:
         kwargs["team"] = team

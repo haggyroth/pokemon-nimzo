@@ -143,6 +143,7 @@ def create_router(
                 "state":         state,
                 "action":        row["action_chosen"],
                 "parse_success": bool(row["parse_success"]),
+                "coach_advice":  row.get("coach_advice"),
             }
 
         turns = [
@@ -344,8 +345,13 @@ def create_router(
         )
         effective_prompt = "v3" if (req.tier != "random" and req.draft) else req.prompt_version
 
-        player_specs = [
-            {"provider": p.provider, "model_name": _model_name(p.provider, p.model)}
+        player_specs: list[dict[str, Any]] = [
+            {
+                "provider":       p.provider,
+                "model_name":     _model_name(p.provider, p.model),
+                "coach_provider": p.coach_provider,
+                "coach_model":    p.coach_model,
+            }
             for p in req.players
         ]
 

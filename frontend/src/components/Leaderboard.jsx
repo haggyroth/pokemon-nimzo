@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import BattleAnalysis from './BattleAnalysis'
 
 const PROVIDERS = ['random', 'anthropic', 'openai', 'lmstudio']
+const COACH_PROVIDERS = ['none', 'anthropic', 'openai', 'lmstudio']
 
 const TIERS = [
   { id: 'random',     label: 'Random Battle' },
@@ -110,6 +111,49 @@ function ModelSelector({ label, provider, model, onProviderChange, onModelChange
 }
 
 // ---------------------------------------------------------------------------
+// Coach selector (compact — shown below each player)
+// ---------------------------------------------------------------------------
+
+function CoachSelector({ label, provider, model, onProviderChange, onModelChange, lmModels }) {
+  return (
+    <div className="coach-selector">
+      <label className="coach-selector-label">🎓 {label} COACH</label>
+      <div className="model-selector-row">
+        <select
+          className="form-select provider-select"
+          value={provider}
+          onChange={e => { onProviderChange(e.target.value); onModelChange('') }}
+        >
+          {COACH_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <input
+          className="form-input model-input"
+          placeholder={provider === 'none' ? '— no coach —' : 'model id (optional)'}
+          value={model}
+          disabled={provider === 'none'}
+          onChange={e => onModelChange(e.target.value)}
+        />
+      </div>
+      {provider === 'lmstudio' && lmModels.length > 0 && (
+        <div className="model-presets">
+          {lmModels.slice(0, 4).map(id => (
+            <button
+              key={id}
+              type="button"
+              className={`preset-chip ${model === id ? 'active' : ''}`}
+              onClick={() => onModelChange(id)}
+              title={id}
+            >
+              {id.split('/').pop()}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Single-battle form
 // ---------------------------------------------------------------------------
 
@@ -118,6 +162,8 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
   const [form, setForm] = useState({
     p1_provider: 'lmstudio', p2_provider: 'lmstudio',
     p1_model: '', p2_model: '',
+    p1_coach_provider: 'none', p1_coach_model: '',
+    p2_coach_provider: 'none', p2_coach_model: '',
     n_battles: 1,
     tier: 'random',
     draft: false,
@@ -144,6 +190,11 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
       const body = { ...form, n_battles: Number(form.n_battles) }
       if (!body.p1_model || body.p1_provider === 'random') delete body.p1_model
       if (!body.p2_model || body.p2_provider === 'random') delete body.p2_model
+      // Coach — omit fields if no coach selected
+      if (body.p1_coach_provider === 'none') { delete body.p1_coach_provider; delete body.p1_coach_model }
+      if (body.p2_coach_provider === 'none') { delete body.p2_coach_provider; delete body.p2_coach_model }
+      if (!body.p1_coach_model) delete body.p1_coach_model
+      if (!body.p2_coach_model) delete body.p2_coach_model
       const res = await fetch('/api/battles/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -169,12 +220,26 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
         onModelChange={v => setForm(f => ({ ...f, p1_model: v }))}
         lmModels={lmModels} lmLoading={lmLoading}
       />
+      <CoachSelector
+        label="P1"
+        provider={form.p1_coach_provider} model={form.p1_coach_model}
+        onProviderChange={v => setForm(f => ({ ...f, p1_coach_provider: v }))}
+        onModelChange={v => setForm(f => ({ ...f, p1_coach_model: v }))}
+        lmModels={lmModels}
+      />
       <ModelSelector
         label="PLAYER 2"
         provider={form.p2_provider} model={form.p2_model}
         onProviderChange={v => setForm(f => ({ ...f, p2_provider: v }))}
         onModelChange={v => setForm(f => ({ ...f, p2_model: v }))}
         lmModels={lmModels} lmLoading={lmLoading}
+      />
+      <CoachSelector
+        label="P2"
+        provider={form.p2_coach_provider} model={form.p2_coach_model}
+        onProviderChange={v => setForm(f => ({ ...f, p2_coach_provider: v }))}
+        onModelChange={v => setForm(f => ({ ...f, p2_coach_model: v }))}
+        lmModels={lmModels}
       />
       <div className="form-group">
         <label className="form-label">Tier</label>
@@ -216,7 +281,7 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
 // Tournament form
 // ---------------------------------------------------------------------------
 
-const EMPTY_PLAYER = { provider: 'lmstudio', model: '' }
+const EMPTY_PLAYER = { provider: 'lmstudio', model: '', coach_provider: 'none', coach_model: '' }
 
 const TOURNAMENT_FORMATS = [
   { id: 'round_robin', label: 'Round Robin' },
@@ -247,9 +312,13 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
   }, [lmModels])
 
   function setPlayer(i, field, value) {
-    setPlayers(prev => prev.map((p, idx) =>
-      idx === i ? { ...p, [field]: value, ...(field === 'provider' ? { model: '' } : {}) } : p
-    ))
+    setPlayers(prev => prev.map((p, idx) => {
+      if (idx !== i) return p
+      const extra = field === 'provider' ? { model: '' }
+        : field === 'coach_provider' ? { coach_model: '' }
+        : {}
+      return { ...p, [field]: value, ...extra }
+    }))
   }
 
   function addPlayer() {
@@ -276,10 +345,17 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
     setLoading(true)
     try {
       const payload = {
-        players: players.map(p => ({
-          provider: p.provider,
-          model: p.provider === 'random' ? null : (p.model || null),
-        })),
+        players: players.map(p => {
+          const spec = {
+            provider: p.provider,
+            model: p.provider === 'random' ? null : (p.model || null),
+          }
+          if (p.coach_provider && p.coach_provider !== 'none') {
+            spec.coach_provider = p.coach_provider
+            if (p.coach_model) spec.coach_model = p.coach_model
+          }
+          return spec
+        }),
         rounds: isElim ? 1 : Number(rounds),
         tier,
         draft,
@@ -346,6 +422,14 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
               ))}
             </div>
           )}
+          <CoachSelector
+            label={`P${i + 1}`}
+            provider={p.coach_provider}
+            model={p.coach_model}
+            onProviderChange={v => setPlayer(i, 'coach_provider', v)}
+            onModelChange={v => setPlayer(i, 'coach_model', v)}
+            lmModels={lmModels}
+          />
         </div>
       ))}
 

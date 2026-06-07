@@ -18,7 +18,7 @@ function App() {
   const [replayOrigin, setReplayOrigin]       = useState('home')
   const {
     events, isConnected, p1State, p2State, battleInfo, battleResult,
-    thinking, tournament, draft, reset, clearTournament,
+    thinking, coachThinking, tournament, draft, reset, clearTournament,
   } = useBattleStream()
 
   const result = dismissed ? null : battleResult
@@ -163,6 +163,7 @@ function App() {
                 battleResult={result}
                 events={events}
                 thinking={thinking}
+                coachThinking={coachThinking}
                 tournament={tournament}
                 onDismiss={() => setDismissed(true)}
                 onTournamentScoreboard={() => {

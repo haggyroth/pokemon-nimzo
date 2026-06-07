@@ -11,7 +11,8 @@ export function useBattleStream() {
   const [p2State, setP2State]           = useState(null)
   const [battleInfo, setBattleInfo]     = useState(null)
   const [battleResult, setBattleResult] = useState(null)
-  const [thinking, setThinking]         = useState(null)   // 'p1' | 'p2' | null
+  const [thinking, setThinking]           = useState(null)   // 'p1' | 'p2' | null
+  const [coachThinking, setCoachThinking] = useState(null)   // 'p1' | 'p2' | null — coach phase
   const [tournament, setTournament]     = useState(null)   // tournament progress state
   const [draft, setDraft]               = useState(null)   // draft phase state
   const wsRef         = useRef(null)
@@ -92,7 +93,13 @@ export function useBattleStream() {
         }
 
         if (event.type === 'thinking') {
-          setThinking(event.player_role)
+          if (event.agent === 'coach') {
+            setCoachThinking(event.player_role)
+            setThinking(null)
+          } else {
+            setThinking(event.player_role)
+            setCoachThinking(null)
+          }
           return
         }
 
@@ -173,11 +180,13 @@ export function useBattleStream() {
           setP1State(null)
           setP2State(null)
           setThinking(null)
+          setCoachThinking(null)
           setDraft(null)   // clear draft once battle proper begins
         }
 
         if (event.type === 'turn') {
           setThinking(null)
+          setCoachThinking(null)
           if (event.player_role === 'p1') setP1State(event)
           if (event.player_role === 'p2') setP2State(event)
           // Increment tournament battle counter on each new turn 1
@@ -189,12 +198,14 @@ export function useBattleStream() {
         if (event.type === 'battle_end') {
           setBattleResult(event)
           setThinking(null)
+          setCoachThinking(null)
           setTournament(prev => prev ? { ...prev, done: (prev.done || 0) + 1 } : null)
         }
 
         if (event.type === 'battle_cancelled') {
           setBattleResult({ ...event, cancelled: true })
           setThinking(null)
+          setCoachThinking(null)
         }
       } catch {
         // non-JSON WebSocket frames are silently ignored
@@ -221,6 +232,7 @@ export function useBattleStream() {
     setBattleInfo(null)
     setBattleResult(null)
     setThinking(null)
+    setCoachThinking(null)
     setDraft(null)
   }, [])
 
@@ -233,6 +245,6 @@ export function useBattleStream() {
 
   return {
     events, isConnected, p1State, p2State, battleInfo, battleResult,
-    thinking, tournament, draft, reset, clearTournament,
+    thinking, coachThinking, tournament, draft, reset, clearTournament,
   }
 }

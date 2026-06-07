@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # Table definitions only — safe to run against any DB version via IF NOT EXISTS.
 # Indexes are kept separate because they may reference columns (e.g. tournament_id)
@@ -86,7 +86,8 @@ CREATE TABLE IF NOT EXISTS turns (
     action_chosen TEXT,               -- e.g. "move 2" or "switch pikachu"
     parse_success INTEGER NOT NULL DEFAULT 1,  -- 0=fell back to random
     llm_response  TEXT,                        -- full raw response (may be large)
-    state_json    TEXT                         -- serialized battle state at decision time (v2+)
+    state_json    TEXT,                        -- serialized battle state at decision time (v2+)
+    coach_advice  TEXT                         -- free-form advice from the coach model (NULL if no coach)
 );
 
 -- Post-battle lessons: one row per model per battle (LLM-generated reflection)
@@ -279,4 +280,13 @@ def migrate(conn: sqlite3.Connection) -> None:
             except sqlite3.OperationalError:
                 pass  # column already exists
         conn.execute("UPDATE schema_version SET version=7")
+        conn.commit()
+
+    if version < 8:
+        # Add coach_advice column to turns for multi-agent coach mode
+        try:
+            conn.execute("ALTER TABLE turns ADD COLUMN coach_advice TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        conn.execute("UPDATE schema_version SET version=8")
         conn.commit()

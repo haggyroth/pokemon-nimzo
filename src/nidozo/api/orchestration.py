@@ -89,12 +89,16 @@ async def run_battles(
                 effective_prompt, store, battle_id, bus, cfg, showdown_format,
                 lessons=p1_lessons,
                 team=p1_team,
+                coach_provider=req.p1_coach_provider,
+                coach_model=req.p1_coach_model,
             )
             p2 = _build_streaming_player(
                 req.p2_provider, p2_model, "p2",
                 effective_prompt, store, battle_id, bus, cfg, showdown_format,
                 lessons=p2_lessons,
                 team=p2_team,
+                coach_provider=req.p2_coach_provider,
+                coach_model=req.p2_coach_model,
             )
 
             store.set_battle_status(battle_id, "running")
@@ -180,6 +184,14 @@ async def run_tournament(
         "tier": req.tier,
     })
 
+    # Build a lookup so each battle's p1/p2 can find their coach config.
+    coach_lookup: dict[tuple[str, str], tuple[str | None, str | None]] = {
+        (ps["provider"], ps["model_name"]): (
+            ps.get("coach_provider"), ps.get("coach_model")
+        )
+        for ps in player_specs
+    }
+
     for battle_num, battle_id in enumerate(battle_ids, start=1):
         battle_row = store.get_battle(battle_id)
         if not battle_row or battle_row["status"] == "cancelled":
@@ -261,17 +273,28 @@ async def run_tournament(
             if do_draft:
                 store.set_battle_teams(battle_id, t_p1_team_id, t_p2_team_id, req.tier)
 
+            t_p1_coach_prov, t_p1_coach_model = coach_lookup.get(
+                (t_p1_prov, battle_info["p1_model"]), (None, None)
+            )
+            t_p2_coach_prov, t_p2_coach_model = coach_lookup.get(
+                (t_p2_prov, battle_info["p2_model"]), (None, None)
+            )
+
             p1 = _build_streaming_player(
                 t_p1_prov, battle_info["p1_model"], "p1",
                 effective_prompt, store, battle_id, bus, cfg, showdown_format,
                 lessons=t_p1_lessons,
                 team=t_p1_team,
+                coach_provider=t_p1_coach_prov,
+                coach_model=t_p1_coach_model,
             )
             p2 = _build_streaming_player(
                 t_p2_prov, battle_info["p2_model"], "p2",
                 effective_prompt, store, battle_id, bus, cfg, showdown_format,
                 lessons=t_p2_lessons,
                 team=t_p2_team,
+                coach_provider=t_p2_coach_prov,
+                coach_model=t_p2_coach_model,
             )
 
             store.set_battle_status(battle_id, "running")

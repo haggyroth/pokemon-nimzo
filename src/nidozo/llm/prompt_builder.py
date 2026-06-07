@@ -64,12 +64,26 @@ class PromptBuilder:
         self,
         battle_state: dict[str, Any],
         lessons: list[str] | None = None,
+        coach_advice: str | None = None,
     ) -> list[Message]:
         """Return [system, turn] ready to pass to a ModelBackend.
 
         Args:
-            battle_state: Serialized battle dict from serialize_battle().
-            lessons:      Optional list of prior-battle lesson strings to inject
-                          into the system prompt as the model's "memory".
+            battle_state:  Serialized battle dict from serialize_battle().
+            lessons:       Optional prior-battle lesson strings to inject into
+                           the system prompt as the model's "memory".
+            coach_advice:  Optional free-form text from a CoachAgent.  When
+                           provided it is appended to the turn message so the
+                           player can weigh it alongside the heuristic scores.
         """
-        return [self.build_system(lessons=lessons), self.build_turn(battle_state)]
+        turn = self.build_turn(battle_state)
+        if coach_advice:
+            turn = Message(
+                role="user",
+                content=(
+                    turn["content"]
+                    + f"\n\n--- COACH ANALYSIS ---\n{coach_advice}\n---"
+                    "\n\nWith this analysis in mind, what is your chosen action?"
+                ),
+            )
+        return [self.build_system(lessons=lessons), turn]

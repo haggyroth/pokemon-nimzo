@@ -15,6 +15,11 @@ class StartBattleRequest(BaseModel):
     n_battles: int = Field(1, ge=1, le=50)
     tier: str = "random"   # "random" | "ou" | "ubers" | "uu" | "nu" | "lc" | "freeforall"
     draft: bool = False    # If True and tier != "random", run LLM draft phase first
+    # Optional coach model per player (None = no coach)
+    p1_coach_provider: str | None = None
+    p1_coach_model: str | None = None
+    p2_coach_provider: str | None = None
+    p2_coach_model: str | None = None
 
 
 class StartBattleResponse(BaseModel):
@@ -25,6 +30,9 @@ class StartBattleResponse(BaseModel):
 class PlayerSpec(BaseModel):
     provider: str
     model: str | None = None
+    # Optional coach — None means this player acts without advisory
+    coach_provider: str | None = None
+    coach_model: str | None = None
 
 
 class StartTournamentRequest(BaseModel):

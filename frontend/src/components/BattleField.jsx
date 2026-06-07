@@ -107,8 +107,18 @@ function WinProbBar({ p1State, p2State, p1Label, p2Label }) {
   )
 }
 
-function ThinkingBadge({ role }) {
+function ThinkingBadge({ role, isCoach }) {
   if (!role) return null
+  if (isCoach) {
+    return (
+      <div className="thinking-badge thinking-badge--coach">
+        <span className="thinking-badge-icon">🎓</span>
+        <span style={{ marginLeft: '0.35rem', fontSize: '0.65rem', opacity: 0.85, letterSpacing: '0.04em' }}>
+          {role.toUpperCase()} COACH ANALYZING
+        </span>
+      </div>
+    )
+  }
   return (
     <div className="thinking-badge">
       <span className="thinking-badge-dot" />
@@ -139,8 +149,8 @@ function useTeams(battleId, enabled) {
 }
 
 export default function BattleField({
-  p1State, p2State, battleInfo, battleResult, events, thinking, onDismiss, tournament,
-  onTournamentScoreboard,
+  p1State, p2State, battleInfo, battleResult, events, thinking, coachThinking,
+  onDismiss, tournament, onTournamentScoreboard,
 }) {
   const p1Mon   = p1State?.state?.my_active ?? null
   const p2Mon   = p2State?.state?.my_active ?? null
@@ -181,7 +191,7 @@ export default function BattleField({
             {battleDrafted && <span className="draft-badge">DRAFT</span>}
           </div>
           {weather && <div className="weather-badge">🌤 {weather}</div>}
-          <ThinkingBadge role={thinking} />
+          <ThinkingBadge role={coachThinking || thinking} isCoach={!!coachThinking} />
         </div>
         <div className="battle-header-right">
           <div className="battle-status-text">
@@ -215,7 +225,7 @@ export default function BattleField({
           mon={p1Mon}
           side="p1"
           isOpponent={false}
-          isThinking={thinking === 'p1'}
+          isThinking={thinking === 'p1' || coachThinking === 'p1'}
           bench={p1Bench}
         />
         <div className="vs-divider">VS</div>
@@ -223,7 +233,7 @@ export default function BattleField({
           mon={p2Mon ?? oppOfP1}
           side="p2"
           isOpponent={!p2Mon}
-          isThinking={thinking === 'p2'}
+          isThinking={thinking === 'p2' || coachThinking === 'p2'}
           bench={p2Bench}
         />
       </div>
