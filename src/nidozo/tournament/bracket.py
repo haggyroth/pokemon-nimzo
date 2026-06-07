@@ -21,7 +21,6 @@ from __future__ import annotations
 import math
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -240,7 +239,6 @@ def record_result_single(
     if m is None:
         return
 
-    loser_slot = 2 if winner_slot == 1 else 1
     winner_seed = m["p1_seed"] if winner_slot == 1 else m["p2_seed"]
     loser_seed  = m["p2_seed"] if winner_slot == 1 else m["p1_seed"]
 
