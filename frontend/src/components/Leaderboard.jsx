@@ -218,11 +218,18 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
 
 const EMPTY_PLAYER = { provider: 'lmstudio', model: '' }
 
+const TOURNAMENT_FORMATS = [
+  { id: 'round_robin', label: 'Round Robin' },
+  { id: 'single_elim', label: 'Single Elimination' },
+  { id: 'double_elim', label: 'Double Elimination' },
+]
+
 function TournamentForm({ onTournamentStarted, lmModels }) {
   const [loading, setLoading] = useState(false)
   const [rounds, setRounds] = useState(3)
   const [tier, setTier] = useState('random')
   const [draft, setDraft] = useState(false)
+  const [tournamentFormat, setTournamentFormat] = useState('round_robin')
   const [players, setPlayers] = useState([
     { ...EMPTY_PLAYER },
     { ...EMPTY_PLAYER },
@@ -255,9 +262,13 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
     setPlayers(prev => prev.filter((_, idx) => idx !== i))
   }
 
+  const isElim = tournamentFormat === 'single_elim' || tournamentFormat === 'double_elim'
   const totalBattles = (() => {
     const n = players.length
-    return n >= 2 ? (n * (n - 1)) * rounds : 0
+    if (n < 2) return 0
+    if (tournamentFormat === 'single_elim') return n - 1
+    if (tournamentFormat === 'double_elim') return 2 * n - 1
+    return (n * (n - 1)) * rounds
   })()
 
   async function handleSubmit(e) {
@@ -269,9 +280,10 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
           provider: p.provider,
           model: p.provider === 'random' ? null : (p.model || null),
         })),
-        rounds: Number(rounds),
+        rounds: isElim ? 1 : Number(rounds),
         tier,
         draft,
+        tournament_format: tournamentFormat,
       }
       const res = await fetch('/api/tournament/start', {
         method: 'POST',
@@ -338,6 +350,21 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
       ))}
 
       <div className="form-group">
+        <label className="form-label">Format</label>
+        <div className="format-chips">
+          {TOURNAMENT_FORMATS.map(f => (
+            <button
+              key={f.id}
+              type="button"
+              className={`format-chip ${tournamentFormat === f.id ? 'active' : ''}`}
+              onClick={() => setTournamentFormat(f.id)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="form-group">
         <label className="form-label">Tier</label>
         <select
           className="form-select"
@@ -358,17 +385,21 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
           />
         </div>
       )}
-      <div className="form-group">
-        <label className="form-label">Rounds per matchup</label>
-        <input
-          className="form-input" type="number" min="1" max="10"
-          value={rounds}
-          onChange={e => setRounds(e.target.value)}
-        />
-        {totalBattles > 0 && (
-          <div className="tournament-battle-count">{totalBattles} battles total</div>
-        )}
-      </div>
+      {!isElim && (
+        <div className="form-group">
+          <label className="form-label">Rounds per matchup</label>
+          <input
+            className="form-input" type="number" min="1" max="10"
+            value={rounds}
+            onChange={e => setRounds(e.target.value)}
+          />
+        </div>
+      )}
+      {totalBattles > 0 && (
+        <div className="tournament-battle-count">
+          ~{totalBattles} battle{totalBattles !== 1 ? 's' : ''} total
+        </div>
+      )}
 
       <button className="btn-start" type="submit" disabled={loading || players.length < 2}>
         {loading ? '⚔ STARTING…' : `⚔ START TOURNAMENT`}

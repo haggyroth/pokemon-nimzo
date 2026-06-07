@@ -104,10 +104,21 @@ export function useBattleStream() {
             total: event.total_battles,
             rounds: event.rounds,
             tier: event.tier ?? 'random',
+            tournament_format: event.tournament_format ?? 'round_robin',
             done: 0,
             status: 'running',
             leaderboard: null,
+            bracket: null,
+            champion: null,
           })
+          return
+        }
+
+        if (event.type === 'bracket_update') {
+          setTournament(prev => prev ? {
+            ...prev,
+            bracket: event.bracket,
+          } : null)
           return
         }
 
@@ -136,6 +147,8 @@ export function useBattleStream() {
             status: 'completed',
             done: prev.total,
             leaderboard: event.leaderboard,
+            bracket: event.bracket ?? prev?.bracket,
+            champion: event.champion ?? null,
           } : null)
           return
         }
