@@ -1,0 +1,382 @@
+"""REST endpoint definitions for the Nidozo API."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import socket
+from typing import Any
+
+import httpx
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi.responses import JSONResponse
+
+from nidozo.api.helpers import _model_name
+from nidozo.api.models import (
+    StartBattleRequest,
+    StartBattleResponse,
+    StartTournamentRequest,
+    StartTournamentResponse,
+)
+from nidozo.api.orchestration import run_battles, run_tournament
+from nidozo.db.store import BattleStore
+
+logger = logging.getLogger(__name__)
+
+_SHOWDOWN_HOST = "localhost"
+_SHOWDOWN_PORT = 8000
+
+
+def create_router(
+    store: BattleStore,
+    bus: Any,
+    active_tasks: dict[int, asyncio.Task[None]],
+) -> APIRouter:
+    """Build and return the main APIRouter with all REST endpoints registered."""
+    router = APIRouter()
+
+    # -------------------------------------------------------------------
+    # Health check
+    # -------------------------------------------------------------------
+
+    @router.get("/healthz", response_model=None)
+    def healthz() -> dict[str, Any] | JSONResponse:
+        """Liveness + readiness probe.
+
+        Returns HTTP 200 with status "ok" when both the database and Showdown
+        server are reachable.  Returns HTTP 503 with status "degraded" if
+        either dependency is down.
+        """
+        checks: dict[str, str] = {}
+
+        try:
+            store._conn.execute("SELECT 1")
+            checks["db"] = "ok"
+        except Exception as exc:
+            logger.error("Health check: DB unreachable: %s", exc)
+            checks["db"] = "unreachable"
+
+        try:
+            with socket.create_connection((_SHOWDOWN_HOST, _SHOWDOWN_PORT), timeout=1.0):
+                pass
+            checks["showdown"] = "ok"
+        except OSError:
+            checks["showdown"] = "unreachable"
+
+        overall = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
+        payload = {"status": overall, "version": "0.11.0", **checks}
+
+        if overall != "ok":
+            return JSONResponse(status_code=503, content=payload)
+        return payload
+
+    # -------------------------------------------------------------------
+    # Leaderboard & battles
+    # -------------------------------------------------------------------
+
+    @router.get("/api/leaderboard")
+    def get_leaderboard(grouped: bool = True, tier: str | None = None) -> list[dict[str, Any]]:
+        return store.leaderboard(grouped=grouped, tier=tier)
+
+    @router.get("/api/battles")
+    def get_battles(limit: int = 20) -> list[dict[str, Any]]:
+        return store.recent_battles(limit=limit)
+
+    @router.get("/api/battles/{battle_id}")
+    def get_battle(battle_id: int) -> dict[str, Any]:
+        battle = store.get_battle(battle_id)
+        if not battle:
+            raise HTTPException(status_code=404, detail="Battle not found")
+        return battle
+
+    @router.post("/api/battles/{battle_id}/cancel")
+    async def cancel_battle(battle_id: int) -> dict[str, Any]:
+        task = active_tasks.get(battle_id)
+        if task and not task.done():
+            task.cancel()
+
+        cancelled = store.cancel_battle(battle_id)
+        if not cancelled:
+            battle = store.get_battle(battle_id)
+            if not battle:
+                raise HTTPException(status_code=404, detail="Battle not found")
+            return {"ok": False, "message": f"Battle already {battle['status']}"}
+
+        await bus.publish({"type": "battle_cancelled", "battle_id": battle_id})
+        return {"ok": True, "message": "Battle cancelled"}
+
+    @router.get("/api/lmstudio/models")
+    async def get_lmstudio_models() -> list[str]:
+        """Proxy to LM Studio's /v1/models."""
+        base_url = os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(
+                    f"{base_url}/models",
+                    headers={"Authorization": "Bearer lm-studio"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return [m["id"] for m in data.get("data", [])]
+        except Exception as exc:
+            logger.debug("LM Studio not reachable at %s: %s", base_url, exc)
+            return []
+
+    @router.get("/api/battles/{battle_id}/replay")
+    def get_replay(battle_id: int) -> dict[str, Any]:
+        """Full turn-by-turn merged state for battle replay."""
+        battle = store.get_battle(battle_id)
+        if not battle:
+            raise HTTPException(status_code=404, detail="Battle not found")
+
+        turns_raw = store.get_turns_with_state(battle_id)
+
+        turns_by_num: dict[int, dict[str, Any]] = {}
+        for row in turns_raw:
+            n = row["turn_number"]
+            if n not in turns_by_num:
+                turns_by_num[n] = {}
+            state = json.loads(row["state_json"]) if row["state_json"] else None
+            turns_by_num[n][row["player_role"]] = {
+                "state":         state,
+                "action":        row["action_chosen"],
+                "parse_success": bool(row["parse_success"]),
+            }
+
+        turns = [
+            {"turn": n, **turns_by_num[n]}
+            for n in sorted(turns_by_num.keys())
+        ]
+        return {"battle": battle, "turns": turns}
+
+    @router.get("/api/battles/{battle_id}/turns")
+    def get_turns(battle_id: int) -> list[dict[str, Any]]:
+        return store.get_turns_basic(battle_id)
+
+    @router.get("/api/battles/{battle_id}/analysis")
+    def get_analysis(battle_id: int) -> dict[str, Any]:
+        from nidozo.analysis import analyze_battle
+        from nidozo.analysis.analyzer import _load_species_data
+
+        turns = store.get_turns_with_state(battle_id)
+        p1_team, p2_team = store.get_battle_teams(battle_id)
+        p1_ids: list[str] | None = p1_team.get("pokemon") if p1_team else None
+        p2_ids: list[str] | None = p2_team.get("pokemon") if p2_team else None
+        sd = _load_species_data() if (p1_ids or p2_ids) else None
+        return analyze_battle(turns, p1_team_ids=p1_ids, p2_team_ids=p2_ids, species_data=sd)
+
+    @router.get("/api/models/{model_id}/lessons")
+    def get_model_lessons(model_id: int, limit: int = 10) -> list[dict[str, Any]]:
+        return store.get_lessons(model_id, limit=limit)
+
+    @router.get("/api/models/{model_id}/stats")
+    def get_model_stats(model_id: int) -> dict[str, Any]:
+        stats = store.get_model_stats(model_id)
+        if stats is None:
+            raise HTTPException(status_code=404, detail="Model not found")
+        return stats
+
+    # -------------------------------------------------------------------
+    # Tournaments
+    # -------------------------------------------------------------------
+
+    @router.get("/api/tournaments")
+    def list_tournaments(limit: int = 20) -> list[dict[str, Any]]:
+        return store.list_tournaments(limit=limit)
+
+    @router.get("/api/tournaments/{tournament_id}")
+    def get_tournament(tournament_id: int) -> dict[str, Any]:
+        t = store.get_tournament(tournament_id)
+        if not t:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        return t
+
+    @router.get("/api/tournaments/{tournament_id}/standings")
+    def get_tournament_standings(tournament_id: int) -> list[dict[str, Any]]:
+        if not store.get_tournament(tournament_id):
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        return store.get_tournament_standings(tournament_id)
+
+    @router.get("/api/tournaments/{tournament_id}/battles")
+    def get_tournament_battles(tournament_id: int) -> list[dict[str, Any]]:
+        if not store.get_tournament(tournament_id):
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        return store.get_tournament_battles(tournament_id)
+
+    @router.post("/api/tournaments/{tournament_id}/cancel")
+    async def cancel_tournament(tournament_id: int) -> dict[str, Any]:
+        t = store.get_tournament(tournament_id)
+        if not t:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        cancelled = store.cancel_tournament(tournament_id)
+        if cancelled:
+            await bus.publish({
+                "type": "tournament_cancelled",
+                "tournament_id": tournament_id,
+                "battles_completed": None,
+            })
+        status = t["status"] if not cancelled else "cancelled"
+        return {"tournament_id": tournament_id, "cancelled": cancelled, "status": status}
+
+    # -------------------------------------------------------------------
+    # Tiers & teams
+    # -------------------------------------------------------------------
+
+    @router.get("/api/tiers")
+    def list_tiers() -> list[dict[str, Any]]:
+        from nidozo.battle.team_builder import all_species as _all_species
+        from nidozo.battle.team_builder import load_movesets
+        from nidozo.battle.tiers import _TIER_POOLS, TIER_DISPLAY, TIER_TO_FORMAT
+
+        ms = load_movesets()
+        all_s = _all_species(ms)
+        result: list[dict[str, Any]] = []
+        for tier_id, display in TIER_DISPLAY.items():
+            if tier_id == "random":
+                continue
+            pool = _TIER_POOLS.get(tier_id)
+            count = len(pool & all_s) if pool is not None else len(all_s)
+            result.append({
+                "id": tier_id,
+                "name": display,
+                "showdown_format": TIER_TO_FORMAT.get(tier_id, "gen3ou"),
+                "pokemon_count": count,
+            })
+        return result
+
+    @router.get("/api/tiers/{tier_id}/pokemon")
+    def get_tier_pokemon(tier_id: str) -> list[dict[str, Any]]:
+        from nidozo.battle.team_builder import all_species as _all_species
+        from nidozo.battle.team_builder import get_pool_info, load_movesets
+        from nidozo.battle.tiers import get_pool, is_valid_tier
+
+        if not is_valid_tier(tier_id) or tier_id == "random":
+            raise HTTPException(status_code=404, detail=f"Unknown tier: {tier_id!r}")
+        ms = load_movesets()
+        pool_ids = get_pool(tier_id, _all_species(ms))
+        return get_pool_info(pool_ids, ms)
+
+    @router.get("/api/models/{model_id}/teams")
+    def get_model_teams(model_id: int, limit: int = 20) -> list[dict[str, Any]]:
+        return store.get_teams_for_model(model_id, limit=limit)
+
+    @router.get("/api/battles/{battle_id}/teams")
+    def get_battle_teams(battle_id: int) -> dict[str, Any]:
+        p1, p2 = store.get_battle_teams(battle_id)
+        return {"p1": p1, "p2": p2}
+
+    # -------------------------------------------------------------------
+    # Start a single battle
+    # -------------------------------------------------------------------
+
+    @router.post("/api/battles/start", response_model=StartBattleResponse)
+    async def start_battle(
+        req: StartBattleRequest,
+        background_tasks: BackgroundTasks,
+    ) -> StartBattleResponse:
+        from nidozo.battle.tiers import TIER_TO_FORMAT, is_valid_tier
+
+        if not is_valid_tier(req.tier) and req.tier != "random":
+            raise HTTPException(status_code=400, detail=f"Unknown tier: {req.tier!r}")
+
+        showdown_format = (
+            "gen3randombattle" if req.tier == "random"
+            else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+        )
+        effective_prompt = "v3" if (req.tier != "random" and req.draft) else req.prompt_version
+
+        battle_ids = []
+        for i in range(req.n_battles):
+            p1_model_name = _model_name(req.p1_provider, req.p1_model or req.model)
+            p2_model_name = _model_name(req.p2_provider, req.p2_model or req.model)
+            p1_id = store.get_or_create_model(req.p1_provider, p1_model_name, effective_prompt)
+            p2_id = store.get_or_create_model(req.p2_provider, p2_model_name, effective_prompt)
+            bid = store.create_battle(
+                f"pending-{req.p1_provider}-{req.p2_provider}-{i}",
+                showdown_format,
+                p1_id,
+                p2_id,
+            )
+            battle_ids.append(bid)
+
+        background_tasks.add_task(run_battles, req, battle_ids, store, bus, active_tasks)
+        return StartBattleResponse(
+            battle_ids=battle_ids,
+            message=f"Started {req.n_battles} battle(s). Connect to /ws/battles to watch.",
+        )
+
+    # -------------------------------------------------------------------
+    # Start a tournament
+    # -------------------------------------------------------------------
+
+    @router.post("/api/tournament/start", response_model=StartTournamentResponse)
+    async def start_tournament(
+        req: StartTournamentRequest,
+        background_tasks: BackgroundTasks,
+    ) -> StartTournamentResponse:
+        import itertools
+
+        from nidozo.battle.tiers import TIER_TO_FORMAT, is_valid_tier
+
+        if len(req.players) < 2:
+            raise HTTPException(status_code=400, detail="Need at least 2 players")
+        if not is_valid_tier(req.tier) and req.tier != "random":
+            raise HTTPException(status_code=400, detail=f"Unknown tier: {req.tier!r}")
+
+        showdown_format = (
+            "gen3randombattle" if req.tier == "random"
+            else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+        )
+        effective_prompt = "v3" if (req.tier != "random" and req.draft) else req.prompt_version
+
+        pairs = list(itertools.combinations(range(len(req.players)), 2))
+        total = len(pairs) * req.rounds * 2
+
+        player_specs = [
+            {"provider": p.provider, "model_name": _model_name(p.provider, p.model)}
+            for p in req.players
+        ]
+
+        tournament_id = store.create_tournament(
+            players=player_specs,
+            rounds=req.rounds,
+            prompt_version=effective_prompt,
+            total_battles=total,
+            tier=req.tier,
+        )
+
+        battle_ids = []
+        battle_num = 0
+        for (i, j) in pairs:
+            for _ in range(req.rounds):
+                for (a_idx, b_idx) in [(i, j), (j, i)]:
+                    a = player_specs[a_idx]
+                    b = player_specs[b_idx]
+                    a_id = store.get_or_create_model(a["provider"], a["model_name"], effective_prompt)
+                    b_id = store.get_or_create_model(b["provider"], b["model_name"], effective_prompt)
+                    bid = store.create_battle(
+                        f"tournament-{tournament_id}-{battle_num}",
+                        showdown_format,
+                        a_id, b_id,
+                        tournament_id=tournament_id,
+                    )
+                    battle_ids.append(bid)
+                    battle_num += 1
+
+        background_tasks.add_task(
+            run_tournament, req, tournament_id, battle_ids, player_specs, store, bus, active_tasks
+        )
+
+        return StartTournamentResponse(
+            tournament_id=tournament_id,
+            battle_ids=battle_ids,
+            total_battles=total,
+            message=(
+                f"Tournament started: {len(req.players)} players, "
+                f"{req.rounds} round(s), {total} battles."
+            ),
+        )
+
+    return router

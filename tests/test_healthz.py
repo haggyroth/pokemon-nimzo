@@ -30,7 +30,7 @@ async def test_healthz_ok_when_all_up(client) -> None:
     mock_sock.__enter__ = MagicMock(return_value=mock_sock)
     mock_sock.__exit__ = MagicMock(return_value=False)
 
-    with patch("nidozo.api.app.socket.create_connection", return_value=mock_sock):
+    with patch("nidozo.api.routes.socket.create_connection", return_value=mock_sock):
         resp = await client.get("/healthz")
 
     assert resp.status_code == 200
@@ -49,7 +49,7 @@ async def test_healthz_ok_when_all_up(client) -> None:
 async def test_healthz_degraded_when_showdown_down(client) -> None:
     """Returns 503 with status=degraded when Showdown is not running."""
     with patch(
-        "nidozo.api.app.socket.create_connection",
+        "nidozo.api.routes.socket.create_connection",
         side_effect=OSError("Connection refused"),
     ):
         resp = await client.get("/healthz")
@@ -75,7 +75,7 @@ async def test_healthz_degraded_when_db_down(client, app) -> None:
     # Break the store's connection by closing it
     app.state.store._conn.close()
 
-    with patch("nidozo.api.app.socket.create_connection", return_value=mock_sock):
+    with patch("nidozo.api.routes.socket.create_connection", return_value=mock_sock):
         resp = await client.get("/healthz")
 
     assert resp.status_code == 503
@@ -95,10 +95,10 @@ async def test_healthz_version_field_present(client) -> None:
     mock_sock.__enter__ = MagicMock(return_value=mock_sock)
     mock_sock.__exit__ = MagicMock(return_value=False)
 
-    with patch("nidozo.api.app.socket.create_connection", return_value=mock_sock):
+    with patch("nidozo.api.routes.socket.create_connection", return_value=mock_sock):
         resp = await client.get("/healthz")
 
-    assert resp.json()["version"] == "0.10.0"
+    assert resp.json()["version"] == "0.11.0"
 
 
 # ---------------------------------------------------------------------------
