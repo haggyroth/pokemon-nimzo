@@ -318,3 +318,269 @@ def test_serialize_weather_non_empty_returns_name() -> None:
 
     result = _serialize_weather(battle)
     assert result == "RAINDANCE"
+
+
+# ===========================================================================
+# v5 additions — actual_stats, last_move on own and opponent Pokémon
+# ===========================================================================
+
+def _mock_move_for_last(id_: str = "thunderbolt", type_name: str = "ELECTRIC",
+                        category_name: str = "SPECIAL", base_power: int = 95) -> MagicMock:
+    m = MagicMock()
+    m.id = id_
+    t = MagicMock()
+    t.name = type_name
+    m.type = t
+    cat = MagicMock()
+    cat.name = category_name
+    m.category = cat
+    m.base_power = base_power
+    m.accuracy = 1.0
+    m.priority = 0
+    return m
+
+
+class TestOwnPokemonActualStats:
+    """_serialize_own_pokemon exposes actual_stats (new in v5)."""
+
+    def test_actual_stats_included_when_stats_populated(self) -> None:
+        mon = _mock_own_pokemon()
+        mon.stats = {"hp": 251, "atk": 85, "def": 57, "spa": 85, "spd": 73, "spe": 162}
+        mon.last_move = None
+        result = _serialize_own_pokemon(mon)
+        assert result is not None
+        assert result["actual_stats"] == {"hp": 251, "atk": 85, "def": 57, "spa": 85, "spd": 73, "spe": 162}
+
+    def test_actual_stats_none_when_all_stats_none(self) -> None:
+        mon = _mock_own_pokemon()
+        mon.stats = {"hp": None, "atk": None, "def": None, "spa": None, "spd": None, "spe": None}
+        mon.last_move = None
+        result = _serialize_own_pokemon(mon)
+        assert result is not None
+        assert result["actual_stats"] is None
+
+    def test_actual_stats_partial_when_some_stats_none(self) -> None:
+        """Partial stats dict: only non-None values are kept."""
+        mon = _mock_own_pokemon()
+        mon.stats = {"hp": 200, "atk": None, "def": 80, "spa": None, "spd": 70, "spe": 120}
+        mon.last_move = None
+        result = _serialize_own_pokemon(mon)
+        assert result is not None
+        assert result["actual_stats"] == {"hp": 200, "def": 80, "spd": 70, "spe": 120}
+
+    def test_actual_stats_key_always_present(self) -> None:
+        """actual_stats key is always in the output dict (may be None)."""
+        mon = _mock_own_pokemon()
+        mon.stats = {}
+        mon.last_move = None
+        result = _serialize_own_pokemon(mon)
+        assert result is not None
+        assert "actual_stats" in result
+
+
+class TestOwnPokemonLastMove:
+    """_serialize_own_pokemon exposes last_move (new in v5)."""
+
+    def test_last_move_included_when_used(self) -> None:
+        mon = _mock_own_pokemon()
+        mon.stats = {}
+        mon.last_move = _mock_move_for_last("thunderbolt", "ELECTRIC", "SPECIAL", 95)
+        result = _serialize_own_pokemon(mon)
+        assert result is not None
+        lm = result["last_move"]
+        assert lm is not None
+        assert lm["id"] == "thunderbolt"
+        assert lm["type"] == "ELECTRIC"
+        assert lm["base_power"] == 95
+
+    def test_last_move_none_when_no_move_used(self) -> None:
+        mon = _mock_own_pokemon()
+        mon.stats = {}
+        mon.last_move = None
+        result = _serialize_own_pokemon(mon)
+        assert result is not None
+        assert result["last_move"] is None
+
+    def test_last_move_key_always_present(self) -> None:
+        """last_move key is always in the output (may be None)."""
+        mon = _mock_own_pokemon()
+        mon.stats = {}
+        mon.last_move = None
+        result = _serialize_own_pokemon(mon)
+        assert result is not None
+        assert "last_move" in result
+
+
+class TestOpponentPokemonLastMove:
+    """_serialize_opponent_pokemon exposes last_move (new in v5)."""
+
+    def test_opponent_last_move_included_when_used(self) -> None:
+        mon = _mock_opponent_pokemon()
+        mon.last_move = _mock_move_for_last("earthquake", "GROUND", "PHYSICAL", 100)
+        result = _serialize_opponent_pokemon(mon)
+        assert result is not None
+        lm = result["last_move"]
+        assert lm is not None
+        assert lm["id"] == "earthquake"
+        assert lm["type"] == "GROUND"
+        assert lm["base_power"] == 100
+        # Opponent last_move should NOT include PP (hidden info)
+        assert "pp" not in lm
+
+    def test_opponent_last_move_none_when_not_used(self) -> None:
+        mon = _mock_opponent_pokemon()
+        mon.last_move = None
+        result = _serialize_opponent_pokemon(mon)
+        assert result is not None
+        assert result["last_move"] is None
+
+    def test_opponent_last_move_key_always_present(self) -> None:
+        mon = _mock_opponent_pokemon()
+        mon.last_move = None
+        result = _serialize_opponent_pokemon(mon)
+        assert result is not None
+        assert "last_move" in result
+
+
+class TestPromptBuilderV5:
+    """PromptBuilder v5 template renders without error and contains expected content."""
+
+    def _make_state(self) -> dict:
+        """Minimal battle state with all v5 fields present."""
+        return {
+            "turn": 5,
+            "format": "gen3randombattle",
+            "weather": None,
+            "fields": [],
+            "my_side_conditions": [],
+            "opponent_side_conditions": [],
+            "recent_events": [],
+            "my_active": {
+                "species": "pikachu",
+                "types": ["ELECTRIC"],
+                "hp_fraction": 0.45,
+                "status": None,
+                "item": None,
+                "ability": "static",
+                "actual_stats": {"hp": 251, "atk": 85, "def": 57, "spa": 85, "spd": 73, "spe": 162},
+                "boosts": {},
+                "last_move": {"id": "thunderbolt", "type": "ELECTRIC", "category": "SPECIAL",
+                              "base_power": 95, "accuracy": 1.0, "priority": 0},
+                "moves": {
+                    "thunderbolt": {
+                        "id": "thunderbolt", "type": "ELECTRIC", "category": "SPECIAL",
+                        "base_power": 95, "accuracy": 1.0, "pp": 15, "max_pp": 24, "priority": 0,
+                    },
+                },
+                "effects": [],
+            },
+            "my_team": [],
+            "opponent_active": {
+                "species": "golem",
+                "types": ["ROCK", "GROUND"],
+                "hp_fraction": 0.6,
+                "status": None,
+                "item": None,
+                "ability": None,
+                "boosts": {},
+                "last_move": {"id": "earthquake", "type": "GROUND", "category": "PHYSICAL",
+                              "base_power": 100, "accuracy": 1.0, "priority": 0},
+                "revealed_moves": {
+                    "earthquake": {"id": "earthquake", "type": "GROUND", "category": "PHYSICAL",
+                                   "base_power": 100, "accuracy": 1.0, "priority": 0},
+                },
+                "moves_revealed": 1,
+            },
+            "opponent_team": [],
+            "opponent_team_size_seen": 1,
+            "available_moves": [
+                {"id": "thunderbolt", "type": "ELECTRIC", "category": "SPECIAL",
+                 "base_power": 95, "accuracy": 1.0, "pp": 15, "max_pp": 24, "priority": 0},
+            ],
+            "available_switches": ["blastoise"],
+            "force_switch": False,
+            "heuristics": {
+                "battle_context": {
+                    "speed": {"you_move_first": True, "speed_tie": False,
+                              "own_speed_estimate": 162, "opp_speed_estimate": 45,
+                              "note": "You move FIRST (est. 162 vs 45)"},
+                    "active_matchup": "disadvantaged",
+                    "phase": "early",
+                    "own_remaining": 5,
+                    "opp_remaining": 5,
+                    "weather": None,
+                    "weather_note": None,
+                    "own_status_impact": None,
+                    "opp_status": None,
+                    "opp_status_impact": None,
+                    "ko_risk_note": "⚠ KO RISK: earthquake estimated ~120% — consider switching",
+                },
+                "move_scores": [
+                    {"move_id": "thunderbolt", "type_multiplier": 0.0,
+                     "effectiveness_label": "immune (0×)", "estimated_damage_pct": "0%",
+                     "accuracy_adjusted_pct": "0%", "priority": 0, "is_status": False,
+                     "low_pp": False, "notes": ["immune — will deal no damage"]},
+                ],
+                "switch_scores": [
+                    {"species": "blastoise", "hp_fraction": 1.0,
+                     "switch_quality": 3, "quality_label": "excellent switch",
+                     "defensive_vs_opp": "neutral", "speed_vs_opp": "faster (98 vs ~45)",
+                     "notes": ["Healthy HP (100%)"]},
+                ],
+            },
+            "opponent_threat_map": [],
+        }
+
+    def test_v5_renders_without_error(self) -> None:
+        """PromptBuilder v5 build_messages() completes without raising."""
+        from nidozo.llm.prompt_builder import PromptBuilder
+        pb = PromptBuilder(version="v5")
+        msgs = pb.build_messages(self._make_state())
+        assert len(msgs) == 2
+
+    def test_v5_system_contains_decision_framework(self) -> None:
+        """v5 system prompt includes the Decision Framework section."""
+        from nidozo.llm.prompt_builder import PromptBuilder
+        pb = PromptBuilder(version="v5")
+        system = pb.build_system()["content"]
+        assert "Decision Framework" in system
+
+    def test_v5_system_contains_ko_guidance(self) -> None:
+        """v5 system prompt explains KO risk and the survival check."""
+        from nidozo.llm.prompt_builder import PromptBuilder
+        pb = PromptBuilder(version="v5")
+        system = pb.build_system()["content"]
+        assert "KO" in system or "survival" in system.lower()
+
+    def test_v5_turn_shows_ko_risk_note(self) -> None:
+        """When ko_risk_note is set, it appears in the rendered turn prompt."""
+        from nidozo.llm.prompt_builder import PromptBuilder
+        pb = PromptBuilder(version="v5")
+        msgs = pb.build_messages(self._make_state())
+        turn_content = msgs[1]["content"]
+        assert "KO RISK" in turn_content
+
+    def test_v5_turn_shows_actual_stats(self) -> None:
+        """Actual stats (Spe, Atk, SpA) appear in the turn prompt."""
+        from nidozo.llm.prompt_builder import PromptBuilder
+        pb = PromptBuilder(version="v5")
+        msgs = pb.build_messages(self._make_state())
+        turn_content = msgs[1]["content"]
+        assert "Spe" in turn_content
+        assert "162" in turn_content   # pikachu's speed stat
+
+    def test_v5_turn_shows_opponent_last_move(self) -> None:
+        """Opponent's last move appears in the opponent active section."""
+        from nidozo.llm.prompt_builder import PromptBuilder
+        pb = PromptBuilder(version="v5")
+        msgs = pb.build_messages(self._make_state())
+        turn_content = msgs[1]["content"]
+        assert "Earthquake" in turn_content or "earthquake" in turn_content
+
+    def test_v5_turn_shows_switch_defense_label(self) -> None:
+        """Switch advisory includes the defensive_vs_opp label."""
+        from nidozo.llm.prompt_builder import PromptBuilder
+        pb = PromptBuilder(version="v5")
+        msgs = pb.build_messages(self._make_state())
+        turn_content = msgs[1]["content"]
+        assert "Defense vs current opponent" in turn_content

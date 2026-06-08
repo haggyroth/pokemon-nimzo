@@ -1065,3 +1065,180 @@ def test_switch_note_paralyzed_active() -> None:
     battle = _mock_battle(available_switches=[incoming], own=own, opp=opp)
     ss = score_actions(battle)["switch_scores"][0]
     assert any("paralyz" in n.lower() for n in ss["notes"])
+
+
+# ===========================================================================
+# v5 additions — KO risk, switch defensive labels, speed_vs_opp
+# ===========================================================================
+
+class TestKoRiskNote:
+    """heuristics.battle_context.ko_risk_note (new in v5)."""
+
+    def _make_last_move(self, base_power: int = 100, category_name: str = "PHYSICAL", type_name: str = "GROUND") -> MagicMock:
+        from poke_env.battle.move_category import MoveCategory
+        m = MagicMock()
+        m.id = "earthquake"
+        m.base_power = base_power
+        m.category = MoveCategory.PHYSICAL if category_name == "PHYSICAL" else MoveCategory.SPECIAL
+        m.type = MagicMock()
+        m.type.name = type_name
+        m.accuracy = 1.0
+        return m
+
+    def test_ko_risk_note_set_when_estimated_damage_exceeds_hp(self) -> None:
+        """At low HP, a high-power super-effective last move produces a KO risk note."""
+        own = _mock_pokemon(
+            species="charizard",
+            types=("FIRE", "FLYING"),
+            base_stats={"hp": 78, "atk": 84, "def": 78, "spa": 109, "spd": 85, "spe": 100},
+            hp_fraction=0.25,   # only 25% HP left
+        )
+        opp = _mock_pokemon(
+            species="golem",
+            types=("ROCK", "GROUND"),
+            base_stats={"hp": 80, "atk": 110, "def": 130, "spa": 55, "spd": 65, "spe": 45},
+        )
+        # Opponent's last move: Rock Slide — 4× vs Charizard
+        last_move = self._make_last_move(base_power=75, category_name="PHYSICAL", type_name="ROCK")
+        opp.last_move = last_move
+        opp.damage_multiplier.return_value = 1.0  # not used in context path
+
+        # own.damage_multiplier simulates that ROCK is 4× vs FIRE/FLYING
+        own.damage_multiplier.return_value = 4.0
+
+        battle = _mock_battle(own=own, opp=opp)
+        ctx = score_actions(battle)["battle_context"]
+        assert ctx["ko_risk_note"] is not None
+        assert "KO" in ctx["ko_risk_note"].upper() or "risk" in ctx["ko_risk_note"].lower()
+
+    def test_ko_risk_note_none_when_no_last_move(self) -> None:
+        """No last move → ko_risk_note stays None."""
+        own = _mock_pokemon(hp_fraction=0.3)
+        opp = _mock_pokemon()
+        opp.last_move = None
+        battle = _mock_battle(own=own, opp=opp)
+        ctx = score_actions(battle)["battle_context"]
+        assert ctx["ko_risk_note"] is None
+
+    def test_ko_risk_note_none_for_status_last_move(self) -> None:
+        """A status last move (base_power=0) should not generate a KO risk note."""
+        from poke_env.battle.move_category import MoveCategory
+        own = _mock_pokemon(hp_fraction=0.1)  # even at 10% HP
+        opp = _mock_pokemon()
+        status_move = MagicMock()
+        status_move.id = "toxic"
+        status_move.base_power = 0
+        status_move.category = MoveCategory.STATUS
+        opp.last_move = status_move
+        battle = _mock_battle(own=own, opp=opp)
+        ctx = score_actions(battle)["battle_context"]
+        assert ctx["ko_risk_note"] is None
+
+    def test_ko_risk_note_none_when_hp_is_safe(self) -> None:
+        """At full HP with a weak last move, no risk note should fire."""
+        own = _mock_pokemon(
+            hp_fraction=1.0,
+            base_stats={"hp": 180, "atk": 80, "def": 100, "spa": 80, "spd": 100, "spe": 80},
+        )
+        opp = _mock_pokemon(
+            base_stats={"hp": 80, "atk": 40, "def": 80, "spa": 40, "spd": 80, "spe": 80},
+        )
+        weak_move = self._make_last_move(base_power=40, type_name="NORMAL")
+        opp.last_move = weak_move
+        own.damage_multiplier.return_value = 0.5   # resisted
+
+        battle = _mock_battle(own=own, opp=opp)
+        ctx = score_actions(battle)["battle_context"]
+        assert ctx["ko_risk_note"] is None
+
+    def test_ko_risk_note_key_always_present(self) -> None:
+        """battle_context always has ko_risk_note key (even if None) so templates don't error."""
+        battle = _mock_battle()
+        ctx = score_actions(battle)["battle_context"]
+        assert "ko_risk_note" in ctx
+
+
+class TestSwitchDefensiveVsOpp:
+    """switch_scores[*].defensive_vs_opp and speed_vs_opp (new in v5)."""
+
+    def test_defensive_vs_opp_immune_when_target_immune(self) -> None:
+        """When the incoming mon is immune to all opponent threat types, label is 'immune'."""
+        own = _mock_pokemon()
+        opp = _mock_pokemon(types=("GROUND",))
+        opp.moves = {}
+
+        incoming = _mock_pokemon(species="charizard", types=("FIRE", "FLYING"))
+        incoming.fainted = False
+        incoming.current_hp_fraction = 1.0
+        # Charizard is immune to Ground
+        incoming.damage_multiplier.return_value = 0.0
+
+        battle = _mock_battle(available_switches=[incoming], own=own, opp=opp)
+        ss = score_actions(battle)["switch_scores"][0]
+        assert ss["defensive_vs_opp"] == "immune"
+
+    def test_defensive_vs_opp_weak_when_target_weak(self) -> None:
+        """When the incoming mon is weak to the opponent's type(s), label is 'weak'."""
+        own = _mock_pokemon()
+        opp = _mock_pokemon(types=("FIRE",))
+        opp.moves = {}
+
+        incoming = _mock_pokemon(species="exeggutor", types=("GRASS", "PSYCHIC"))
+        incoming.fainted = False
+        incoming.current_hp_fraction = 1.0
+        # Exeggutor is weak to Fire
+        incoming.damage_multiplier.return_value = 2.0
+
+        battle = _mock_battle(available_switches=[incoming], own=own, opp=opp)
+        ss = score_actions(battle)["switch_scores"][0]
+        assert ss["defensive_vs_opp"] == "weak"
+
+    def test_defensive_vs_opp_neutral_when_no_special_interaction(self) -> None:
+        """When no immunity, resistance, or weakness exists, label is 'neutral'."""
+        own = _mock_pokemon()
+        opp = _mock_pokemon(types=("NORMAL",))
+        opp.moves = {}
+
+        incoming = _mock_pokemon(species="raticate", types=("NORMAL",))
+        incoming.fainted = False
+        incoming.current_hp_fraction = 1.0
+        incoming.damage_multiplier.return_value = 1.0
+
+        battle = _mock_battle(available_switches=[incoming], own=own, opp=opp)
+        ss = score_actions(battle)["switch_scores"][0]
+        assert ss["defensive_vs_opp"] == "neutral"
+
+    def test_defensive_vs_opp_key_always_present(self) -> None:
+        """Every switch score dict has defensive_vs_opp regardless of opponent state."""
+        own = _mock_pokemon()
+        incoming = _mock_pokemon(species="raichu")
+        incoming.fainted = False
+        incoming.current_hp_fraction = 1.0
+        incoming.damage_multiplier.return_value = 1.0
+
+        battle = _mock_battle(available_switches=[incoming], own=own, opp=None)
+        ss = score_actions(battle)["switch_scores"][0]
+        assert "defensive_vs_opp" in ss
+
+    def test_speed_vs_opp_present_when_opp_available(self) -> None:
+        """speed_vs_opp is a non-None string when opponent is known."""
+        own = _mock_pokemon()
+        opp = _mock_pokemon(base_stats={"hp": 80, "atk": 80, "def": 80, "spa": 80, "spd": 80, "spe": 50})
+        opp.moves = {}
+        opp.boosts = {}
+        opp.status = None
+
+        incoming = _mock_pokemon(
+            species="jolteon",
+            base_stats={"hp": 65, "atk": 65, "def": 60, "spa": 110, "spd": 95, "spe": 130},
+        )
+        incoming.fainted = False
+        incoming.current_hp_fraction = 1.0
+        incoming.damage_multiplier.return_value = 1.0
+        incoming.boosts = {}
+        incoming.status = None
+
+        battle = _mock_battle(available_switches=[incoming], own=own, opp=opp)
+        ss = score_actions(battle)["switch_scores"][0]
+        assert ss["speed_vs_opp"] is not None
+        assert "faster" in ss["speed_vs_opp"] or "slower" in ss["speed_vs_opp"] or "similar" in ss["speed_vs_opp"]
