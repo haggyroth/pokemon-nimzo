@@ -547,3 +547,96 @@ def test_json_missing_identifier_no_fallback_returns_none() -> None:
     # Pure JSON with action_type but no identifier
     result = parse_action('{"action_type":"move"}', battle, player)
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# <think> tag stripping (Qwen 3, DeepSeek R1, etc.)
+# ---------------------------------------------------------------------------
+
+class TestThinkTagStripping:
+    """Reasoning models prepend <think>...</think> before the actual response.
+    The parser must strip these before attempting JSON or regex parsing.
+    """
+
+    def test_think_tag_before_json_move(self) -> None:
+        """Qwen-style: <think>...</think> then JSON — must parse the JSON."""
+        moves = [_mock_move("thunderbolt"), _mock_move("tackle")]
+        battle = _make_battle(moves=moves)
+        player = _make_player()
+
+        response = (
+            "<think>\nLet me evaluate the matchup...\nThunderbolt is super effective.\n</think>\n"
+            '{"reasoning": "super effective", "action_type": "move", "identifier": "thunderbolt"}'
+        )
+        result = parse_action(response, battle, player)
+        assert result is not None
+        player.create_order.assert_called_once_with(moves[0])
+
+    def test_think_tag_before_json_switch(self) -> None:
+        """<think>...</think> before a JSON switch action."""
+        switches = [_mock_pokemon("blastoise"), _mock_pokemon("venusaur")]
+        battle = _make_battle(switches=switches)
+        player = _make_player()
+
+        response = (
+            "<think>I should switch to avoid the fire move.</think>\n"
+            '{"action_type": "switch", "identifier": "blastoise"}'
+        )
+        result = parse_action(response, battle, player)
+        assert result is not None
+        player.create_order.assert_called_once_with(switches[0])
+
+    def test_think_tag_before_text_action(self) -> None:
+        """<think>...</think> before a legacy text ACTION: line."""
+        moves = [_mock_move("surf"), _mock_move("tackle")]
+        battle = _make_battle(moves=moves)
+        player = _make_player()
+
+        response = "<think>Surf is the best choice here.</think>\nACTION: move 1"
+        result = parse_action(response, battle, player)
+        assert result is not None
+        player.create_order.assert_called_once_with(moves[0])
+
+    def test_multiline_think_block_stripped(self) -> None:
+        """Multiline <think> content is fully stripped before parsing."""
+        moves = [_mock_move("flamethrower")]
+        battle = _make_battle(moves=moves)
+        player = _make_player()
+
+        response = (
+            "<think>\n"
+            "Line one of thinking.\n"
+            "Line two.\n"
+            "Line three.\n"
+            "</think>\n"
+            '{"action_type": "move", "identifier": "flamethrower"}'
+        )
+        result = parse_action(response, battle, player)
+        assert result is not None
+
+    def test_think_tag_case_insensitive(self) -> None:
+        """<THINK> and <Think> variants are also stripped."""
+        moves = [_mock_move("tackle")]
+        battle = _make_battle(moves=moves)
+        player = _make_player()
+
+        response = "<THINK>Some thoughts.</THINK>\nACTION: move 1"
+        result = parse_action(response, battle, player)
+        assert result is not None
+
+    def test_only_think_tag_returns_none(self) -> None:
+        """A response consisting only of a <think> block produces no action."""
+        battle = _make_battle(moves=[_mock_move("tackle")])
+        player = _make_player()
+
+        result = parse_action("<think>Just thinking, no action.</think>", battle, player)
+        assert result is None
+
+    def test_raw_response_preserved_in_caller(self) -> None:
+        """Stripping is internal to parse_action — the original string is unchanged."""
+        raw = "<think>thoughts</think>\n" + '{"action_type":"move","identifier":"tackle"}'
+        original = raw  # take a reference before calling
+        battle = _make_battle(moves=[_mock_move("tackle")])
+        player = _make_player()
+        parse_action(raw, battle, player)
+        assert raw == original  # parse_action must not mutate the caller's string
