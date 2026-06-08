@@ -194,9 +194,11 @@ def _compute_threat_map(battle: AbstractBattle) -> list[dict[str, Any]]:
     if not your_mons:
         return result
 
-    # All REVEALED opponent mons (active + bench)
+    # All REVEALED opponent mons (active + bench), deduped.
+    # opponent_team already contains the active mon, so iterating both would
+    # double-count it and produce duplicate threat-map entries.
     opp_mons = [
-        m for m in [battle.opponent_active_pokemon, *battle.opponent_team.values()]
+        m for m in battle.opponent_team.values()
         if m is not None and not m.fainted
     ]
 
