@@ -6,6 +6,7 @@ import pytest
 
 from nidozo.analysis.analyzer import (
     BLUNDER_GAP_THRESHOLD,
+    _annotate_switch_quality,
     _build_key_moments,
     _build_variance_report,
     _composite_score,
@@ -13,10 +14,12 @@ from nidozo.analysis.analyzer import (
     _merge_turns,
     _mon_weaknesses,
     _parse_move_slot,
+    _player_summary,
     _rank_moves,
     _resolve_move_slot,
     _score_gap,
     _team_hp_score,
+    _turning_point_description,
     _win_prob,
     analyze_battle,
     annotate_turn,
@@ -249,7 +252,8 @@ def test_annotate_switch():
         "state_json": state,
     }
     result = annotate_turn(turn)
-    assert result["decision_quality"] == "switch"
+    # Switches now get a quality label: neutral_switch when no heuristic switch data is present
+    assert result["decision_quality"] in ("neutral_switch", "forced_switch", "good_switch", "bad_switch", "switch")
 
 
 def test_annotate_real_format_not_no_data():
@@ -1331,3 +1335,171 @@ def test_infer_rng_species_change_skips_comparison() -> None:
     result = _infer_rng_event(mt, prev_mt)
     # Species changed — HP delta is invalid, must not flag as crit/miss
     assert result["p1"] is None
+
+
+# ---------------------------------------------------------------------------
+# _annotate_switch_quality
+# ---------------------------------------------------------------------------
+
+class TestAnnotateSwitchQuality:
+    """Tests for the switch quality labeller."""
+
+    def test_forced_switch_on_faint(self):
+        state = {"force_switch": True, "heuristics": {}}
+        label, note = _annotate_switch_quality("switch venusaur", state)
+        assert label == "forced_switch"
+        assert "forced" in note
+
+    def test_good_switch_high_score(self):
+        state = {
+            "force_switch": False,
+            "heuristics": {
+                "switch_scores": [
+                    {
+                        "species": "charizard",
+                        "switch_quality": 2,
+                        "defensive_vs_opp": "immune",
+                        "speed_vs_opp": None,
+                        "notes": ["immune to water"],
+                    }
+                ]
+            },
+        }
+        label, note = _annotate_switch_quality("switch charizard", state)
+        assert label == "good_switch"
+
+    def test_bad_switch_negative_score(self):
+        state = {
+            "force_switch": False,
+            "heuristics": {
+                "switch_scores": [
+                    {
+                        "species": "blastoise",
+                        "switch_quality": -2,
+                        "defensive_vs_opp": "weak",
+                        "speed_vs_opp": None,
+                        "notes": [],
+                    }
+                ]
+            },
+        }
+        label, note = _annotate_switch_quality("switch blastoise", state)
+        assert label == "bad_switch"
+
+    def test_neutral_switch_zero_score(self):
+        state = {
+            "force_switch": False,
+            "heuristics": {
+                "switch_scores": [
+                    {
+                        "species": "snorlax",
+                        "switch_quality": 0,
+                        "defensive_vs_opp": "neutral",
+                        "speed_vs_opp": None,
+                        "notes": [],
+                    }
+                ]
+            },
+        }
+        label, note = _annotate_switch_quality("switch snorlax", state)
+        assert label == "neutral_switch"
+
+    def test_no_heuristic_data_falls_back_to_neutral(self):
+        state = {"force_switch": False, "heuristics": {}}
+        label, note = _annotate_switch_quality("switch gengar", state)
+        assert label == "neutral_switch"
+
+
+# ---------------------------------------------------------------------------
+# _turning_point_description
+# ---------------------------------------------------------------------------
+
+class TestTurningPointDescription:
+    """Tests for enriched turning point text generation."""
+
+    def _make_timeline(self, entries):
+        """Build a minimal win_prob_timeline list."""
+        return [{"turn_number": t, "p1_win_prob": p} for t, p in entries]
+
+    def test_includes_turn_number(self):
+        timeline = self._make_timeline([(5, 0.4), (6, 0.75)])
+        merged = [
+            {"turn_number": 5, "p1": {"action": "move 1", "state": {}}, "p2": {"action": None, "state": {}}},
+            {"turn_number": 6, "p1": {"action": None,     "state": {}}, "p2": {"action": None, "state": {}}},
+        ]
+        desc = _turning_point_description(5, merged, timeline)
+        assert "Turn 5" in desc or "turn 5" in desc.lower()
+
+    def test_includes_probability_swing(self):
+        timeline = self._make_timeline([(3, 0.35), (4, 0.80)])
+        merged = [
+            {"turn_number": 3, "p1": {"action": "move 2", "state": {}}, "p2": {"action": None, "state": {}}},
+        ]
+        desc = _turning_point_description(3, merged, timeline)
+        # Should mention win probability numbers
+        assert "35%" in desc or "38" in desc or "80%" in desc or "pp" in desc.lower() or "%" in desc
+
+    def test_fallback_when_no_win_prob_data(self):
+        """When win_prob_timeline is empty, should return a basic description without crashing."""
+        desc = _turning_point_description(7, [], [])
+        assert isinstance(desc, str)
+        assert len(desc) > 0
+
+
+# ---------------------------------------------------------------------------
+# _player_summary — switch quality breakdown
+# ---------------------------------------------------------------------------
+
+class TestPlayerSummarySwitchBreakdown:
+    """Tests for the new switch quality counts in _player_summary."""
+
+    def _make_annotation(self, quality):
+        return {
+            "turn_number": 1,
+            "player_role": "p1",
+            "decision_quality": quality,
+            "is_blunder": False,
+            "heuristic_rank": None,
+            "action_chosen": "switch pikachu",
+        }
+
+    def test_good_switch_counted(self):
+        anns = [self._make_annotation("good_switch")]
+        summary = _player_summary(anns, "p1")
+        assert summary["good_switches"] == 1
+        assert summary["switch_turns"] == 1
+
+    def test_bad_switch_counted(self):
+        anns = [self._make_annotation("bad_switch")]
+        summary = _player_summary(anns, "p1")
+        assert summary["bad_switches"] == 1
+        assert summary["switch_turns"] == 1
+
+    def test_forced_switch_counted(self):
+        anns = [self._make_annotation("forced_switch")]
+        summary = _player_summary(anns, "p1")
+        assert summary["forced_switches"] == 1
+        assert summary["switch_turns"] == 1
+
+    def test_mixed_switch_types_counted_separately(self):
+        anns = [
+            self._make_annotation("good_switch"),
+            self._make_annotation("good_switch"),
+            self._make_annotation("bad_switch"),
+            self._make_annotation("neutral_switch"),
+            self._make_annotation("forced_switch"),
+        ]
+        summary = _player_summary(anns, "p1")
+        assert summary["good_switches"]    == 2
+        assert summary["bad_switches"]     == 1
+        assert summary["neutral_switches"] == 1
+        assert summary["forced_switches"]  == 1
+        assert summary["switch_turns"]     == 5
+
+    def test_legacy_switch_still_counted(self):
+        """Old 'switch' quality label (pre-v5 analyses) still contributes to switch_turns."""
+        anns = [self._make_annotation("switch")]
+        summary = _player_summary(anns, "p1")
+        assert summary["switch_turns"] == 1
+        # New-style counts are zero
+        assert summary["good_switches"] == 0

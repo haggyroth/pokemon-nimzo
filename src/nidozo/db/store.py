@@ -247,7 +247,8 @@ class BattleStore:
                       COALESCE(b.tier, 'random') AS tier,
                       CAST(b.p1_team_id IS NOT NULL AS INT) AS drafted,
                       p1.provider||'/'||p1.model_name AS p1,
-                      p2.provider||'/'||p2.model_name AS p2
+                      p2.provider||'/'||p2.model_name AS p2,
+                      b.narrative
                FROM battles b
                JOIN models p1 ON p1.id = b.p1_model_id
                JOIN models p2 ON p2.id = b.p2_model_id
@@ -255,6 +256,14 @@ class BattleStore:
             (battle_id,),
         ).fetchone()
         return dict(row) if row else None
+
+    def set_battle_narrative(self, battle_id: int, narrative: str) -> None:
+        """Store the LLM-generated narrative for a completed battle."""
+        self._conn.execute(
+            "UPDATE battles SET narrative=? WHERE id=?",
+            (narrative, battle_id),
+        )
+        self._conn.commit()
 
     def create_battle(
         self,

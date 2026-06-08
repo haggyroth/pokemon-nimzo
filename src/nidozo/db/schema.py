@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 # Table definitions only — safe to run against any DB version via IF NOT EXISTS.
 # Indexes are kept separate because they may reference columns (e.g. tournament_id)
@@ -64,7 +64,8 @@ CREATE TABLE IF NOT EXISTS battles (
     total_turns     INTEGER,
     status          TEXT    NOT NULL DEFAULT 'pending',   -- pending|running|completed|cancelled|failed
     started_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-    finished_at     TEXT
+    finished_at     TEXT,
+    narrative       TEXT    -- LLM-generated post-battle story (NULL until generated)
 );
 
 -- ELO delta per model per battle (for history / audit)
@@ -351,4 +352,13 @@ def migrate(conn: sqlite3.Connection) -> None:
             "CREATE INDEX IF NOT EXISTS idx_battles_season ON battles(season_id)"
         )
         conn.execute("UPDATE schema_version SET version=10")
+        conn.commit()
+
+    if version < 11:
+        # Add narrative column to battles for LLM-generated post-battle stories.
+        try:
+            conn.execute("ALTER TABLE battles ADD COLUMN narrative TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        conn.execute("UPDATE schema_version SET version=11")
         conn.commit()
