@@ -455,8 +455,10 @@ class BattleStore:
         tier_filter = "AND b.tier = :tier" if tier and tier != "all" else ""
         cur = self._conn.execute(
             f"""SELECT m.provider, m.model_name,
-                      MAX(e.rating)          AS rating,
-                      SUM(e.games)           AS games,
+                      MAX(e.rating) AS rating,
+                      COALESCE(SUM(wld.wins),   0)
+                        + COALESCE(SUM(wld.losses), 0)
+                        + COALESCE(SUM(wld.ties),   0) AS games,
                       COALESCE(SUM(wld.wins),   0) AS wins,
                       COALESCE(SUM(wld.losses), 0) AS losses,
                       COALESCE(SUM(wld.ties),   0) AS ties,
