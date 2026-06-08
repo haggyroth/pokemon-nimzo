@@ -108,20 +108,11 @@
 
 ### Near Term — LLM Intelligence & Viewing Experience
 
-**Prompt v4 — Structured opponent knowledge + battle history**
-- Battle event log (last 3 turns): HP deltas, what happened each turn
-- Explicit moveset revelation count: "Starmie: 2/4 moves revealed"
-- Opponent threat map: pre-computed table of which opponent mons threaten each of your mons
-- Cleaner section layout separating "confirmed facts" from "partial observations"
+~~**Prompt v4 — Structured opponent knowledge + battle history**~~ ✅ *shipped in v0.13.0*
 
-**Head-to-head matchup matrix**
-- Leaderboard page: model × model win-rate grid
-- All data already in SQLite; query + new frontend component
-- Makes ELO rankings interpretable and surfaces stylistic matchups
+~~**Head-to-head matchup matrix**~~ ✅ *shipped in v0.13.0*
 
-**Live win-probability bar**
-- Thin bar above the battlefield during active battles showing real-time team HP ratio
-- Data already flows through WebSocket `turn` events; purely a frontend addition
+~~**Live win-probability bar**~~ ✅ *shipped in v0.9.0*
 
 **Season concept**
 - Named tournament seasons (e.g. "Season 1 — Gen 3 OU") with a fixed participant list and schedule
