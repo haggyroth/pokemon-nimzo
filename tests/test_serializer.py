@@ -76,6 +76,7 @@ def _mock_opponent_pokemon(
     mon.boosts = {}
     mon.item = None
     mon.ability = None
+    mon.base_stats = {"hp": 39, "atk": 52, "def": 43, "spa": 60, "spd": 50, "spe": 65}
     # poke-env only populates moves for opponent when they've been used
     mon.moves = revealed_moves or {}
     mon.active = True
@@ -151,12 +152,14 @@ def test_opponent_pokemon_has_no_exact_hp() -> None:
     assert "current_hp" not in result
 
 
-def test_opponent_pokemon_has_no_base_stats() -> None:
-    """Base stats (Pokédex data) are public, but we deliberately omit them
-    from the opponent serialization to keep the prompt focused on observed state."""
+def test_opponent_pokemon_includes_base_stats() -> None:
+    """Base stats are Pokédex-public knowledge (not hidden battle info), so they
+    are included in the opponent serialization for tooltip display in the UI."""
     mon = _mock_opponent_pokemon()
     result = _serialize_opponent_pokemon(mon)
-    assert "base_stats" not in result
+    assert "base_stats" in result
+    assert result["base_stats"]["hp"] == 39
+    assert result["base_stats"]["spe"] == 65
 
 
 def test_opponent_pokemon_unrevealed_item_is_none() -> None:

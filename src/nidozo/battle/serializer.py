@@ -122,6 +122,8 @@ def _serialize_opponent_pokemon(mon: Pokemon | None) -> dict[str, Any] | None:
         # poke-env can return "unknown" as a sentinel — treat that as unrevealed.
         "item": mon.item if mon.item not in (None, "unknown") else None,
         "ability": mon.ability if mon.ability not in (None, "unknown") else None,
+        # base_stats are Pokédex-public knowledge (not hidden battle information).
+        "base_stats": mon.base_stats,
         "revealed_moves": revealed_moves,
         # Explicit count so the prompt can show "N/4 moves revealed" without
         # the model having to count dictionary entries itself.
