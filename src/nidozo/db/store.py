@@ -527,6 +527,57 @@ class BattleStore:
         )
         return [dict(r) for r in cur.fetchall()]
 
+    def matchup_matrix(self, tier: str | None = None) -> list[dict[str, Any]]:
+        """Return per-pair win/loss/tie counts for the head-to-head matchup matrix.
+
+        Each row represents model A vs model B (A's perspective).  Models are
+        grouped by (provider, model_name) — same granularity as the grouped
+        leaderboard.  Both side-assignments (A as p1 and A as p2) are unioned
+        so every battle is counted exactly once per ordered pair.
+
+        Returns a list of dicts with keys:
+            row_provider, row_model, col_provider, col_model,
+            wins, losses, ties, games
+        """
+        tier_filter = "AND b.tier = :tier" if tier and tier != "all" else ""
+        cur = self._conn.execute(
+            f"""WITH ag AS (
+                    -- A is p1, B is p2
+                    SELECT mr.provider AS row_provider, mr.model_name AS row_model,
+                           mc.provider AS col_provider, mc.model_name AS col_model,
+                           CASE WHEN b.winner = 1 THEN 1 ELSE 0 END AS is_win,
+                           CASE WHEN b.winner = 2 THEN 1 ELSE 0 END AS is_loss,
+                           CASE WHEN b.winner IS NULL OR (b.winner != 1 AND b.winner != 2)
+                                THEN 1 ELSE 0 END AS is_tie
+                    FROM battles b
+                    JOIN models mr ON mr.id = b.p1_model_id
+                    JOIN models mc ON mc.id = b.p2_model_id
+                    WHERE b.finished_at IS NOT NULL {tier_filter}
+                    UNION ALL
+                    -- A is p2, B is p1
+                    SELECT mr.provider, mr.model_name,
+                           mc.provider, mc.model_name,
+                           CASE WHEN b.winner = 2 THEN 1 ELSE 0 END,
+                           CASE WHEN b.winner = 1 THEN 1 ELSE 0 END,
+                           CASE WHEN b.winner IS NULL OR (b.winner != 1 AND b.winner != 2)
+                                THEN 1 ELSE 0 END
+                    FROM battles b
+                    JOIN models mr ON mr.id = b.p2_model_id
+                    JOIN models mc ON mc.id = b.p1_model_id
+                    WHERE b.finished_at IS NOT NULL {tier_filter}
+                )
+                SELECT row_provider, row_model, col_provider, col_model,
+                       SUM(is_win)  AS wins,
+                       SUM(is_loss) AS losses,
+                       SUM(is_tie)  AS ties,
+                       COUNT(*)     AS games
+                FROM ag
+                GROUP BY row_provider, row_model, col_provider, col_model
+                ORDER BY row_provider, row_model, col_provider, col_model""",
+            {"tier": tier},
+        )
+        return [dict(r) for r in cur.fetchall()]
+
     def recent_battles(self, limit: int = 10) -> list[dict[str, Any]]:
         cur = self._conn.execute(
             """SELECT b.id, b.battle_tag, b.format, b.total_turns, b.winner, b.finished_at,

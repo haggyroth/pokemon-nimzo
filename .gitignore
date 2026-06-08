@@ -13,7 +13,11 @@ build/
 .mypy_cache/
 .ruff_cache/
 .coverage
+coverage.json
 htmlcov/
+
+# Claude Code local session state
+.claude/scheduled_tasks.lock
 
 # uv
 .uv/
