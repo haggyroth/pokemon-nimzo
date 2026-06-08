@@ -79,6 +79,11 @@ def create_router(
     # Leaderboard & battles
     # -------------------------------------------------------------------
 
+    @router.get("/api/stats/global")
+    def get_global_stats() -> dict[str, Any]:
+        """Aggregate stats across all battles and models."""
+        return store.get_global_stats()
+
     @router.get("/api/leaderboard")
     def get_leaderboard(grouped: bool = True, tier: str | None = None) -> list[dict[str, Any]]:
         return store.leaderboard(grouped=grouped, tier=tier)

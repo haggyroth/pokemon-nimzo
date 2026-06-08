@@ -4,6 +4,7 @@ import Leaderboard from './components/Leaderboard'
 import BattleField from './components/BattleField'
 import BattleReplay from './components/BattleReplay'
 import ModelStats from './components/ModelStats'
+import GlobalStats from './components/GlobalStats'
 import TournamentView from './components/TournamentView'
 import SeasonView from './components/SeasonView'
 import DraftPhase from './components/DraftPhase'
@@ -110,6 +111,14 @@ function App() {
     setView('home')
   }
 
+  function handleGlobalStatsOpen() {
+    setView('globalstats')
+  }
+
+  function handleGlobalStatsClose() {
+    setView('home')
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -122,6 +131,10 @@ function App() {
             className={`nav-btn ${view === 'home' || view === 'stats' || view === 'tournament' || view === 'season' ? 'active' : ''}`}
             onClick={() => { setStatsModelId(null); setTournamentId(null); setSeasonId(null); setView('home') }}
           >HOME</button>
+          <button
+            className={`nav-btn ${view === 'globalstats' ? 'active' : ''}`}
+            onClick={handleGlobalStatsOpen}
+          >STATS</button>
           <button
             className={`nav-btn ${view === 'battle' ? 'active' : ''}`}
             onClick={() => setView('battle')}
@@ -156,6 +169,12 @@ function App() {
             onModelSelected={handleModelSelected}
             onTournamentSelected={handleTournamentSelected}
             onSeasonSelected={handleSeasonSelected}
+          />
+        )}
+        {view === 'globalstats' && (
+          <GlobalStats
+            onClose={handleGlobalStatsClose}
+            onReplaySelected={handleReplaySelected}
           />
         )}
         {view === 'stats' && statsModelId != null && (

@@ -727,6 +727,8 @@ class BattleStore:
             (model_id,),
         ).fetchall()
 
+        usage = self.get_model_usage_stats(model_id)
+
         return {
             "model": dict(info_row),
             "elo_history": [dict(r) for r in elo_rows],
@@ -738,6 +740,142 @@ class BattleStore:
                 "parse_success_rate": parse_success_rate,
             },
             "lessons": [dict(r) for r in lesson_rows],
+            "usage": usage,
+        }
+
+    def get_model_usage_stats(self, model_id: int) -> dict[str, Any]:
+        """Mine turns.state_json and turns.llm_response for per-model usage stats.
+
+        Uses SQLite's json_extract so no Python-side JSON parsing loop is needed.
+        Returns empty lists/dicts if the model has no recorded turns yet.
+        """
+        # Top Pokémon used as the active mon across all turns for this model.
+        species_rows = self._conn.execute(
+            """SELECT json_extract(t.state_json, '$.my_active.species') AS species,
+                      COUNT(*) AS cnt
+               FROM turns t
+               JOIN battles b ON b.id = t.battle_id
+               WHERE ((b.p1_model_id = ? AND t.player_role = 'p1')
+                   OR (b.p2_model_id = ? AND t.player_role = 'p2'))
+                 AND t.state_json IS NOT NULL
+                 AND json_extract(t.state_json, '$.my_active.species') IS NOT NULL
+               GROUP BY species
+               ORDER BY cnt DESC LIMIT 8""",
+            (model_id, model_id),
+        ).fetchall()
+
+        # Top moves chosen (action_type = "move", identifier = move name).
+        move_rows = self._conn.execute(
+            """SELECT json_extract(t.llm_response, '$.identifier') AS move,
+                      COUNT(*) AS cnt
+               FROM turns t
+               JOIN battles b ON b.id = t.battle_id
+               WHERE ((b.p1_model_id = ? AND t.player_role = 'p1')
+                   OR (b.p2_model_id = ? AND t.player_role = 'p2'))
+                 AND json_extract(t.llm_response, '$.action_type') = 'move'
+                 AND t.llm_response IS NOT NULL
+               GROUP BY move
+               ORDER BY cnt DESC LIMIT 10""",
+            (model_id, model_id),
+        ).fetchall()
+
+        # Action type distribution: move / switch / (null=fallback).
+        action_rows = self._conn.execute(
+            """SELECT COALESCE(json_extract(t.llm_response, '$.action_type'), 'fallback') AS action_type,
+                      COUNT(*) AS cnt
+               FROM turns t
+               JOIN battles b ON b.id = t.battle_id
+               WHERE ((b.p1_model_id = ? AND t.player_role = 'p1')
+                   OR (b.p2_model_id = ? AND t.player_role = 'p2'))
+               GROUP BY action_type""",
+            (model_id, model_id),
+        ).fetchall()
+
+        # Win rate broken down by tier.
+        tier_rows = self._conn.execute(
+            """SELECT COALESCE(b.tier, 'random') AS tier,
+                      COUNT(*) AS total,
+                      SUM(CASE WHEN (b.p1_model_id = ? AND b.winner = 1)
+                                 OR (b.p2_model_id = ? AND b.winner = 2) THEN 1 ELSE 0 END) AS wins
+               FROM battles b
+               WHERE (b.p1_model_id = ? OR b.p2_model_id = ?)
+                 AND b.finished_at IS NOT NULL
+               GROUP BY tier
+               ORDER BY total DESC""",
+            (model_id, model_id, model_id, model_id),
+        ).fetchall()
+
+        return {
+            "top_pokemon": [dict(r) for r in species_rows],
+            "top_moves": [dict(r) for r in move_rows],
+            "action_distribution": [dict(r) for r in action_rows],
+            "win_rate_by_tier": [dict(r) for r in tier_rows],
+        }
+
+    def get_global_stats(self) -> dict[str, Any]:
+        """Aggregate stats across all battles and models for the global dashboard."""
+        # Summary numbers.
+        summary_row = self._conn.execute(
+            """SELECT COUNT(*)                                    AS total_battles,
+                      ROUND(AVG(total_turns), 1)                 AS avg_turns,
+                      SUM(CASE WHEN winner IS NOT NULL THEN 1 ELSE 0 END) AS decided_battles
+               FROM battles WHERE finished_at IS NOT NULL"""
+        ).fetchone()
+        model_count = self._conn.execute(
+            "SELECT COUNT(*) AS cnt FROM models"
+        ).fetchone()
+
+        # Battles by tier.
+        tier_rows = self._conn.execute(
+            """SELECT COALESCE(tier, 'random') AS tier, COUNT(*) AS cnt
+               FROM battles WHERE finished_at IS NOT NULL
+               GROUP BY tier ORDER BY cnt DESC"""
+        ).fetchall()
+
+        # Top Pokémon globally (all models, all turns).
+        species_rows = self._conn.execute(
+            """SELECT json_extract(t.state_json, '$.my_active.species') AS species,
+                      COUNT(*) AS cnt
+               FROM turns t
+               WHERE t.state_json IS NOT NULL
+                 AND json_extract(t.state_json, '$.my_active.species') IS NOT NULL
+               GROUP BY species ORDER BY cnt DESC LIMIT 15"""
+        ).fetchall()
+
+        # Top moves globally.
+        move_rows = self._conn.execute(
+            """SELECT json_extract(t.llm_response, '$.identifier') AS move,
+                      COUNT(*) AS cnt
+               FROM turns t
+               WHERE json_extract(t.llm_response, '$.action_type') = 'move'
+                 AND t.llm_response IS NOT NULL
+               GROUP BY move ORDER BY cnt DESC LIMIT 12"""
+        ).fetchall()
+
+        # Recent completed battles.
+        recent_rows = self._conn.execute(
+            """SELECT b.id, b.finished_at, b.total_turns, b.winner,
+                      COALESCE(b.tier, 'random') AS tier,
+                      p1.provider||'/'||p1.model_name AS p1,
+                      p2.provider||'/'||p2.model_name AS p2
+               FROM battles b
+               JOIN models p1 ON p1.id = b.p1_model_id
+               JOIN models p2 ON p2.id = b.p2_model_id
+               WHERE b.finished_at IS NOT NULL
+               ORDER BY b.finished_at DESC LIMIT 10"""
+        ).fetchall()
+
+        return {
+            "summary": {
+                "total_battles": summary_row["total_battles"] if summary_row else 0,
+                "avg_turns": summary_row["avg_turns"] if summary_row else None,
+                "decided_battles": summary_row["decided_battles"] if summary_row else 0,
+                "total_models": model_count["cnt"] if model_count else 0,
+            },
+            "battles_by_tier": [dict(r) for r in tier_rows],
+            "top_pokemon": [dict(r) for r in species_rows],
+            "top_moves": [dict(r) for r in move_rows],
+            "recent_battles": [dict(r) for r in recent_rows],
         }
 
     # ------------------------------------------------------------------

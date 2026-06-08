@@ -991,3 +991,149 @@ def test_battle_narrative_defaults_to_none(store) -> None:
     row = store.get_battle(bid)
     assert row is not None
     assert row["narrative"] is None
+
+
+# ------------------------------------------------------------------
+# Usage stats
+# ------------------------------------------------------------------
+
+import json as _json  # noqa: E402 — only for test helpers below
+
+
+def _seed_usage_turns(store: BattleStore) -> int:
+    """Create a finished battle with several turns carrying state_json + llm_response."""
+    p1 = store.get_or_create_model("lmstudio", "qwen3-4b", "v5")
+    p2 = store.get_or_create_model("random", "random", "v1")
+    bid = store.create_battle("usage-tag-1", "gen3randombattle", p1, p2)
+    store.finish_battle(bid, winner=1, total_turns=6)
+
+    turns = [
+        ("p1", {"my_active": {"species": "Charizard"}},
+         {"action_type": "move", "identifier": "flamethrower"}),
+        ("p1", {"my_active": {"species": "Charizard"}},
+         {"action_type": "move", "identifier": "flamethrower"}),
+        ("p1", {"my_active": {"species": "Blastoise"}},
+         {"action_type": "switch", "identifier": "Blastoise"}),
+        ("p1", {"my_active": {"species": "Blastoise"}},
+         {"action_type": "move", "identifier": "surf"}),
+        ("p2", {"my_active": {"species": "Gengar"}},
+         {"action_type": "move", "identifier": "shadowball"}),
+        ("p2", {"my_active": {"species": "Gengar"}},
+         {"action_type": "move", "identifier": "shadowball"}),
+    ]
+    for i, (role, state, resp) in enumerate(turns, start=1):
+        store.log_turn(
+            battle_id=bid,
+            turn_number=i,
+            player_role=role,
+            prompt_version="v5",
+            action_chosen=f"{resp['action_type']} {resp['identifier']}",
+            parse_success=True,
+            llm_response=_json.dumps(resp),
+            state_json=_json.dumps(state),
+        )
+    return p1
+
+
+def test_model_usage_stats_top_pokemon(store) -> None:
+    """Top Pokémon for a model are derived from state_json my_active species."""
+    p1 = _seed_usage_turns(store)
+    usage = store.get_model_usage_stats(p1)
+
+    species = [r["species"] for r in usage["top_pokemon"]]
+    assert "Charizard" in species
+    assert "Blastoise" in species
+    # p2's Gengar should NOT appear (different model)
+    assert "Gengar" not in species
+
+
+def test_model_usage_stats_top_moves(store) -> None:
+    """Top moves come from llm_response action_type=move rows only."""
+    p1 = _seed_usage_turns(store)
+    usage = store.get_model_usage_stats(p1)
+
+    moves = {r["move"]: r["cnt"] for r in usage["top_moves"]}
+    assert "flamethrower" in moves
+    assert moves["flamethrower"] == 2
+    assert "surf" in moves
+    # switch identifier must NOT appear in move list
+    assert "Blastoise" not in moves
+
+
+def test_model_usage_stats_action_distribution(store) -> None:
+    """Action distribution counts move and switch turns separately."""
+    p1 = _seed_usage_turns(store)
+    usage = store.get_model_usage_stats(p1)
+
+    dist = {r["action_type"]: r["cnt"] for r in usage["action_distribution"]}
+    assert dist.get("move", 0) == 3   # flamethrower x2 + surf
+    assert dist.get("switch", 0) == 1
+
+
+def test_model_usage_stats_win_rate_by_tier(store) -> None:
+    """Win rate by tier returns a row for each tier the model has played."""
+    p1 = _seed_usage_turns(store)
+    usage = store.get_model_usage_stats(p1)
+
+    tiers = {r["tier"]: r for r in usage["win_rate_by_tier"]}
+    assert "random" in tiers
+    row = tiers["random"]
+    assert row["total"] == 1
+    assert row["wins"] == 1
+
+
+def test_get_model_stats_includes_usage(store) -> None:
+    """get_model_stats folds usage stats into the response."""
+    p1 = _seed_usage_turns(store)
+    stats = store.get_model_stats(p1)
+    assert stats is not None
+    assert "usage" in stats
+    assert "top_pokemon" in stats["usage"]
+    assert "top_moves" in stats["usage"]
+    assert "action_distribution" in stats["usage"]
+    assert "win_rate_by_tier" in stats["usage"]
+
+
+# ------------------------------------------------------------------
+# Global stats
+# ------------------------------------------------------------------
+
+def test_get_global_stats_empty_db(store) -> None:
+    """Global stats on a fresh DB returns zeros, not errors."""
+    gs = store.get_global_stats()
+    assert gs["summary"]["total_battles"] == 0
+    assert gs["summary"]["total_models"] == 0
+    assert gs["top_pokemon"] == []
+    assert gs["top_moves"] == []
+    assert gs["battles_by_tier"] == []
+    assert gs["recent_battles"] == []
+
+
+def test_get_global_stats_counts_battles(store) -> None:
+    """Global stats total_battles counts finished battles correctly."""
+    _seed_usage_turns(store)
+    gs = store.get_global_stats()
+    assert gs["summary"]["total_battles"] == 1
+    assert gs["summary"]["total_models"] >= 2
+
+
+def test_get_global_stats_top_pokemon(store) -> None:
+    """Top Pokémon aggregates across all models."""
+    _seed_usage_turns(store)
+    gs = store.get_global_stats()
+
+    # Gengar appears in p2 turns too (no model filter for global)
+    species_names = [r["species"] for r in gs["top_pokemon"]]
+    assert "Charizard" in species_names
+    assert "Gengar" in species_names
+
+
+def test_get_global_stats_top_moves(store) -> None:
+    """Top moves across all turns, all models."""
+    _seed_usage_turns(store)
+    gs = store.get_global_stats()
+
+    moves = {r["move"]: r["cnt"] for r in gs["top_moves"]}
+    # shadowball appears in p2 turns; flamethrower in p1 — both should be present globally
+    assert "flamethrower" in moves
+    assert "shadowball" in moves

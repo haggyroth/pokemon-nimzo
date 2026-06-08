@@ -282,6 +282,137 @@ function LessonsLog({ lessons }) {
 }
 
 // ---------------------------------------------------------------------------
+// Usage stats sub-components
+// ---------------------------------------------------------------------------
+
+function spriteUrl(species) {
+  if (!species) return null
+  return `https://play.pokemonshowdown.com/sprites/gen3/${species.toLowerCase().replace(/[^a-z0-9]/g, '')}.png`
+}
+
+function UsagePokemon({ rows }) {
+  if (!rows.length) return <div className="gs-empty">No turn data yet.</div>
+  const max = rows[0]?.cnt ?? 1
+  return (
+    <div className="usage-pokemon-list">
+      {rows.map((r, i) => {
+        const pct = Math.round((r.cnt / max) * 100)
+        const url = spriteUrl(r.species)
+        return (
+          <div key={r.species} className="usage-pokemon-row">
+            <span className="usage-rank">#{i + 1}</span>
+            {url && (
+              <img src={url} alt={r.species} className="usage-sprite"
+                onError={e => { e.currentTarget.style.display = 'none' }}
+                style={{ imageRendering: 'pixelated' }} />
+            )}
+            <span className="usage-species">{r.species}</span>
+            <div className="usage-track">
+              <div className="usage-bar usage-bar--pokemon" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="usage-cnt">{r.cnt}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function UsageMoves({ rows }) {
+  if (!rows.length) return <div className="gs-empty">No move data yet.</div>
+  const max = rows[0]?.cnt ?? 1
+  return (
+    <div className="usage-move-list">
+      {rows.map((r, i) => {
+        const pct = Math.round((r.cnt / max) * 100)
+        return (
+          <div key={r.move ?? i} className="usage-move-row">
+            <span className="usage-rank">#{i + 1}</span>
+            <span className="usage-move-name">{(r.move ?? 'unknown').replace(/_/g, ' ')}</span>
+            <div className="usage-track">
+              <div className="usage-bar usage-bar--move" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="usage-cnt">{r.cnt}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+const ACTION_COLORS = { move: '#42a5f5', switch: '#4caf50', fallback: '#e53935' }
+const ACTION_LABELS = { move: 'MOVE', switch: 'SWITCH', fallback: 'FALLBACK' }
+
+function ActionDistribution({ rows }) {
+  if (!rows.length) return <div className="gs-empty">No turn data yet.</div>
+  const total = rows.reduce((s, r) => s + r.cnt, 0)
+  return (
+    <div className="action-dist">
+      <div className="action-dist-bar">
+        {rows.map(r => {
+          const pct = total > 0 ? (r.cnt / total) * 100 : 0
+          const color = ACTION_COLORS[r.action_type] ?? '#888'
+          return (
+            <div
+              key={r.action_type}
+              className="action-dist-segment"
+              style={{ width: `${pct}%`, background: color }}
+              title={`${ACTION_LABELS[r.action_type] ?? r.action_type}: ${r.cnt} (${pct.toFixed(1)}%)`}
+            />
+          )
+        })}
+      </div>
+      <div className="action-dist-legend">
+        {rows.map(r => {
+          const pct = total > 0 ? ((r.cnt / total) * 100).toFixed(1) : '0.0'
+          const color = ACTION_COLORS[r.action_type] ?? '#888'
+          return (
+            <div key={r.action_type} className="action-legend-item">
+              <span className="action-legend-dot" style={{ background: color }} />
+              <span className="action-legend-label">{ACTION_LABELS[r.action_type] ?? r.action_type}</span>
+              <span className="action-legend-pct">{pct}%</span>
+              <span className="action-legend-cnt">({r.cnt})</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+const TIER_COLORS = {
+  random: '#4d9de0', ou: '#f7c948', ubers: '#e53935',
+  uu: '#ab47bc', nu: '#4caf50', lc: '#80deea', freeforall: '#ff9800',
+}
+const TIER_LABELS = {
+  random: 'RANDOM', ou: 'OU', ubers: 'UBERS',
+  uu: 'UU', nu: 'NU', lc: 'LC', freeforall: 'FFA',
+}
+
+function WinRateByTier({ rows }) {
+  if (!rows.length) return <div className="gs-empty">No battles by tier yet.</div>
+  return (
+    <div className="tier-winrate-list">
+      {rows.map(r => {
+        const winPct = r.total > 0 ? Math.round((r.wins / r.total) * 100) : 0
+        const color = TIER_COLORS[r.tier] ?? '#666'
+        const label = TIER_LABELS[r.tier] ?? r.tier?.toUpperCase()
+        return (
+          <div key={r.tier} className="tier-wr-row">
+            <span className="tier-wr-label" style={{ color }}>{label}</span>
+            <div className="tier-wr-track">
+              <div className="tier-wr-bar" style={{ width: `${winPct}%`, background: color }} />
+            </div>
+            <span className="tier-wr-pct" style={{ color }}>{winPct}%</span>
+            <span className="tier-wr-record">{r.wins}W / {r.total - r.wins}L</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main ModelStats component
 // ---------------------------------------------------------------------------
 
@@ -331,7 +462,7 @@ export default function ModelStats({ modelId, onClose, onReplaySelected }) {
     )
   }
 
-  const { model, elo_history, battle_history, turn_stats, lessons } = stats
+  const { model, elo_history, battle_history, turn_stats, lessons, usage } = stats
   const winRate = model.games > 0
     ? ((model.wins / model.games) * 100).toFixed(1)
     : null
@@ -398,6 +529,42 @@ export default function ModelStats({ modelId, onClose, onReplaySelected }) {
           />
         </div>
       </div>
+
+      {/* Usage stats — only shown when there's turn data */}
+      {usage && (usage.top_pokemon?.length > 0 || usage.top_moves?.length > 0) && (
+        <div className="stats-grid">
+          <div className="panel stats-panel">
+            <div className="panel-title">
+              POKÉMON USAGE
+              <span className="panel-subtitle">most turns as active mon</span>
+            </div>
+            <UsagePokemon rows={usage.top_pokemon ?? []} />
+          </div>
+
+          <div className="panel stats-panel">
+            <div className="panel-title">
+              MOVE USAGE
+              <span className="panel-subtitle">most frequently chosen</span>
+            </div>
+            <UsageMoves rows={usage.top_moves ?? []} />
+          </div>
+        </div>
+      )}
+
+      {/* Action distribution + win-rate by tier */}
+      {usage && (usage.action_distribution?.length > 0 || usage.win_rate_by_tier?.length > 0) && (
+        <div className="stats-grid">
+          <div className="panel stats-panel">
+            <div className="panel-title">ACTION SPLIT</div>
+            <ActionDistribution rows={usage.action_distribution ?? []} />
+          </div>
+
+          <div className="panel stats-panel">
+            <div className="panel-title">WIN RATE BY TIER</div>
+            <WinRateByTier rows={usage.win_rate_by_tier ?? []} />
+          </div>
+        </div>
+      )}
 
       {/* Lessons */}
       <div className="panel stats-panel">
