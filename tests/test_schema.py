@@ -422,3 +422,118 @@ def test_finish_battle_idempotent_elo(tmp_path) -> None:
         "SELECT COUNT(*) FROM elo_history WHERE battle_id=? AND model_id=?", (bid, p1)
     ).fetchone()[0]
     assert history_rows == 1, "elo_history should have exactly one row per (battle, model)"
+
+
+def test_migration_v9_to_v10_adds_seasons_table(tmp_path) -> None:
+    """A v9 database gains the seasons table and season_id on battles after migrate()."""
+    import sqlite3
+
+    from nidozo.db.schema import migrate
+
+    db_path = tmp_path / "v9.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+
+    # Replicate a v9 schema (tables without seasons / season_id)
+    conn.executescript("""
+        PRAGMA foreign_keys=ON;
+        CREATE TABLE schema_version (version INTEGER NOT NULL);
+        INSERT INTO schema_version VALUES (9);
+        CREATE TABLE models (
+            id INTEGER PRIMARY KEY,
+            provider TEXT NOT NULL,
+            model_name TEXT NOT NULL,
+            prompt_version TEXT NOT NULL DEFAULT 'v1',
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE TABLE battles (
+            id INTEGER PRIMARY KEY,
+            battle_tag TEXT NOT NULL UNIQUE,
+            format TEXT NOT NULL,
+            p1_model_id INTEGER NOT NULL REFERENCES models(id),
+            p2_model_id INTEGER NOT NULL REFERENCES models(id),
+            winner INTEGER,
+            total_turns INTEGER,
+            status TEXT NOT NULL DEFAULT 'pending',
+            started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            finished_at TEXT
+        );
+        CREATE TABLE elo_ratings (
+            model_id INTEGER PRIMARY KEY REFERENCES models(id),
+            rating REAL NOT NULL DEFAULT 1000.0,
+            games INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE TABLE elo_history (
+            id INTEGER PRIMARY KEY,
+            battle_id INTEGER NOT NULL REFERENCES battles(id),
+            model_id INTEGER NOT NULL REFERENCES models(id),
+            rating_before REAL NOT NULL,
+            rating_after REAL NOT NULL,
+            delta REAL NOT NULL
+        );
+        CREATE TABLE turns (
+            id INTEGER PRIMARY KEY,
+            battle_id INTEGER NOT NULL REFERENCES battles(id),
+            turn_number INTEGER NOT NULL,
+            player_role TEXT NOT NULL,
+            prompt_version TEXT NOT NULL,
+            action_chosen TEXT,
+            parse_success INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE tournaments (
+            id INTEGER PRIMARY KEY,
+            players TEXT NOT NULL,
+            rounds INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE lessons (
+            id INTEGER PRIMARY KEY,
+            model_id INTEGER NOT NULL,
+            battle_id INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE TABLE teams (
+            id INTEGER PRIMARY KEY,
+            model_id INTEGER NOT NULL,
+            tier TEXT NOT NULL,
+            format TEXT NOT NULL,
+            pokemon TEXT NOT NULL,
+            team_string TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE TABLE draft_sessions (
+            id INTEGER PRIMARY KEY,
+            model_id INTEGER NOT NULL,
+            tier TEXT NOT NULL,
+            pool_size INTEGER NOT NULL,
+            picked TEXT NOT NULL,
+            prompt_version TEXT NOT NULL DEFAULT 'v3',
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE UNIQUE INDEX idx_elohist_battle ON elo_history(battle_id, model_id);
+    """)
+    conn.commit()
+
+    migrate(conn)
+    conn.close()
+
+    # Re-open and verify
+    conn2 = sqlite3.connect(str(db_path))
+    conn2.row_factory = sqlite3.Row
+
+    # seasons table must exist
+    tables = {r[0] for r in conn2.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+    assert "seasons" in tables, "seasons table not created by v10 migration"
+
+    # season_id column must exist on battles
+    cols = {r[1] for r in conn2.execute("PRAGMA table_info(battles)").fetchall()}
+    assert "season_id" in cols, "season_id column not added to battles by v10 migration"
+
+    # schema version must be 10
+    version = conn2.execute("SELECT version FROM schema_version").fetchone()[0]
+    assert version == 10
+
+    conn2.close()

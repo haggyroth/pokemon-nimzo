@@ -117,7 +117,8 @@ def no_battle_runner():
     async def _noop(*args, **kwargs):
         pass
     with patch("nidozo.api.routes.run_battles", side_effect=_noop), \
-         patch("nidozo.api.routes.run_tournament", side_effect=_noop):
+         patch("nidozo.api.routes.run_tournament", side_effect=_noop), \
+         patch("nidozo.api.routes.run_season", side_effect=_noop):
         yield
 
 
@@ -1015,3 +1016,203 @@ async def test_start_tournament_one_player_returns_400(client: AsyncClient, no_b
     )
     # Pydantic enforces min_length=2 → 422 Unprocessable Entity
     assert resp.status_code in (400, 422)
+
+
+# ===========================================================================
+# /api/seasons — CRUD + start
+# ===========================================================================
+
+@pytest.mark.asyncio
+async def test_list_seasons_empty(client: AsyncClient) -> None:
+    resp = await client.get("/api/seasons")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+@pytest.mark.asyncio
+async def test_get_season_not_found(client: AsyncClient) -> None:
+    resp = await client.get("/api/seasons/9999")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_season_standings_not_found(client: AsyncClient) -> None:
+    resp = await client.get("/api/seasons/9999/standings")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_season_battles_not_found(client: AsyncClient) -> None:
+    resp = await client.get("/api/seasons/9999/battles")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_cancel_season_not_found(client: AsyncClient) -> None:
+    resp = await client.post("/api/seasons/9999/cancel")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_start_season_one_player_returns_422(client: AsyncClient, no_battle_runner) -> None:
+    """Pydantic min_length=2 on players."""
+    resp = await client.post(
+        "/api/seasons/start",
+        json={"name": "Test", "players": [{"provider": "random"}]},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_start_season_unknown_tier_returns_400(client: AsyncClient, no_battle_runner) -> None:
+    resp = await client.post(
+        "/api/seasons/start",
+        json={
+            "name": "Tier Test",
+            "players": [{"provider": "random"}, {"provider": "random"}],
+            "tier": "notarealthing",
+        },
+    )
+    assert resp.status_code == 400
+    assert "Unknown tier" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_start_season_returns_season_id_and_battle_ids(
+    client: AsyncClient, no_battle_runner
+) -> None:
+    resp = await client.post(
+        "/api/seasons/start",
+        json={
+            "name": "Season 1 — Gen 3 Random",
+            "players": [
+                {"provider": "random"},
+                {"provider": "random"},
+            ],
+            "rounds": 1,
+            "tier": "random",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "season_id" in data
+    assert isinstance(data["season_id"], int)
+    assert "battle_ids" in data
+    assert len(data["battle_ids"]) == 2   # 2 players × 1 round × both sides
+    assert data["total_battles"] == 2
+
+
+@pytest.mark.asyncio
+async def test_start_season_creates_retrievable_season(
+    app, client: AsyncClient, no_battle_runner
+) -> None:
+    resp = await client.post(
+        "/api/seasons/start",
+        json={
+            "name": "Retrievable Season",
+            "players": [{"provider": "random"}, {"provider": "random"}],
+            "rounds": 1,
+        },
+    )
+    assert resp.status_code == 200
+    sid = resp.json()["season_id"]
+
+    # Season is retrievable via GET
+    get_resp = await client.get(f"/api/seasons/{sid}")
+    assert get_resp.status_code == 200
+    season = get_resp.json()
+    assert season["name"] == "Retrievable Season"
+    assert season["status"] == "pending"
+
+    # Appears in list
+    list_resp = await client.get("/api/seasons")
+    assert list_resp.status_code == 200
+    ids = [s["id"] for s in list_resp.json()]
+    assert sid in ids
+
+
+@pytest.mark.asyncio
+async def test_get_season_standings_empty_before_battles(
+    app, client: AsyncClient, no_battle_runner
+) -> None:
+    resp = await client.post(
+        "/api/seasons/start",
+        json={
+            "name": "Standings Test",
+            "players": [{"provider": "random"}, {"provider": "random"}],
+            "rounds": 1,
+        },
+    )
+    sid = resp.json()["season_id"]
+    st_resp = await client.get(f"/api/seasons/{sid}/standings")
+    assert st_resp.status_code == 200
+    standings = st_resp.json()
+    assert len(standings) == 2
+    for s in standings:
+        assert s["elo"] == 1000.0
+        assert s["games"] == 0
+
+
+@pytest.mark.asyncio
+async def test_get_season_battles_empty_initially(
+    app, client: AsyncClient, no_battle_runner
+) -> None:
+    resp = await client.post(
+        "/api/seasons/start",
+        json={
+            "name": "Battles Test",
+            "players": [{"provider": "random"}, {"provider": "random"}],
+            "rounds": 1,
+        },
+    )
+    sid = resp.json()["season_id"]
+    bt_resp = await client.get(f"/api/seasons/{sid}/battles")
+    assert bt_resp.status_code == 200
+    # Battles exist in DB (created on start) but none are finished yet
+    battles = bt_resp.json()
+    assert isinstance(battles, list)
+    assert len(battles) == 2   # 2 players, 1 round, both sides
+
+
+@pytest.mark.asyncio
+async def test_cancel_season_pending_returns_ok(
+    app, client: AsyncClient, no_battle_runner
+) -> None:
+    """A pending season cannot be cancelled — only running ones can."""
+    resp = await client.post(
+        "/api/seasons/start",
+        json={
+            "name": "Cancel Test",
+            "players": [{"provider": "random"}, {"provider": "random"}],
+            "rounds": 1,
+        },
+    )
+    sid = resp.json()["season_id"]
+    # Manually set to running so cancel is valid
+    app.state.store.set_season_running(sid)
+
+    cancel_resp = await client.post(f"/api/seasons/{sid}/cancel")
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["ok"] is True
+
+    s = app.state.store.get_season(sid)
+    assert s["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_cancel_already_completed_season_returns_409(
+    app, client: AsyncClient, no_battle_runner
+) -> None:
+    resp = await client.post(
+        "/api/seasons/start",
+        json={
+            "name": "Done Season",
+            "players": [{"provider": "random"}, {"provider": "random"}],
+            "rounds": 1,
+        },
+    )
+    sid = resp.json()["season_id"]
+    app.state.store.finish_season(sid, status="completed")
+
+    cancel_resp = await client.post(f"/api/seasons/{sid}/cancel")
+    assert cancel_resp.status_code == 409

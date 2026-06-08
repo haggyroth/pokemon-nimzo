@@ -672,3 +672,283 @@ def test_matchup_matrix_tier_filter(store) -> None:
 
     assert ou_lookup[("a-tier", "b-tier")]["games"] == 1
     assert all_lookup[("a-tier", "b-tier")]["games"] == 2
+
+
+# ===========================================================================
+# Seasons
+# ===========================================================================
+
+# ------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------
+
+def _make_season(store, name="Season 1", tier="random", fmt="gen3randombattle",
+                 participants=None, rounds=1, prompt_version="v4", total_battles=2):
+    if participants is None:
+        participants = [
+            {"provider": "random", "model_name": "model-a"},
+            {"provider": "random", "model_name": "model-b"},
+        ]
+    return store.create_season(
+        name=name, tier=tier, fmt=fmt, participants=participants,
+        rounds=rounds, prompt_version=prompt_version, total_battles=total_battles,
+    )
+
+
+def _season_battle(store, season_id, p1_model, p2_model, winner=1, tag=None):
+    """Create and finish a battle tagged to a season."""
+    p1_id = store.get_or_create_model("random", p1_model)
+    p2_id = store.get_or_create_model("random", p2_model)
+    tag = tag or f"s{season_id}-{p1_model}-{p2_model}"
+    bid = store.create_battle(tag, "gen3randombattle", p1_id, p2_id, season_id=season_id)
+    store.finish_battle(bid, winner=winner, total_turns=5)
+    return bid
+
+
+# ------------------------------------------------------------------
+# create / get / list
+# ------------------------------------------------------------------
+
+def test_create_season_returns_int(store) -> None:
+    sid = _make_season(store)
+    assert isinstance(sid, int)
+
+
+def test_get_season_returns_dict(store) -> None:
+    sid = _make_season(store, name="Test Season")
+    s = store.get_season(sid)
+    assert s is not None
+    assert s["name"] == "Test Season"
+    assert s["status"] == "pending"
+
+
+def test_get_season_parses_participants_as_list(store) -> None:
+    participants = [
+        {"provider": "random", "model_name": "alpha"},
+        {"provider": "random", "model_name": "beta"},
+    ]
+    sid = _make_season(store, participants=participants)
+    s = store.get_season(sid)
+    assert isinstance(s["participants"], list)
+    assert len(s["participants"]) == 2
+    assert s["participants"][0]["model_name"] == "alpha"
+
+
+def test_get_season_returns_none_for_missing(store) -> None:
+    assert store.get_season(9999) is None
+
+
+def test_list_seasons_empty(store) -> None:
+    assert store.list_seasons() == []
+
+
+def test_list_seasons_returns_rows(store) -> None:
+    _make_season(store, name="S1")
+    _make_season(store, name="S2")
+    rows = store.list_seasons()
+    assert len(rows) == 2
+
+
+def test_list_seasons_newest_first(store) -> None:
+    _make_season(store, name="Old")
+    _make_season(store, name="New")
+    rows = store.list_seasons()
+    assert rows[0]["name"] == "New"
+
+
+def test_list_seasons_battles_done_count(store) -> None:
+    sid = _make_season(store)
+    _season_battle(store, sid, "model-a", "model-b", winner=1, tag="s-tag1")
+    rows = store.list_seasons()
+    assert rows[0]["battles_done"] == 1
+
+
+# ------------------------------------------------------------------
+# Status transitions
+# ------------------------------------------------------------------
+
+def test_set_season_running_updates_status(store) -> None:
+    sid = _make_season(store)
+    store.set_season_running(sid)
+    s = store.get_season(sid)
+    assert s["status"] == "running"
+    assert s["started_at"] is not None
+
+
+def test_finish_season_completed(store) -> None:
+    sid = _make_season(store)
+    store.finish_season(sid, status="completed")
+    s = store.get_season(sid)
+    assert s["status"] == "completed"
+    assert s["finished_at"] is not None
+
+
+def test_cancel_season_returns_true(store) -> None:
+    sid = _make_season(store)
+    store.set_season_running(sid)
+    assert store.cancel_season(sid) is True
+    assert store.get_season(sid)["status"] == "cancelled"
+
+
+def test_cancel_season_already_completed_returns_false(store) -> None:
+    sid = _make_season(store)
+    store.finish_season(sid, status="completed")
+    assert store.cancel_season(sid) is False
+
+
+def test_cancel_season_nonexistent_returns_false(store) -> None:
+    assert store.cancel_season(9999) is False
+
+
+# ------------------------------------------------------------------
+# create_battle with season_id
+# ------------------------------------------------------------------
+
+def test_create_battle_with_season_id(store) -> None:
+    sid = _make_season(store)
+    p1 = store.get_or_create_model("random", "r1")
+    p2 = store.get_or_create_model("random", "r2")
+    bid = store.create_battle("s-tag", "gen3randombattle", p1, p2, season_id=sid)
+    row = store._conn.execute("SELECT season_id FROM battles WHERE id=?", (bid,)).fetchone()
+    assert row["season_id"] == sid
+
+
+# ------------------------------------------------------------------
+# get_season_battles
+# ------------------------------------------------------------------
+
+def test_get_season_battles_empty(store) -> None:
+    sid = _make_season(store)
+    assert store.get_season_battles(sid) == []
+
+
+def test_get_season_battles_returns_tagged_battles(store) -> None:
+    sid = _make_season(store)
+    _season_battle(store, sid, "model-a", "model-b", tag="sb1")
+    _season_battle(store, sid, "model-b", "model-a", tag="sb2")
+    battles = store.get_season_battles(sid)
+    assert len(battles) == 2
+
+
+def test_get_season_battles_excludes_other_seasons(store) -> None:
+    sid1 = _make_season(store, name="S1")
+    sid2 = _make_season(store, name="S2")
+    _season_battle(store, sid1, "model-a", "model-b", tag="s1b1")
+    _season_battle(store, sid2, "model-a", "model-b", tag="s2b1")
+    assert len(store.get_season_battles(sid1)) == 1
+    assert len(store.get_season_battles(sid2)) == 1
+
+
+# ------------------------------------------------------------------
+# get_season_standings — ELO replay
+# ------------------------------------------------------------------
+
+def test_get_season_standings_empty_no_battles(store) -> None:
+    """With no battles the standings return 1000.0 ELO for each participant."""
+    sid = _make_season(store, participants=[
+        {"provider": "random", "model_name": "alpha"},
+        {"provider": "random", "model_name": "beta"},
+    ])
+    standings = store.get_season_standings(sid)
+    assert len(standings) == 2
+    for s in standings:
+        assert s["elo"] == pytest.approx(DEFAULT_RATING, abs=0.1)
+        assert s["wins"] == 0
+        assert s["losses"] == 0
+        assert s["ties"] == 0
+        assert s["games"] == 0
+
+
+def test_get_season_standings_winner_gains_elo(store) -> None:
+    """The battle winner's season ELO exceeds 1000; loser's falls below 1000."""
+    sid = _make_season(store, participants=[
+        {"provider": "random", "model_name": "winner"},
+        {"provider": "random", "model_name": "loser"},
+    ])
+    _season_battle(store, sid, "winner", "loser", winner=1, tag="s-w-l")
+    standings = store.get_season_standings(sid)
+    by_name = {s["model_name"]: s for s in standings}
+    assert by_name["winner"]["elo"] > DEFAULT_RATING
+    assert by_name["loser"]["elo"] < DEFAULT_RATING
+    assert by_name["winner"]["wins"] == 1
+    assert by_name["loser"]["losses"] == 1
+
+
+def test_get_season_standings_tie_both_near_1000(store) -> None:
+    """A tied battle nudges both players toward 1000 (expected score ≈ 0.5 each)."""
+    sid = _make_season(store, participants=[
+        {"provider": "random", "model_name": "p1"},
+        {"provider": "random", "model_name": "p2"},
+    ])
+    _season_battle(store, sid, "p1", "p2", winner=None, tag="s-tie")
+    standings = store.get_season_standings(sid)
+    by_name = {s["model_name"]: s for s in standings}
+    # Starting at 1000 vs 1000 means expected score is 0.5; tie gives 0.5 → no change
+    assert by_name["p1"]["elo"] == pytest.approx(DEFAULT_RATING, abs=1.0)
+    assert by_name["p2"]["elo"] == pytest.approx(DEFAULT_RATING, abs=1.0)
+    assert by_name["p1"]["ties"] == 1
+    assert by_name["p2"]["ties"] == 1
+
+
+def test_get_season_standings_sorted_by_elo_descending(store) -> None:
+    """Standings are sorted highest ELO first; rank=1 for top entry."""
+    sid = _make_season(store, participants=[
+        {"provider": "random", "model_name": "champ"},
+        {"provider": "random", "model_name": "scrub"},
+    ])
+    _season_battle(store, sid, "champ", "scrub", winner=1, tag="s-rank")
+    standings = store.get_season_standings(sid)
+    assert standings[0]["model_name"] == "champ"
+    assert standings[0]["rank"] == 1
+    assert standings[1]["rank"] == 2
+
+
+def test_get_season_standings_elo_isolated_from_all_time(store) -> None:
+    """Season standings do not use the all-time ELO table — completely independent."""
+    sid = _make_season(store, participants=[
+        {"provider": "random", "model_name": "iso-a"},
+        {"provider": "random", "model_name": "iso-b"},
+    ])
+    # Run 5 wins for iso-a to inflate all-time ELO significantly
+    for i in range(5):
+        _finish(store, f"alltime-{i}", *[
+            store.get_or_create_model("random", "iso-a"),
+            store.get_or_create_model("random", "iso-b"),
+        ], winner=1)
+    # Season has no battles yet
+    standings = store.get_season_standings(sid)
+    by_name = {s["model_name"]: s for s in standings}
+    # Both must start at 1000 in the season regardless of all-time ELO
+    assert by_name["iso-a"]["elo"] == pytest.approx(DEFAULT_RATING, abs=0.1)
+
+
+def test_get_season_standings_returns_empty_for_missing_season(store) -> None:
+    assert store.get_season_standings(9999) == []
+
+
+def test_get_season_standings_multi_battle_elo_progression(store) -> None:
+    """ELO moves correctly across multiple sequential battles."""
+    from nidozo.db.elo import K_FACTOR, expected_score
+
+    sid = _make_season(store, participants=[
+        {"provider": "random", "model_name": "aa"},
+        {"provider": "random", "model_name": "bb"},
+    ])
+    # aa wins twice
+    _season_battle(store, sid, "aa", "bb", winner=1, tag="multi-1")
+    _season_battle(store, sid, "aa", "bb", winner=1, tag="multi-2")
+
+    standings = store.get_season_standings(sid)
+    by_name = {s["model_name"]: s for s in standings}
+
+    # Manually replay to verify
+    r_aa, r_bb = DEFAULT_RATING, DEFAULT_RATING
+    for _ in range(2):
+        e = expected_score(r_aa, r_bb)
+        r_aa = r_aa + K_FACTOR * (1.0 - e)
+        r_bb = r_bb + K_FACTOR * (0.0 - (1.0 - e))
+
+    assert by_name["aa"]["elo"] == pytest.approx(r_aa, abs=0.1)
+    assert by_name["bb"]["elo"] == pytest.approx(r_bb, abs=0.1)
+    assert by_name["aa"]["wins"] == 2
+    assert by_name["bb"]["losses"] == 2
