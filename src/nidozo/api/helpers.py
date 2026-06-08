@@ -7,6 +7,10 @@ from typing import Any
 
 from nidozo.llm.backend import ModelBackend
 
+# Prompt versions that require structured JSON output (grammar-sampling / response_format).
+# Update this set whenever a new JSON-output prompt version is added.
+_JSON_OUTPUT_PROMPT_VERSIONS: frozenset[str] = frozenset({"v2", "v3", "v4"})
+
 
 def _model_name(provider: str, model: str | None) -> str:
     defaults = {
@@ -80,7 +84,7 @@ def _build_streaming_player(
             server_configuration=cfg,
         )
 
-    use_json_mode = prompt_version in ("v2", "v3") and provider in ("lmstudio", "openai")
+    use_json_mode = prompt_version in _JSON_OUTPUT_PROMPT_VERSIONS and provider in ("lmstudio", "openai")
     backend = _build_backend(provider, model, json_mode=use_json_mode)
     coach = _build_coach(coach_provider, coach_model)
 
