@@ -136,7 +136,7 @@
   "jolteon": {
     "species": "Jolteon", "item": "Lum Berry", "ability": "Volt Absorb",
     "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Thunderbolt", "Shadow Ball", "Hidden Power [Ice]", "Baton Pass"],
+    "moves": ["Thunderbolt", "Shadow Ball", "Hidden Power [Ice]", "Substitute"],
     "level": 100, "types": ["Electric"]
   },
   "gyarados": {
@@ -190,7 +190,7 @@
   "umbreon": {
     "species": "Umbreon", "item": "Leftovers", "ability": "Synchronize",
     "nature": "Careful", "evs": {"HP": 252, "Atk": 4, "SpD": 252},
-    "moves": ["Moonlight", "Baton Pass", "Mean Look", "Pursuit"],
+    "moves": ["Moonlight", "Toxic", "Mean Look", "Pursuit"],
     "level": 100, "types": ["Dark"]
   },
   "weezing": {
@@ -298,7 +298,7 @@
   "espeon": {
     "species": "Espeon", "item": "Lum Berry", "ability": "Synchronize",
     "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Calm Mind", "Psychic", "Baton Pass", "Shadow Ball"],
+    "moves": ["Calm Mind", "Psychic", "Signal Beam", "Shadow Ball"],
     "level": 100, "types": ["Psychic"]
   },
   "slowbro": {
@@ -731,13 +731,13 @@
   "ninjask": {
     "species": "Ninjask", "item": "Salac Berry", "ability": "Speed Boost",
     "nature": "Jolly", "evs": {"HP": 56, "Atk": 252, "Spe": 200},
-    "moves": ["Baton Pass", "Swords Dance", "Silver Wind", "Shadow Ball"],
+    "moves": ["Protect", "Swords Dance", "Silver Wind", "Shadow Ball"],
     "level": 100, "types": ["Bug", "Flying"]
   },
   "mawile": {
     "species": "Mawile", "item": "Salac Berry", "ability": "Intimidate",
     "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Iron Defense", "Baton Pass", "Iron Head", "Crunch"],
+    "moves": ["Swords Dance", "Return", "Iron Head", "Crunch"],
     "level": 100, "types": ["Steel"]
   },
   "sableye": {
@@ -761,7 +761,7 @@
   "smeargle": {
     "species": "Smeargle", "item": "Salac Berry", "ability": "Own Tempo",
     "nature": "Jolly", "evs": {"HP": 4, "Atk": 4, "Spe": 252},
-    "moves": ["Spore", "Baton Pass", "Substitute", "Swords Dance"],
+    "moves": ["Spore", "Encore", "Substitute", "Swords Dance"],
     "level": 100, "types": ["Normal"]
   },
   "tropius": {

@@ -25,7 +25,9 @@ The frontend preserves the last full turn's advisory when it merges these in.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import asyncio
+from time import perf_counter
+from typing import TYPE_CHECKING, Any, Optional
 
 from poke_env.battle import AbstractBattle
 from poke_env.player.battle_order import BattleOrder
@@ -36,6 +38,11 @@ from nidozo.battle.serializer import serialize_battle
 
 if TYPE_CHECKING:
     from nidozo.api.events import EventBus
+
+# Seconds to wait for a challenge to be accepted before assuming team rejection.
+# Normally this takes under 2 seconds; 60s is generous enough to survive a slow
+# server while still catching the infinite-hang from a Showdown team rejection.
+_CHALLENGE_TIMEOUT_SECS: float = 60.0
 
 
 # Showdown protocol message types that change what the battlefield renders.
@@ -128,6 +135,67 @@ class _StreamingMixin:
         """Publish a render-only snapshot of the current battle state."""
         await self._bus.publish(
             _state_event(battle, self._player_role, serialize_battle(battle, light=True))
+        )
+
+    async def _send_challenges(
+        self,
+        opponent: str,
+        n_challenges: int,
+        to_wait: Optional[asyncio.Event] = None,
+    ) -> None:
+        """Override _send_challenges to add a per-challenge timeout.
+
+        poke-env's default implementation blocks on ``_battle_semaphore.acquire()``
+        forever when Showdown rejects the team (popup message) because no battle
+        ever starts to release the semaphore. Adding a 60-second timeout detects
+        this condition and raises so the battle is marked failed instead of hanging.
+
+        This runs on POKE_LOOP (via ``handle_threaded_coroutines``), so asyncio
+        primitives and ``self._bus.publish`` (which uses ``put_nowait``) are safe.
+        """
+        await self.ps_client.logged_in.wait()
+        self.logger.info("Event logged in received in send challenge")
+
+        if to_wait is not None:
+            await to_wait.wait()
+
+        start_time = perf_counter()
+
+        for _ in range(n_challenges):
+            await self.ps_client.challenge(opponent, self._format, self.get_next_team())
+            try:
+                await asyncio.wait_for(
+                    self._battle_semaphore.acquire(),
+                    timeout=_CHALLENGE_TIMEOUT_SECS,
+                )
+            except asyncio.TimeoutError:
+                battle_id: int | None = getattr(self, "_battle_id", None)
+                self.logger.error(
+                    "Challenge timed out after %.0fs (battle_id=%s) — "
+                    "Showdown likely rejected the team. Check server logs for a "
+                    "'|popup|Your team was rejected' message.",
+                    _CHALLENGE_TIMEOUT_SECS,
+                    battle_id,
+                )
+                await self._bus.publish({
+                    "type": "error",
+                    "battle_id": battle_id,
+                    "message": (
+                        f"Battle challenge timed out after {_CHALLENGE_TIMEOUT_SECS:.0f}s — "
+                        "Showdown rejected the team. See server logs for details."
+                    ),
+                })
+                raise RuntimeError(
+                    f"Battle challenge timed out after {_CHALLENGE_TIMEOUT_SECS:.0f}s — "
+                    "Showdown likely rejected the submitted team. "
+                    "Check the server logs for a '|popup|Your team was rejected' message."
+                )
+
+        await self._battle_count_queue.join()
+        self.logger.info(
+            "Challenges (%d battles) finished in %fs",
+            n_challenges,
+            perf_counter() - start_time,
         )
 
     async def _handle_battle_message(self, split_messages: list[list[str]]) -> None:  # type: ignore[override]
