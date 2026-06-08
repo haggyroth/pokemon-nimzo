@@ -26,11 +26,14 @@ The frontend preserves the last full turn's advisory when it merges these in.
 from __future__ import annotations
 
 import asyncio
+import logging
+from collections.abc import Callable
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Optional
 
 from poke_env.battle import AbstractBattle
 from poke_env.player.battle_order import BattleOrder
+from poke_env.ps_client import PSClient
 
 from nidozo.battle.bots import RandomBot
 from nidozo.battle.llm_player import LLMPlayer
@@ -124,6 +127,15 @@ class _StreamingMixin:
     _player_role: str
     _battles: dict[str, AbstractBattle]
 
+    # Attributes provided by the poke-env Player subclass lower in the MRO.
+    # Declared here so mypy can resolve them on the mixin without a concrete base.
+    ps_client: PSClient
+    logger: logging.Logger
+    _format: str
+    _battle_semaphore: asyncio.Semaphore
+    _battle_count_queue: asyncio.Queue[Any]
+    get_next_team: Callable[[], str | None]
+
     def _init_streaming(self, event_bus: EventBus, player_role: str) -> None:
         self._bus = event_bus
         self._player_role = player_role
@@ -168,7 +180,7 @@ class _StreamingMixin:
                     self._battle_semaphore.acquire(),
                     timeout=_CHALLENGE_TIMEOUT_SECS,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError as exc:
                 battle_id: int | None = getattr(self, "_battle_id", None)
                 self.logger.error(
                     "Challenge timed out after %.0fs (battle_id=%s) — "
@@ -189,7 +201,7 @@ class _StreamingMixin:
                     f"Battle challenge timed out after {_CHALLENGE_TIMEOUT_SECS:.0f}s — "
                     "Showdown likely rejected the submitted team. "
                     "Check the server logs for a '|popup|Your team was rejected' message."
-                )
+                ) from exc
 
         await self._battle_count_queue.join()
         self.logger.info(
@@ -198,7 +210,7 @@ class _StreamingMixin:
             perf_counter() - start_time,
         )
 
-    async def _handle_battle_message(self, split_messages: list[list[str]]) -> None:  # type: ignore[override]
+    async def _handle_battle_message(self, split_messages: list[list[str]]) -> None:
         # Let poke-env parse the frame (mutating the battle, possibly invoking
         # choose_move on a request). Delegating keeps us robust to library
         # internals changing between versions.
