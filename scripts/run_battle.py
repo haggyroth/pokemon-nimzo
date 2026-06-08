@@ -156,8 +156,8 @@ async def main(
         store.finish_battle(battle_id, winner, total_turns)
 
         for player, provider in ((p1, p1_provider), (p2, p2_provider)):
-            w, l, t = player.n_won_battles, player.n_lost_battles, player.n_tied_battles
-            print(f"  {player.username} [{provider}]: {w}W / {l}L / {t}T")
+            w, lo, t = player.n_won_battles, player.n_lost_battles, player.n_tied_battles
+            print(f"  {player.username} [{provider}]: {w}W / {lo}L / {t}T")
         print(f"  Winner: {winner_name}  |  Turns: {total_turns}")
 
     store.close()

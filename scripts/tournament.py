@@ -37,7 +37,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from nidozo.db.store import BattleStore
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -104,6 +103,7 @@ async def run_one_battle(
 ) -> dict:
     """Run one battle, persist results, return summary dict."""
     from poke_env import LocalhostServerConfiguration
+
     from nidozo.api.events import EventBus
 
     cfg = LocalhostServerConfiguration
@@ -194,7 +194,7 @@ def _print_leaderboard(store: BattleStore) -> None:
         return
 
     print(f"\n{'═' * 60}")
-    print(f"  FINAL LEADERBOARD")
+    print("  FINAL LEADERBOARD")
     print(f"{'═' * 60}")
     print(f"  {'#':<3} {'MODEL':<35} {'ELO':>7}  {'W':>3}{'L':>3}{'T':>3}")
     print(f"  {'─' * 56}")
@@ -283,7 +283,7 @@ async def _run_via_api(
     player_payload = [{"provider": prov, "model": model} for prov, model in players]
 
     print(f"\n  Routing through API at {api_url}")
-    print(f"  Battles will appear live in the UI WebSocket feed.\n")
+    print("  Battles will appear live in the UI WebSocket feed.\n")
 
     async with _httpx.AsyncClient(timeout=None) as client:
         resp = client.post(
@@ -334,7 +334,7 @@ async def _run_via_api(
         if lb_resp.status_code == 200:
             rows = lb_resp.json()
             print(f"\n{'═' * 60}")
-            print(f"  FINAL LEADERBOARD")
+            print("  FINAL LEADERBOARD")
             print(f"{'═' * 60}")
             print(f"  {'#':<3} {'MODEL':<35} {'ELO':>7}  {'W':>3}{'L':>3}{'T':>3}")
             print(f"  {'─' * 56}")
