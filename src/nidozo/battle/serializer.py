@@ -73,6 +73,10 @@ def _serialize_own_pokemon(mon: Pokemon | None) -> dict[str, Any] | None:
     moves = {
         name: _serialize_move(m) for name, m in mon.moves.items()
     }
+    # Actual in-battle stats (populated by poke-env from the |request| message).
+    # May be None for bench mons whose stats haven't been reported yet.
+    actual = {k: v for k, v in (mon.stats or {}).items() if v is not None}
+    last_move = mon.last_move
     return {
         "species": mon.species,
         "level": mon.level,
@@ -84,8 +88,14 @@ def _serialize_own_pokemon(mon: Pokemon | None) -> dict[str, Any] | None:
         "item": mon.item,
         "ability": mon.ability,
         "base_stats": mon.base_stats,
+        # actual_stats: real computed stats for this battle (level/EVs/nature applied).
+        # Use these for speed comparisons and damage estimates — they are more accurate
+        # than base_stats, which ignore level and individual variation.
+        "actual_stats": actual if actual else None,
         "moves": moves,
         "effects": [e.name for e in mon.effects],
+        # last_move: the most recent move used by this Pokémon (revealed information).
+        "last_move": _serialize_move_basic(last_move) if last_move else None,
     }
 
 
@@ -99,6 +109,7 @@ def _serialize_opponent_pokemon(mon: Pokemon | None) -> dict[str, Any] | None:
     # mon.moves only contains moves the opponent has *used* — poke-env tracks
     # this for us. We do NOT include possible_abilities or estimated stats.
     revealed_moves = {name: _serialize_move_basic(m) for name, m in mon.moves.items()}
+    last_move = mon.last_move
     return {
         "species": mon.species,
         "level": mon.level,
@@ -115,6 +126,8 @@ def _serialize_opponent_pokemon(mon: Pokemon | None) -> dict[str, Any] | None:
         # Explicit count so the prompt can show "N/4 moves revealed" without
         # the model having to count dictionary entries itself.
         "moves_revealed": len(mon.moves),
+        # last_move: the most recent move the opponent used this battle (already revealed).
+        "last_move": _serialize_move_basic(last_move) if last_move else None,
     }
 
 
