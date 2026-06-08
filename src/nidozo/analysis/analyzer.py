@@ -822,9 +822,9 @@ def _turning_point_description(
 
     # Find merged turn data for this turn number
     mt: dict[str, Any] = {}
-    for m in merged_turns:
-        if m["turn_number"] == turn_number:
-            mt = m
+    for mt_row in merged_turns:
+        if mt_row["turn_number"] == turn_number:
+            mt = mt_row
             break
 
     # Extract moves used

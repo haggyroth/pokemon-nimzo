@@ -31,8 +31,6 @@ const RNG_ICON = {
   possible_miss: { icon: '✕',  label: 'MISS?', cls: 'rng-miss' },
 }
 
-// Switch quality keys — treated as "switches" for QualityBar segment counting
-const SWITCH_QUALITY_KEYS = new Set(['switch', 'good_switch', 'bad_switch', 'neutral_switch', 'forced_switch'])
 
 // ---------------------------------------------------------------------------
 // Battle narrative ("Battle Story")
