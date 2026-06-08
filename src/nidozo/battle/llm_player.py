@@ -29,6 +29,9 @@ ThinkingCallback = Callable[[dict[str, Any]], Coroutine[Any, Any, None]] | None
 _COACH_BLOCK = "\n\n--- COACH ANALYSIS ---\n{advice}\n---\n\nWith this analysis in mind, what is your chosen action?"
 
 
+_MAX_RECENT_EVENTS = 3  # turns of history to surface in the prompt
+
+
 class LLMPlayer(Player):
     """A Pokémon Showdown player whose moves are chosen by an LLM.
 
@@ -63,6 +66,10 @@ class LLMPlayer(Player):
         self._on_thinking = on_thinking
         self._lessons = lessons or []
         self._coach = coach
+        # Battle-history tracking (for prompt v4 recent_events)
+        self._prev_hp: dict[str, float] = {}       # species_key → hp_fraction
+        self._recent_events: list[dict[str, Any]] = []  # rolling event log
+        self._last_action_display: str | None = None    # human-readable last action
 
     async def choose_move(self, battle: AbstractBattle) -> BattleOrder:
         # Recharge turn (e.g. after Hyper Beam): only one forced pseudo-move, skip LLM
@@ -71,6 +78,14 @@ class LLMPlayer(Player):
             return self.create_order(moves[0])
 
         state = serialize_battle(battle)
+
+        # Inject battle history (HP deltas since last turn) for prompt v4.
+        # This is stateful and can't be derived from a single snapshot, so we
+        # build it here and overwrite the empty list set by serialize_battle.
+        state["recent_events"] = self._build_recent_events(battle, state)
+        # Snapshot current HP for next turn's delta computation.
+        self._update_hp_snapshot(battle)
+
         state_json = json.dumps(state)
         coach_advice: str | None = None
 
@@ -134,7 +149,104 @@ class LLMPlayer(Player):
 
         action_label = getattr(order, "message", str(order))
         self._log_turn(battle.turn, action_label, True, response, state_json, coach_advice)
+        # Store for next turn's battle history summary
+        self._last_action_display = self._action_display(response)
         return order
+
+    # ------------------------------------------------------------------
+    # Battle history helpers (prompt v4)
+    # ------------------------------------------------------------------
+
+    def _action_display(self, response: str | None) -> str | None:
+        """Extract a human-readable action string from the LLM response."""
+        if not response:
+            return None
+        try:
+            data = json.loads(response.strip())
+            if isinstance(data, dict):
+                atype = data.get("action_type", "")
+                ident = data.get("identifier", "")
+                if atype and ident:
+                    return f"{atype} {ident}"
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
+        return None
+
+    def _build_recent_events(
+        self,
+        battle: AbstractBattle,
+        state: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Build a rolling list of the last N turns' HP events for the prompt."""
+        prev_hp: dict[str, float] = getattr(self, "_prev_hp", {})
+        recent_events: list[dict[str, Any]] = getattr(self, "_recent_events", [])
+        if not hasattr(self, "_recent_events"):
+            self._recent_events = recent_events
+        if not prev_hp or battle.turn <= 1:
+            return list(recent_events)
+
+        lines: list[str] = []
+
+        # What did I play last turn?
+        last_action = getattr(self, "_last_action_display", None)
+        if last_action:
+            lines.append(f"Your action: {last_action}")
+
+        # HP changes for my active Pokémon
+        my_active = state.get("my_active")
+        if my_active:
+            key = my_active["species"]
+            prev = prev_hp.get(key)
+            curr = my_active["hp_fraction"]
+            if prev is not None and abs(curr - prev) > 0.01:
+                delta_pct = (curr - prev) * 100
+                direction = f"took ~{abs(delta_pct):.0f}% damage" if delta_pct < 0 else f"recovered ~{delta_pct:.0f}% HP"
+                lines.append(
+                    f"Your {key.title()} {direction} (now {curr * 100:.0f}%)"
+                )
+
+        # HP changes for opponent's active Pokémon
+        opp_active = state.get("opponent_active")
+        if opp_active:
+            key = f"opp_{opp_active['species']}"
+            prev = prev_hp.get(key)
+            curr = opp_active["hp_fraction"]
+            if prev is not None and abs(curr - prev) > 0.01:
+                delta_pct = (curr - prev) * 100
+                direction = f"took ~{abs(delta_pct):.0f}% damage" if delta_pct < 0 else f"recovered ~{delta_pct:.0f}% HP"
+                lines.append(
+                    f"Opponent's {opp_active['species'].title()} {direction} (now {curr * 100:.0f}%)"
+                )
+
+        if lines:
+            recent_events.append({"turn": battle.turn - 1, "lines": lines})
+            trimmed = recent_events[-_MAX_RECENT_EVENTS:]
+            self._recent_events = trimmed
+            return list(trimmed)
+
+        return list(recent_events)
+
+    def _update_hp_snapshot(self, battle: AbstractBattle) -> None:
+        """Snapshot current HP fractions for all visible mons."""
+        snap: dict[str, float] = {}
+        try:
+            if battle.active_pokemon:
+                snap[battle.active_pokemon.species] = (
+                    battle.active_pokemon.current_hp_fraction
+                )
+            for mon in battle.team.values():
+                if not mon.active:
+                    snap[mon.species] = mon.current_hp_fraction
+            if battle.opponent_active_pokemon:
+                snap[f"opp_{battle.opponent_active_pokemon.species}"] = (
+                    battle.opponent_active_pokemon.current_hp_fraction
+                )
+            for mon in battle.opponent_team.values():
+                if not mon.active:
+                    snap[f"opp_{mon.species}"] = mon.current_hp_fraction
+        except Exception:  # noqa: BLE001
+            pass
+        self._prev_hp = snap
 
     async def _notify_thinking(self, is_coach: bool, turn: int) -> None:
         """Fire a thinking event to any registered callback."""

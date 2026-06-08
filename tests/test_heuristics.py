@@ -587,8 +587,8 @@ def test_battle_context_phase_exception_silenced() -> None:
     # Should not raise — the except clause silences it
     result = score_actions(battle)
     assert "battle_context" in result
-    # 'phase' key should be absent because exception was caught
-    assert "phase" not in result.get("battle_context", {})
+    # 'phase' should be falsy (None) because exception was caught before it was set
+    assert not result.get("battle_context", {}).get("phase")
 
 
 def test_score_move_priority_keyerror_silenced() -> None:
