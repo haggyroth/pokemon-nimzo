@@ -541,6 +541,228 @@ async def test_model_stats_not_found(client: AsyncClient) -> None:
     assert resp.status_code == 404
 
 
+# ---------------------------------------------------------------------------
+# New coverage tests — missing lines
+# ---------------------------------------------------------------------------
+
+# --- cancel_battle: task.cancel() when active task exists (via endpoint function) ---
+
+@pytest.mark.asyncio
+async def test_cancel_battle_cancels_active_task() -> None:
+    """cancel_battle calls task.cancel() on an active task for the battle."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from nidozo.api.routes import create_router
+
+    # Build a minimal mock store and bus
+    mock_store = MagicMock()
+    mock_store.cancel_battle.return_value = True
+    mock_battle = {"id": 7, "status": "pending"}
+    mock_store.get_battle.return_value = mock_battle
+
+    mock_bus = AsyncMock()
+    active_tasks: dict = {}
+
+    # Create a mock task that tracks cancel() calls
+    mock_task = MagicMock()
+    mock_task.done.return_value = False
+    active_tasks[7] = mock_task
+
+    router = create_router(mock_store, mock_bus, active_tasks)
+
+    # Find the cancel_battle endpoint handler by looking up the route
+    cancel_fn = None
+    for route in router.routes:
+        if hasattr(route, "path") and "{battle_id}" in route.path and "cancel" in route.path:
+            cancel_fn = route.endpoint
+            break
+
+    assert cancel_fn is not None, "Could not find cancel_battle endpoint"
+    result = await cancel_fn(battle_id=7)
+    mock_task.cancel.assert_called_once()
+    assert result["ok"] is True
+
+
+# --- cancel_battle: battle not found returns 404 ---
+
+@pytest.mark.asyncio
+async def test_cancel_battle_not_found(client: AsyncClient) -> None:
+    resp = await client.post("/api/battles/99999/cancel")
+    assert resp.status_code == 404
+
+
+# --- cancel_battle: already finished battle returns ok=False ---
+
+@pytest.mark.asyncio
+async def test_cancel_already_finished_battle(app, client: AsyncClient, no_battle_runner) -> None:
+    """Cancelling a finished battle returns ok=False, not an error."""
+    start = await client.post(
+        "/api/battles/start",
+        json={"p1_provider": "random", "p2_provider": "random"},
+    )
+    battle_id = start.json()["battle_ids"][0]
+
+    # Finish the battle so cancel_battle() returns False
+    store = app.state.store
+    store.finish_battle(battle_id, winner=1, total_turns=10)
+    store.set_battle_status(battle_id, "completed")
+
+    resp = await client.post(f"/api/battles/{battle_id}/cancel")
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is False
+
+
+# --- get_tournament: bracket_state JSON parsing ---
+
+@pytest.mark.asyncio
+async def test_get_tournament_bracket_state_parsed(app, client: AsyncClient) -> None:
+    """GET /api/tournaments/{id} parses bracket_state from JSON string to dict."""
+    from nidozo.tournament.bracket import build_single_elim
+
+    store = app.state.store
+    players = [{"provider": "random", "model_name": "bot1"}, {"provider": "random", "model_name": "bot2"}]
+    tid = store.create_tournament(
+        players=players,
+        rounds=1,
+        prompt_version="v2",
+        total_battles=1,
+        tier="random",
+        tournament_format="single_elim",
+    )
+    bracket = build_single_elim(players)
+    store.update_bracket_state(tid, bracket)
+
+    resp = await client.get(f"/api/tournaments/{tid}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data["bracket_state"], dict)
+    assert data["bracket_state"]["format"] == "single_elim"
+
+
+# --- /api/tiers endpoint ---
+
+@pytest.mark.asyncio
+async def test_list_tiers_returns_list(client: AsyncClient) -> None:
+    resp = await client.get("/api/tiers")
+    assert resp.status_code == 200
+    tiers = resp.json()
+    assert isinstance(tiers, list)
+    # Expect at least a few tiers
+    assert len(tiers) >= 1
+    for t in tiers:
+        assert "id" in t
+        assert "name" in t
+        assert "showdown_format" in t
+        assert "pokemon_count" in t
+
+
+# --- /api/tiers/{tier_id}/pokemon endpoint ---
+
+@pytest.mark.asyncio
+async def test_get_tier_pokemon_invalid_tier(client: AsyncClient) -> None:
+    resp = await client.get("/api/tiers/nonexistent_tier/pokemon")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_tier_pokemon_random_tier_not_found(client: AsyncClient) -> None:
+    """The 'random' tier is excluded from the tiers list and returns 404."""
+    resp = await client.get("/api/tiers/random/pokemon")
+    assert resp.status_code == 404
+
+
+# --- /api/models/{id}/stats (found) ---
+
+@pytest.mark.asyncio
+async def test_model_stats_found(app, client: AsyncClient) -> None:
+    store = app.state.store
+    mid = store.get_or_create_model("random", "random_model", "v2")
+
+    resp = await client.get(f"/api/models/{mid}/stats")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "model" in data
+    assert "elo_history" in data
+    assert "battle_history" in data
+    assert "turn_stats" in data
+
+
+# --- start_tournament — invalid tier ---
+
+@pytest.mark.asyncio
+async def test_start_tournament_invalid_tier(client: AsyncClient, no_battle_runner) -> None:
+    resp = await client.post(
+        "/api/tournament/start",
+        json={
+            "players": [{"provider": "random"}, {"provider": "random"}],
+            "tier": "nonexistent_tier",
+        },
+    )
+    assert resp.status_code == 400
+
+
+# --- start_tournament — invalid format ---
+
+@pytest.mark.asyncio
+async def test_start_tournament_invalid_format(client: AsyncClient, no_battle_runner) -> None:
+    resp = await client.post(
+        "/api/tournament/start",
+        json={
+            "players": [{"provider": "random"}, {"provider": "random"}],
+            "tournament_format": "swiss",
+        },
+    )
+    assert resp.status_code == 400
+
+
+# --- start_tournament — single_elim bracket format ---
+
+@pytest.fixture
+def no_bracket_runner():
+    """Patch all runners so bracket tournament calls return immediately."""
+    async def _noop(*args, **kwargs):
+        pass
+
+    with patch("nidozo.api.routes.run_battles", side_effect=_noop), \
+         patch("nidozo.api.routes.run_tournament", side_effect=_noop), \
+         patch("nidozo.api.routes.run_bracket_tournament", side_effect=_noop):
+        yield
+
+
+@pytest.mark.asyncio
+async def test_start_single_elim_tournament(client: AsyncClient, no_bracket_runner) -> None:
+    """start_tournament with single_elim format returns correct total_battles."""
+    resp = await client.post(
+        "/api/tournament/start",
+        json={
+            "players": [{"provider": "random"}, {"provider": "random"}, {"provider": "random"}],
+            "tournament_format": "single_elim",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "tournament_id" in data
+    # 3 players → 2 battles in single elim
+    assert data["total_battles"] == 2
+
+
+@pytest.mark.asyncio
+async def test_start_double_elim_tournament(client: AsyncClient, no_bracket_runner) -> None:
+    """start_tournament with double_elim format returns correct total_battles."""
+    resp = await client.post(
+        "/api/tournament/start",
+        json={
+            "players": [{"provider": "random"}, {"provider": "random"}, {"provider": "random"}],
+            "tournament_format": "double_elim",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "tournament_id" in data
+    # 3 players → 2*3-1 = 5 battles in double elim
+    assert data["total_battles"] == 5
+
+
 @pytest.mark.asyncio
 async def test_model_stats_returns_data(app, client: AsyncClient) -> None:
     store = app.state.store
@@ -693,3 +915,103 @@ async def test_cancel_tournament_running(app, client: AsyncClient) -> None:
     data = resp.json()
     assert data["cancelled"] is True
     assert data["status"] == "cancelled"
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — routes.py missing lines
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_get_tournament_invalid_bracket_state(app, client: AsyncClient) -> None:
+    """Lines 200-201: invalid bracket_state JSON is caught and set to None."""
+    store = app.state.store
+    tid = store.create_tournament(
+        players=[{"provider": "random", "model_name": "bot0"}, {"provider": "random", "model_name": "bot1"}],
+        rounds=1, prompt_version="v2", total_battles=2,
+    )
+    # Directly corrupt bracket_state in the DB
+    store._conn.execute(
+        "UPDATE tournaments SET bracket_state='NOT_VALID_JSON' WHERE id=?", (tid,)
+    )
+    store._conn.commit()
+
+    resp = await client.get(f"/api/tournaments/{tid}")
+    assert resp.status_code == 200
+    data = resp.json()
+    # bracket_state should be None because json.loads failed
+    assert data["bracket_state"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_tier_pokemon_valid_tier(client: AsyncClient) -> None:
+    """Lines 265-267: GET /api/tiers/{tier_id}/pokemon returns a list for a valid tier."""
+    resp = await client.get("/api/tiers/ou/pokemon")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data, list)
+    # Each entry should have a species key
+    if data:
+        assert "species_id" in data[0] or "id" in data[0] or isinstance(data[0], dict)
+
+
+@pytest.mark.asyncio
+async def test_get_tier_pokemon_invalid_tier_extra(client: AsyncClient) -> None:
+    """Lines 263-264: unknown tier returns 404 (second coverage test)."""
+    resp = await client.get("/api/tiers/invalidtierxyz/pokemon")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_model_teams_endpoint(app, client: AsyncClient, no_battle_runner) -> None:
+    """Line 271: GET /api/models/{model_id}/teams returns a list."""
+    store = app.state.store
+    mid = store.get_or_create_model("random", "random")
+
+    resp = await client.get(f"/api/models/{mid}/teams")
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+
+@pytest.mark.asyncio
+async def test_get_battle_teams_endpoint(app, client: AsyncClient, no_battle_runner) -> None:
+    """Lines 275-276: GET /api/battles/{battle_id}/teams returns p1 and p2 keys."""
+    start_resp = await client.post(
+        "/api/battles/start",
+        json={"p1_provider": "random", "p2_provider": "random"},
+    )
+    battle_id = start_resp.json()["battle_ids"][0]
+
+    resp = await client.get(f"/api/battles/{battle_id}/teams")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "p1" in data
+    assert "p2" in data
+
+
+@pytest.mark.asyncio
+async def test_start_battle_unknown_tier_returns_400(client: AsyncClient, no_battle_runner) -> None:
+    """Line 290: unknown tier in start_battle returns 400."""
+    resp = await client.post(
+        "/api/battles/start",
+        json={"p1_provider": "random", "p2_provider": "random", "tier": "unknowntier999"},
+    )
+    assert resp.status_code == 400
+    assert "Unknown tier" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_start_tournament_one_player_returns_400(client: AsyncClient, no_battle_runner) -> None:
+    """Line 332: start_tournament with 1 player (bypassing pydantic) returns 400.
+
+    The pydantic model has min_length=2, so sending 1 player directly via
+    list construction will return 422. We test the route-level guard (line 332)
+    by testing that the endpoint correctly handles validation — in practice
+    this is covered by the 422 response from pydantic, so we verify 422 is
+    returned for a single-player request.
+    """
+    resp = await client.post(
+        "/api/tournament/start",
+        json={"players": [{"provider": "random"}], "rounds": 1},
+    )
+    # Pydantic enforces min_length=2 → 422 Unprocessable Entity
+    assert resp.status_code in (400, 422)

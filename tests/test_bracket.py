@@ -297,3 +297,348 @@ class TestSchemaV7Migration:
             "SELECT tournament_format FROM tournaments LIMIT 1"
         ).fetchone()
         assert row["tournament_format"] == "round_robin"
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — missing lines
+# ---------------------------------------------------------------------------
+
+# --- Single-elim p2_is_bye branch (p2 gets the bye, p1 wins) ---
+
+class TestByeHandlingExtended:
+    def test_p2_bye_p1_wins_single_elim(self) -> None:
+        """When p2 is a bye in single-elim, p1 should be set as winner."""
+        # 3 players → size=4; bye slots depend on seeding order.
+        # Build the bracket and check that every bye match has the real player as winner.
+        state = build_single_elim(_players(3))
+        bye_matches = [m for m in state["match_index"].values() if m["status"] == "bye"]
+        for m in bye_matches:
+            # Winner must be the non-bye seed
+            if m.get("p1_is_bye") and not m.get("p2_is_bye"):
+                assert m["winner_seed"] == m["p2_seed"]
+            elif m.get("p2_is_bye") and not m.get("p1_is_bye"):
+                assert m["winner_seed"] == m["p1_seed"]
+
+    def test_bye_propagates_into_round2(self) -> None:
+        """Winner of a bye match is placed into round-2 before any result is recorded."""
+        state = build_single_elim(_players(3))
+        # Find the round-2 match
+        r2_matches = [m for m in state["match_index"].values() if m["round_num"] == 2]
+        assert r2_matches, "No round-2 match found"
+        r2 = r2_matches[0]
+        # At least one slot in round 2 should be pre-filled from the bye propagation
+        assert r2["p1_seed"] is not None or r2["p2_seed"] is not None
+
+    def test_p2_bye_auto_resolves_double_elim(self) -> None:
+        """In double-elim, bye matches auto-resolve with p1 winning."""
+        state = build_double_elim(_players(3))
+        bye_matches = [
+            m for m in state["match_index"].values()
+            if m["bracket"] == "winners" and m["round_num"] == 1 and m["status"] == "bye"
+        ]
+        for m in bye_matches:
+            if m.get("p2_is_bye") and not m.get("p1_is_bye"):
+                assert m["winner_seed"] == m["p1_seed"]
+
+
+# --- record_result_single — guard when match_id not found ---
+
+def test_record_result_single_unknown_match_id_is_noop() -> None:
+    """record_result_single does nothing when match_id not in index."""
+    state = build_single_elim(_players(2))
+    before = dict(state["match_index"]["WR1-1"])
+    record_result_single(state, "WR99-99", 1, 0)
+    assert state["match_index"]["WR1-1"] == before
+
+
+# --- record_result_double — guard when match_id not found ---
+
+def test_record_result_double_unknown_match_id_is_noop() -> None:
+    """record_result_double does nothing when match_id not in index."""
+    from nidozo.tournament.bracket import record_result_double
+
+    state = build_double_elim(_players(4))
+    champion_before = state["champion_seed"]
+    record_result_double(state, "WR99-99", 1, 0)
+    assert state["champion_seed"] == champion_before
+
+
+# --- GF WB winner path: GFR becomes void ---
+
+def test_gf_wb_winner_sets_champion_and_voids_gfr() -> None:
+    """When WB player wins GF (slot 1), champion is set and GFR is voided."""
+    from nidozo.tournament.bracket import record_result_double
+
+    state = build_double_elim(_players(4))
+    mi = state["match_index"]
+    gf = mi["GF"]
+    # Manually set both seeds so we can record result
+    gf["p1_seed"] = 1
+    gf["p2_seed"] = 3
+    gf["status"] = "pending"
+    record_result_double(state, "GF", 1, battle_id=99)
+    assert state["champion_seed"] == 1
+    assert mi["GFR"]["status"] == "void"
+
+
+# --- GF LB winner path: GFR becomes pending ---
+
+def test_gf_lb_winner_triggers_gfr() -> None:
+    """When LB player wins GF (slot 2), GFR is set to pending."""
+    from nidozo.tournament.bracket import record_result_double
+
+    state = build_double_elim(_players(4))
+    mi = state["match_index"]
+    gf = mi["GF"]
+    gf["p1_seed"] = 1
+    gf["p2_seed"] = 3
+    gf["status"] = "pending"
+    record_result_double(state, "GF", 2, battle_id=99)
+    assert mi["GFR"]["status"] == "pending"
+    assert mi["GFR"]["p1_seed"] == gf["p2_seed"]  # LB player
+    assert mi["GFR"]["p2_seed"] == gf["p1_seed"]  # WB player
+
+
+# --- GFR completes → champion set ---
+
+def test_gfr_completion_sets_champion() -> None:
+    """Recording GFR result sets champion_seed."""
+    from nidozo.tournament.bracket import record_result_double
+
+    state = build_double_elim(_players(4))
+    mi = state["match_index"]
+    gfr = mi["GFR"]
+    gfr["p1_seed"] = 3
+    gfr["p2_seed"] = 1
+    gfr["status"] = "pending"
+    record_result_double(state, "GFR", 1, battle_id=100)
+    assert state["champion_seed"] == 3
+
+
+# --- get_pending_matches excludes bye-slotted entries ---
+
+def test_get_pending_matches_excludes_bye_flagged() -> None:
+    """get_pending_matches never returns matches with p1_is_bye or p2_is_bye."""
+    state = build_double_elim(_players(3))
+    pending = get_pending_matches(state)
+    for m in pending:
+        assert not m.get("p1_is_bye"), f"Match {m['match_id']} has p1_is_bye"
+        assert not m.get("p2_is_bye"), f"Match {m['match_id']} has p2_is_bye"
+
+
+# --- resolve_seed ---
+
+def test_resolve_seed_none_returns_none() -> None:
+    """resolve_seed(state, None) → None."""
+    state = build_single_elim(_players(2))
+    assert resolve_seed(state, None) is None
+
+
+def test_resolve_seed_missing_seed_returns_none() -> None:
+    """resolve_seed with a seed beyond the bracket size → None."""
+    state = build_single_elim(_players(2))
+    assert resolve_seed(state, 99) is None
+
+
+# --- seeds dict has None entries for byes ---
+
+def test_seeds_has_none_for_bye_slots() -> None:
+    """Bye seeds in the bracket are stored as None."""
+    state = build_single_elim(_players(3))
+    # size=4, 3 real players → seed 4 is a bye
+    assert state["seeds"]["4"] is None
+
+
+# --- Double-elim seeds map has None for byes ---
+
+def test_double_elim_seeds_none_for_bye_slot() -> None:
+    state = build_double_elim(_players(3))
+    # size=4, seed 4 is bye
+    assert state["seeds"]["4"] is None
+
+
+# --- record_result dispatch invalid format ---
+
+def test_record_result_invalid_format_raises() -> None:
+    """record_result raises ValueError for an unknown format."""
+    state = build_single_elim(_players(2))
+    state["format"] = "unknown_format"
+    with pytest.raises(ValueError, match="Unknown bracket format"):
+        record_result(state, "WR1-1", 1, 1)
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — bracket.py missing lines
+# ---------------------------------------------------------------------------
+
+def test_advance_winner_single_early_return_guard() -> None:
+    """Line 219: _advance_winner_single returns early when winner_to is None.
+
+    This fires for the final match — its winner_to is None (no next match).
+    After recording the final, _advance_winner_single is called but returns
+    immediately on line 219 because wt is None.
+    """
+    # A 2-player bracket: WR1-1 is the final (winner_to=None)
+    state = build_single_elim(_players(2))
+    final_match = state["match_index"]["WR1-1"]
+    # Confirm winner_to is None for the final match
+    assert final_match["winner_to"] is None
+    # Record result — _advance_winner_single is called, hits the guard, returns
+    record_result_single(state, "WR1-1", 1, battle_id=1)
+    # champion_seed should be set
+    assert state["champion_seed"] == final_match["p1_seed"]
+
+
+def test_record_result_dispatch_single_elim() -> None:
+    """Line 580: record_result dispatches to record_result_single for single_elim."""
+    state = build_single_elim(_players(2))
+    # Use the dispatch function instead of record_result_single directly
+    record_result(state, "WR1-1", 1, battle_id=42)
+    assert state["match_index"]["WR1-1"]["winner_seed"] is not None
+    assert state["champion_seed"] is not None
+
+
+def test_build_single_elim_three_players_has_p2_bye() -> None:
+    """Lines 153-155: 3-player bracket produces a match where p2 is the bye.
+
+    build_single_elim(_players(3)) produces size=4 with one bye slot.
+    The bracket seeding puts (1 vs 4) and (2 vs 3) in round 1.
+    Seed 4 is None (bye), so the WR1-1 match has p2_is_bye=True.
+    """
+    state = build_single_elim(_players(3))
+    bye_matches = [m for m in state["match_index"].values() if m["status"] == "bye"]
+    assert len(bye_matches) >= 1
+    # In the bye match, exactly one side should be flagged as a bye
+    for m in bye_matches:
+        assert m.get("p1_is_bye") or m.get("p2_is_bye")
+        # winner_seed is the non-bye player
+        assert m["winner_seed"] is not None
+
+
+def test_build_double_elim_three_players_has_p2_bye() -> None:
+    """Lines 308-310: 3-player DE produces a bye match in WB round 1."""
+    state = build_double_elim(_players(3))
+    wb_r1_byes = [
+        m for m in state["match_index"].values()
+        if m["bracket"] == "winners" and m["round_num"] == 1 and m["status"] == "bye"
+    ]
+    assert len(wb_r1_byes) >= 1
+    for m in wb_r1_byes:
+        assert m.get("p1_is_bye") or m.get("p2_is_bye")
+        assert m["winner_seed"] is not None
+
+
+def test_de_even_lb_round_odd_index_slot_assignment() -> None:
+    """Lines 344-346: even LB round at odd index uses slot 2.
+
+    In DE with 4+ players, LB even rounds merge adjacent match pairs.
+    For an even LB round, match at odd index (idx % 2 == 1) gets ws=2.
+    We just verify the LR2-2 match (if present) has winner_slot=2.
+    """
+    state = build_double_elim(_players(4))
+    mi = state["match_index"]
+    # LR2 is an even round; LR2-2 is the second match (idx=1 → ws=2)
+    lr2_2 = mi.get("LR2-2")
+    if lr2_2 is not None:
+        assert lr2_2["winner_slot"] == 2
+    else:
+        # With 4 players, there may be only one LR2 match — still valid
+        lr2_1 = mi.get("LR2-1")
+        assert lr2_1 is not None
+
+
+def test_propagate_byes_double_slots_loser_into_lb() -> None:
+    """Lines 454-455: loser of a bye match in DE gets slotted into LB.
+
+    With 3 players (one bye), the WB bye match drops the bye seed into LB.
+    After build_double_elim, verify that the LR1 match has a seed slotted
+    from the bye propagation.
+    """
+    state = build_double_elim(_players(3))
+    mi = state["match_index"]
+    # LR1-1 should have one seed pre-slotted from the bye propagation
+    lr1_1 = mi.get("LR1-1")
+    assert lr1_1 is not None
+    # At least one slot should be populated (the bye seed was propagated in)
+    assert lr1_1.get("p1_seed") is not None or lr1_1.get("p2_seed") is not None
+
+
+def test_get_pending_matches_sort_key_across_brackets() -> None:
+    """Lines 539-545: get_all_matches_ordered sorts across bracket types.
+
+    Building a 4-player DE and calling get_all_matches_ordered exercises
+    the sort key for winners, losers, and grand_final brackets.
+    """
+    from nidozo.tournament.bracket import get_all_matches_ordered
+
+    state = build_double_elim(_players(4))
+    ordered = get_all_matches_ordered(state)
+    assert len(ordered) > 0
+    # Winners bracket matches must appear before losers, which before grand_final
+    brackets = [m["bracket"] for m in ordered]
+    bracket_order = {"winners": 0, "losers": 1, "grand_final": 2}
+    bracket_nums = [bracket_order[b] for b in brackets]
+    assert bracket_nums == sorted(bracket_nums)
+
+
+def test_get_pending_matches_de_mixed_brackets() -> None:
+    """get_pending_matches on a DE bracket with matches in different brackets."""
+    state = build_double_elim(_players(4))
+    pending = get_pending_matches(state)
+    # In a fresh 4-player DE, there should be ready WB round-1 matches
+    wb_pending = [m for m in pending if m["bracket"] == "winners"]
+    assert len(wb_pending) >= 1
+
+
+def test_de_eight_players_lb_even_round_odd_index() -> None:
+    """Lines 344-346: even LB round with idx > 0 sets winner_slot=2.
+
+    An 8-player DE has lb_rounds=4. LR2 is an even round with 2 matches.
+    LR2-2 (idx=1) hits the 'ws = 2' branch because idx % 2 == 1.
+    """
+    state = build_double_elim(_players(8))
+    mi = state["match_index"]
+    # LR2-2 is the second match in LB round 2 (even, not last)
+    lr2_2 = mi.get("LR2-2")
+    assert lr2_2 is not None, "LR2-2 should exist for 8-player DE"
+    # idx=1 → ws = 1 if 1 % 2 == 0 else 2 → ws=2
+    assert lr2_2["winner_slot"] == 2
+
+
+def test_propagate_byes_double_p2_slot_five_players() -> None:
+    """Lines 454-455: bye loser placed in LB p2 slot during bye propagation.
+
+    With 5 players (size=8), WR1-4 is a bye match with loser_slot=2.
+    _propagate_byes_double places the bye loser into LB's p2 slot (line 455).
+    """
+    state = build_double_elim(_players(5))
+    mi = state["match_index"]
+    # WR1-4 should be a bye match (seed 6 is bye with 5 players)
+    wr1_4 = mi.get("WR1-4")
+    assert wr1_4 is not None, "WR1-4 should exist for 5-player DE"
+    if wr1_4.get("status") == "bye":
+        lt = wr1_4.get("loser_to")
+        ls = wr1_4.get("loser_slot")
+        assert ls == 2, f"loser_slot should be 2, got {ls}"
+        lb_m = mi.get(lt)
+        assert lb_m is not None
+        # The bye seed should be in the p2 slot
+        assert lb_m.get("p2_is_bye") is True
+
+
+def test_advance_winner_single_next_match_none_guard() -> None:
+    """Line 219: _advance_winner_single returns when winner_to match is absent.
+
+    Manually craft a completed match with a winner_to that points to a
+    nonexistent match ID. Calling _advance_winner_single should not raise.
+    """
+    from nidozo.tournament.bracket import _advance_winner_single
+
+    match_index = {}
+    completed = {
+        "winner_to":   "NONEXISTENT",
+        "winner_slot":  1,
+        "winner_seed":  1,
+    }
+    # Should return early without raising (next_m is None)
+    _advance_winner_single(match_index, completed)  # no error = test passes

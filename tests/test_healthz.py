@@ -171,3 +171,45 @@ def test_json_formatter_includes_exc_info() -> None:
     assert "exc" in parsed
     assert "ValueError" in parsed["exc"]
     assert "boom" in parsed["exc"]
+
+
+def test_json_formatter_includes_stack_info() -> None:
+    """Stack info is serialised into the 'stack' field when present."""
+    import json
+    import logging
+
+    from nidozo.api.logging_config import _JsonFormatter
+
+    formatter = _JsonFormatter()
+    record = logging.LogRecord(
+        name="test",
+        level=logging.WARNING,
+        pathname="",
+        lineno=0,
+        msg="with stack",
+        args=(),
+        exc_info=None,
+    )
+    record.stack_info = "Stack trace here"
+    output = formatter.format(record)
+    parsed = json.loads(output)
+    assert "stack" in parsed
+    assert "Stack trace here" in parsed["stack"]
+
+
+def test_configure_logging_second_call_is_noop() -> None:
+    """configure_logging() is idempotent — second call does nothing."""
+    import nidozo.api.logging_config as lc
+
+    # Reset state so we can test the first-call path
+    original = lc._CONFIGURED
+    lc._CONFIGURED = False
+    try:
+        from nidozo.api.logging_config import configure_logging
+        configure_logging(level="DEBUG")
+        assert lc._CONFIGURED is True
+        # Second call should be a no-op (no error)
+        configure_logging(level="DEBUG")
+        assert lc._CONFIGURED is True
+    finally:
+        lc._CONFIGURED = original

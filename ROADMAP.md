@@ -94,6 +94,12 @@
 - **Gen 3 pool expansion**: 93 → 153 species with Smogon ADV competitive sets covering all missing starters (Blaziken, Charizard, Venusaur, Blastoise), legends (Raikou, Entei, Regirock, Registeel), and popular UU/NU picks; all Gen 3 legal (no Gen 4+ moves)
 - 358 tests; mypy strict enforced across all source files
 
+### v0.12 — Coach Mode, Brackets & Richer Lessons
+- **Multi-agent coach mode**: optional pre-turn coach model queries the same battle state with no output constraints; coach advice appended to player prompt; `agent: "coach"|"player"` thinking events in the UI; `coach_advice` column in turns table (schema v8)
+- **Tournament brackets**: single-elimination and double-elimination bracket modes with seeded byes for non-power-of-2 fields; lazy battle creation; `bracket_update` WebSocket event; `BracketView` UI with bracket progression visualizer; `tournament_format` and `bracket_state` columns (schema v7)
+- **Richer lesson prompting**: draft critique, variance report, and win-probability data now fully surfaced in the lesson prompt; lesson grounded in specific blunders and turning-point turns rather than generic reflection
+- **Tier 1 test coverage**: 564 tests at 88% coverage; targeted unit tests for analyzer, heuristics, bracket, store, schema, serializer, action parser, and API routes
+
 ---
 
 ## Upcoming
@@ -102,16 +108,6 @@
 
 ### Phase 5 — Platform Expansion
 *Goal: broaden the competitive scope and polish.*
-
-**Multi-agent Reasoning** (coach / tutor mode)
-- Optional: before acting, the player model queries a "coach" model for advice
-- Coach receives the same battle state but no output constraints — free analysis
-- Player weighs coach advice alongside its own reasoning
-- Configurable: which models use a coach, which coach model to use
-
-**Tournament Brackets**
-- Single-elimination and double-elimination bracket modes
-- Bracket visualizer in the UI showing live progression
 
 **Doubles**
 - 2v2 format with target selection (adds which-Pokémon-to-hit decision)
@@ -134,6 +130,11 @@
 
 **Refactoring**
 - Split `app.py` into routing / orchestration / WebSocket layers — still growing
+
+**Test Coverage**
+- *Tier 1 complete at 88%* — pure unit tests for analysis, heuristics, bracket, store, schema, API routes (564 tests)
+- **Tier 2** — async mock-heavy tests for `api/events.py`, `api/ws.py`, `api/helpers.py`, and `api/app.py` startup; requires `AsyncMock` + `anyio` fixtures; estimated ~110 lines, would bring coverage to ~93%
+- **Tier 3** — integration tests for `battle/orchestration.py` and `llm/draft.py` that require a live local Showdown server; intended to run in a separate CI job with a `[integration]` marker; estimated ~333 lines, would push total past 95%
 
 **Infrastructure**
 - Add E2E smoke tests (Playwright) covering start → watch → replay → analyze

@@ -566,3 +566,502 @@ def test_no_crash_when_opp_is_none_for_switch() -> None:
     battle = _mock_battle(available_switches=[incoming], own=_mock_pokemon(), opp=None)
     result = score_actions(battle)
     assert result["switch_scores"][0]["species"] == "pikachu"
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — missing lines in heuristics.py
+# ---------------------------------------------------------------------------
+
+def test_battle_context_phase_exception_silenced() -> None:
+    """Lines 288-289: except Exception in phase calculation is silenced.
+
+    Making battle.team.values() raise causes the phase block to be skipped,
+    but build_heuristics (via score_actions) must still return without error.
+    """
+    own = _mock_pokemon()
+    opp = _mock_pokemon()
+    battle = _mock_battle(own=own, opp=opp)
+    # Make team.values() raise so the phase-calculation except fires
+    battle.team = MagicMock()
+    battle.team.values.side_effect = RuntimeError("oops")
+    # Should not raise — the except clause silences it
+    result = score_actions(battle)
+    assert "battle_context" in result
+    # 'phase' key should be absent because exception was caught
+    assert "phase" not in result.get("battle_context", {})
+
+
+def test_score_move_priority_keyerror_silenced() -> None:
+    """Lines 334-335: KeyError on move.priority is caught and defaults to 0."""
+
+    move = _mock_move("recharge")
+    # Override priority to raise KeyError
+    type(move).priority = PropertyMock(side_effect=KeyError("no priority"))
+    own = _mock_pokemon()
+    opp = _mock_pokemon()
+    opp.damage_multiplier.return_value = 1.0
+    battle = _mock_battle(available_moves=[move], own=own, opp=opp)
+    ms = score_actions(battle)["move_scores"][0]
+    assert ms["priority"] == 0
+
+
+def test_score_move_pp_attributeerror_silenced() -> None:
+    """Lines 342-343: AttributeError in PP check is caught silently.
+
+    We use a spec'd MagicMock so PropertyMock raises AttributeError on access.
+    """
+    from poke_env.battle.move_category import MoveCategory
+
+    class _FakeMove:
+        pass
+
+    move = MagicMock(spec=_FakeMove)
+    move.id = "tackle"
+    move.base_power = 90
+    move.category = MoveCategory.SPECIAL
+    move.priority = 0
+    move.max_pp = 10
+    # Make current_pp raise AttributeError via PropertyMock on a spec'd mock
+    type(move).current_pp = PropertyMock(side_effect=AttributeError("no pp"))
+    move_type = _mock_type("NORMAL")
+    type(move).type = PropertyMock(return_value=move_type)
+
+    own = _mock_pokemon()
+    opp = _mock_pokemon()
+    opp.damage_multiplier.return_value = 1.0
+    battle = _mock_battle(available_moves=[move], own=own, opp=opp)
+    # Should not raise — the AttributeError is caught
+    ms = score_actions(battle)["move_scores"][0]
+    assert ms["low_pp"] is False
+
+
+def test_score_move_type_attributeerror_silenced() -> None:
+    """Lines 382-383: AttributeError on move.type.name defaults move_type_name to ''.
+
+    When move.type.name raises AttributeError, the except sets move_type_name=''
+    and weather modifier defaults to 1.0.
+    """
+    from poke_env.battle.move_category import MoveCategory
+
+    class _FakeMove2:
+        pass
+
+    class _FakeType:
+        """No 'name' attribute — accessing .name on a spec=_FakeType mock raises AttributeError."""
+        pass
+
+    move = MagicMock(spec=_FakeMove2)
+    move.id = "tackle"
+    move.base_power = 90
+    move.category = MoveCategory.SPECIAL
+    move.priority = 0
+    move.max_pp = 15
+    move.current_pp = 15
+    move.accuracy = 1.0
+    # MagicMock(spec=_FakeType) raises AttributeError on .name because _FakeType has no 'name'
+    bad_type = MagicMock(spec=_FakeType)
+    type(move).type = PropertyMock(return_value=bad_type)
+
+    own = _mock_pokemon()
+    opp = _mock_pokemon()
+    opp.damage_multiplier.return_value = 1.0
+    battle = _mock_battle(available_moves=[move], own=own, opp=opp)
+    # Should not raise; weather modifier defaults to 1.0 with empty string
+    ms = score_actions(battle)["move_scores"][0]
+    assert "estimated_damage_pct" in ms
+
+
+def test_score_move_accuracy_exception_defaults_to_one() -> None:
+    """Lines 390-391: exception in accuracy evaluation defaults acc_frac to 1.0.
+
+    Setting accuracy to a value that causes float() to raise ValueError
+    triggers the except clause. With acc_frac=1.0, accuracy_adjusted_pct
+    equals estimated_damage_pct.
+    """
+    move = _mock_move("tackle")
+    # "not-a-number" causes float("not-a-number") to raise ValueError
+    move.accuracy = "not-a-number"
+    own = _mock_pokemon()
+    opp = _mock_pokemon()
+    opp.damage_multiplier.return_value = 1.0
+    battle = _mock_battle(available_moves=[move], own=own, opp=opp)
+    ms = score_actions(battle)["move_scores"][0]
+    # With acc_frac=1.0, pct * 1.0 == pct, so both percentages should be the same
+    assert ms["estimated_damage_pct"] is not None
+    assert ms["accuracy_adjusted_pct"] is not None
+    assert ms["estimated_damage_pct"] == ms["accuracy_adjusted_pct"]
+
+
+def test_score_move_likely_ohko_noted() -> None:
+    """Line 423: 'likely OHKO' note fires when pct >= 100."""
+    # Use very high base_power and low opp stats to guarantee pct >= 100
+    move = _mock_move("hyperbeam", base_power=250, category_name="SPECIAL", type_name="NORMAL")
+    move.accuracy = True
+    own = _mock_pokemon(
+        stats={"spa": 400},
+        base_stats={"hp": 80, "atk": 80, "def": 80, "spa": 400, "spd": 80, "spe": 80},
+    )
+    opp = _mock_pokemon(
+        base_stats={"hp": 1, "atk": 80, "def": 80, "spa": 80, "spd": 5, "spe": 80},
+    )
+    opp.damage_multiplier.return_value = 1.0
+    battle = _mock_battle(available_moves=[move], own=own, opp=opp)
+    ms = score_actions(battle)["move_scores"][0]
+    assert any("OHKO" in n for n in ms["notes"])
+
+
+def test_score_move_stab_noted() -> None:
+    """Line 456: 'STAB' note fires when move.type is in own.types."""
+    electric_type = _mock_type("ELECTRIC")
+    move = _mock_move("thunderbolt", type_name="ELECTRIC")
+    # Override move.type to be the same object as in own.types
+    move.type = electric_type
+    own = _mock_pokemon(types=("ELECTRIC",))
+    # Override own.types to return exactly that type object
+    type(own).types = PropertyMock(return_value=[electric_type])
+    opp = _mock_pokemon()
+    opp.damage_multiplier.return_value = 2.0
+    battle = _mock_battle(available_moves=[move], own=own, opp=opp)
+    ms = score_actions(battle)["move_scores"][0]
+    assert any("STAB" in n for n in ms["notes"])
+
+
+def test_annotate_status_move_unknown_id_generic_fallback() -> None:
+    """Lines 476-477: unknown status move id → generic 'status move' note + return."""
+    move = _mock_move("unknownmove99", base_power=0, category_name="STATUS")
+    own = _mock_pokemon()
+    opp = _mock_pokemon()
+    battle = _mock_battle(available_moves=[move], own=own, opp=opp)
+    ms = score_actions(battle)["move_scores"][0]
+    assert any(n == "status move" for n in ms["notes"])
+
+
+def test_annotate_status_move_stat_drop_at_min_stage() -> None:
+    """Line 513: opponent already at -6 notes 'no further effect'."""
+    move = _mock_move("growl", base_power=0, category_name="STATUS")
+    own = _mock_pokemon()
+    opp = _mock_pokemon(boosts={"atk": -6})
+    battle = _mock_battle(available_moves=[move], own=own, opp=opp)
+    ms = score_actions(battle)["move_scores"][0]
+    assert any("-6" in n and "min" in n.lower() for n in ms["notes"])
+
+
+def test_switch_fainted_cannot_be_sent_out() -> None:
+    """Lines 564-566: fainted incoming → 'fainted' note and switch_quality=-3."""
+    incoming = _mock_pokemon("pikachu", hp_fraction=0.0)
+    incoming.fainted = True
+    opp = _mock_pokemon()
+    opp.moves = {}
+    battle = _mock_battle(available_switches=[incoming], own=_mock_pokemon(), opp=opp)
+    ss = score_actions(battle)["switch_scores"][0]
+    assert ss["switch_quality"] == -3
+    assert any("fainted" in n.lower() for n in ss["notes"])
+
+
+def test_switch_moderate_hp_noted() -> None:
+    """Lines 574-575: incoming at moderate HP (0.25 <= hp < 0.5) notes 'Moderate HP'."""
+    incoming = _mock_pokemon("pikachu", hp_fraction=0.4)
+    incoming.fainted = False
+    opp = _mock_pokemon()
+    opp.moves = {}
+    battle = _mock_battle(available_switches=[incoming], own=_mock_pokemon(), opp=opp)
+    ss = score_actions(battle)["switch_scores"][0]
+    assert any("moderate" in n.lower() or "40%" in n for n in ss["notes"])
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — missing lines
+# ---------------------------------------------------------------------------
+
+# --- _current_weather exception paths ---
+
+def test_current_weather_stop_iteration() -> None:
+    """_current_weather returns None when weather dict raises StopIteration."""
+    from nidozo.battle.heuristics import _current_weather
+
+    battle = _mock_battle(own=_mock_pokemon(), opp=_mock_pokemon())
+    # iter({}) raises StopIteration on next()
+    battle.weather = {}  # empty dict → StopIteration on next(iter({}))
+    result = _current_weather(battle)
+    assert result is None
+
+
+def test_current_weather_attribute_error() -> None:
+    """_current_weather returns None when weather attribute is missing."""
+    from nidozo.battle.heuristics import _current_weather
+
+    battle = MagicMock()
+    type(battle).weather = PropertyMock(side_effect=AttributeError("no weather"))
+    result = _current_weather(battle)
+    assert result is None
+
+
+def test_current_weather_happy_path() -> None:
+    """_current_weather extracts the weather name when dict has one entry."""
+    from nidozo.battle.heuristics import _current_weather
+
+    weather_key = MagicMock()
+    weather_key.name = "SANDSTORM"
+    battle = _mock_battle(own=_mock_pokemon(), opp=_mock_pokemon(),
+                          weather={weather_key: 3})
+    result = _current_weather(battle)
+    assert result == "SANDSTORM"
+
+
+# --- _effective_speed exception path ---
+
+def test_effective_speed_attribute_error_returns_fallback() -> None:
+    """_effective_speed returns 80.0 when boosts.get raises TypeError."""
+    from nidozo.battle.heuristics import _effective_speed
+
+    mon = MagicMock()
+    mon.stats = {}       # empty dict → raw is None → float(mon.base_stats.get(...))
+    mon.base_stats = {"spe": 80}
+    # Make boosts.get raise TypeError → triggers except block
+    mon.boosts = None    # None.get("spe", 0) → AttributeError → caught
+    result = _effective_speed(mon, is_own=True)
+    assert result == pytest.approx(80.0)
+
+
+# --- _active_matchup_quality ---
+
+def test_active_matchup_quality_double_edged() -> None:
+    """Both sides super effective → 'double-edged'."""
+    from nidozo.battle.heuristics import _active_matchup_quality
+
+    own = _mock_pokemon(types=("WATER",))
+    opp = _mock_pokemon(types=("FIRE",))
+    # own STAB (Water) hits opp (Fire) for 2×; opp STAB (Fire) hits own (Water) for... set to 2×
+    opp.damage_multiplier.return_value = 2.0   # own Water → opp Fire: 2×
+    own.damage_multiplier.return_value = 2.0   # opp Fire → own Water: 2×
+    result = _active_matchup_quality(own, opp)
+    assert result == "double-edged"
+
+
+def test_active_matchup_quality_unknown_when_none() -> None:
+    """Returns 'unknown' when either pokemon is None."""
+    from nidozo.battle.heuristics import _active_matchup_quality
+
+    assert _active_matchup_quality(None, _mock_pokemon()) == "unknown"
+    assert _active_matchup_quality(_mock_pokemon(), None) == "unknown"
+
+
+# --- Battle phase detection ---
+
+def test_battle_phase_endgame_behind() -> None:
+    """own_remaining==1, opp_remaining>1 → endgame_behind."""
+    own = _mock_pokemon()
+    opp1 = _mock_pokemon("opp1")
+    opp2 = _mock_pokemon("opp2")
+    battle = MagicMock()
+    battle.available_moves = []
+    battle.available_switches = []
+    battle.active_pokemon = own
+    battle.opponent_active_pokemon = opp1
+    battle.weather = {}
+    # own team: only 1 alive; opp team: 2 alive
+    own.fainted = False
+    opp1.fainted = False
+    opp2.fainted = False
+    battle.team = {"own": own}
+    battle.opponent_team = {"opp1": opp1, "opp2": opp2}
+
+    ctx = score_actions(battle)["battle_context"]
+    assert ctx.get("phase") == "endgame_behind"
+
+
+def test_battle_phase_endgame_ahead() -> None:
+    """own_remaining>1, opp_remaining==1 → endgame_ahead."""
+    own1 = _mock_pokemon("own1")
+    own2 = _mock_pokemon("own2")
+    opp = _mock_pokemon("opp")
+    battle = MagicMock()
+    battle.available_moves = []
+    battle.available_switches = []
+    battle.active_pokemon = own1
+    battle.opponent_active_pokemon = opp
+    battle.weather = {}
+    own1.fainted = False
+    own2.fainted = False
+    opp.fainted = False
+    battle.team = {"own1": own1, "own2": own2}
+    battle.opponent_team = {"opp": opp}
+
+    ctx = score_actions(battle)["battle_context"]
+    assert ctx.get("phase") == "endgame_ahead"
+
+
+def test_battle_phase_midgame() -> None:
+    """3 own + 3 opp (sum=6) → midgame."""
+    mons = [_mock_pokemon(f"m{i}") for i in range(6)]
+    for m in mons:
+        m.fainted = False
+    battle = MagicMock()
+    battle.available_moves = []
+    battle.available_switches = []
+    battle.active_pokemon = mons[0]
+    battle.opponent_active_pokemon = mons[3]
+    battle.weather = {}
+    battle.team = {m.species: m for m in mons[:3]}
+    battle.opponent_team = {m.species: m for m in mons[3:]}
+
+    ctx = score_actions(battle)["battle_context"]
+    assert ctx.get("phase") == "midgame"
+
+
+def test_battle_phase_early() -> None:
+    """4 own + 4 opp (sum=8 > 6) → early."""
+    mons = [_mock_pokemon(f"m{i}") for i in range(8)]
+    for m in mons:
+        m.fainted = False
+    battle = MagicMock()
+    battle.available_moves = []
+    battle.available_switches = []
+    battle.active_pokemon = mons[0]
+    battle.opponent_active_pokemon = mons[4]
+    battle.weather = {}
+    battle.team = {m.species: m for m in mons[:4]}
+    battle.opponent_team = {m.species: m for m in mons[4:]}
+
+    ctx = score_actions(battle)["battle_context"]
+    assert ctx.get("phase") == "early"
+
+
+# --- Weather context notes ---
+
+def test_weather_note_sandstorm() -> None:
+    weather_key = MagicMock()
+    weather_key.name = "SANDSTORM"
+    battle = _mock_battle(own=_mock_pokemon(), opp=_mock_pokemon(),
+                          weather={weather_key: 5})
+    ctx = score_actions(battle)["battle_context"]
+    assert "Sandstorm" in ctx.get("weather_note", "")
+
+
+def test_weather_note_hail() -> None:
+    weather_key = MagicMock()
+    weather_key.name = "HAIL"
+    battle = _mock_battle(own=_mock_pokemon(), opp=_mock_pokemon(),
+                          weather={weather_key: 5})
+    ctx = score_actions(battle)["battle_context"]
+    assert "Hail" in ctx.get("weather_note", "")
+
+
+def test_weather_note_sunnyday() -> None:
+    weather_key = MagicMock()
+    weather_key.name = "SUNNYDAY"
+    battle = _mock_battle(own=_mock_pokemon(), opp=_mock_pokemon(),
+                          weather={weather_key: 5})
+    ctx = score_actions(battle)["battle_context"]
+    assert "Sun" in ctx.get("weather_note", "")
+
+
+# --- Low PP note ---
+
+def test_low_pp_boundary() -> None:
+    """Exactly 25% PP left still triggers low_pp warning."""
+    move = _mock_move("thunderbolt")
+    move.current_pp = 4
+    move.max_pp = 16   # 4/16 = 0.25 → low_pp
+    own = _mock_pokemon()
+    opp = _mock_pokemon()
+    opp.damage_multiplier.return_value = 1.0
+    battle = _mock_battle(available_moves=[move], own=own, opp=opp)
+    ms = score_actions(battle)["move_scores"][0]
+    assert ms["low_pp"] is True
+    assert any("LOW PP" in n for n in ms["notes"])
+
+
+# --- Switch scoring — quality labels ---
+
+def test_switch_quality_poor_label() -> None:
+    """Very low HP (-2) and a weakness (-1) → switch_quality ≤ -2 → 'poor switch'."""
+    incoming = _mock_pokemon("charizard", types=("FIRE",), hp_fraction=0.15)
+    incoming.damage_multiplier.return_value = 2.0  # weak to opp's type
+    opp = _mock_pokemon(types=("WATER",))
+    opp.moves = {}
+    opp.damage_multiplier.return_value = 1.0
+    battle = _mock_battle(available_switches=[incoming], own=_mock_pokemon(), opp=opp)
+    ss = score_actions(battle)["switch_scores"][0]
+    assert ss["quality_label"] in ("poor switch", "risky switch")
+
+
+def test_switch_quality_excellent_label() -> None:
+    """Multiple immunities / resists → high switch_quality → 'excellent switch'."""
+    incoming = _mock_pokemon("gengar", types=("GHOST",))
+    # immune to Normal, also resists Poison
+    incoming.damage_multiplier.side_effect = lambda t: (
+        0.0 if t.name in ("NORMAL", "FIGHTING") else
+        0.5 if t.name == "POISON" else 1.0
+    )
+    opp = _mock_pokemon(types=("NORMAL",))
+    opp.moves = {}
+    opp.damage_multiplier.return_value = 2.0  # Ghost hits opp SE
+    battle = _mock_battle(available_switches=[incoming], own=_mock_pokemon(), opp=opp)
+    ss = score_actions(battle)["switch_scores"][0]
+    # Should be high quality
+    assert ss["switch_quality"] >= 1
+
+
+# --- _is_primarily_physical with no moves ---
+
+def test_is_primarily_physical_no_moves_falls_back_to_base_stats() -> None:
+    """With no moves, _is_primarily_physical uses base_stats atk vs spa."""
+    from nidozo.battle.heuristics import _is_primarily_physical
+
+    mon = _mock_pokemon(base_stats={"hp": 80, "atk": 120, "def": 80, "spa": 60, "spd": 80, "spe": 80})
+    mon.moves = {}   # no moves
+    assert _is_primarily_physical(mon) is True
+
+    mon_special = _mock_pokemon(base_stats={"hp": 80, "atk": 60, "def": 80, "spa": 120, "spd": 80, "spe": 80})
+    mon_special.moves = {}
+    assert _is_primarily_physical(mon_special) is False
+
+
+# --- Switch score: burned physical attacker note ---
+
+def test_switch_note_burned_physical_attacker() -> None:
+    """Burned physical attacker generates a note suggesting switching."""
+    from poke_env.battle.move_category import MoveCategory
+
+    status_brn = MagicMock()
+    status_brn.name = "BRN"
+
+    # Set up own as burned with mostly physical moves
+    phys_move = MagicMock()
+    phys_move.category = MoveCategory.PHYSICAL
+    phys_move.base_power = 80
+
+    own = _mock_pokemon(status=status_brn)
+    own.moves = {"tackle": phys_move}
+
+    incoming = _mock_pokemon("blastoise")
+    incoming.damage_multiplier.return_value = 1.0
+
+    opp = _mock_pokemon(types=("NORMAL",))
+    opp.moves = {}
+    opp.damage_multiplier.return_value = 1.0
+
+    battle = _mock_battle(available_switches=[incoming], own=own, opp=opp)
+    ss = score_actions(battle)["switch_scores"][0]
+    assert any("burned" in n.lower() or "burn" in n.lower() for n in ss["notes"])
+
+
+# --- Paralysis on switch target ---
+
+def test_switch_note_paralyzed_active() -> None:
+    """Paralyzed active mon should note the speed penalty when switching."""
+    status_par = MagicMock()
+    status_par.name = "PAR"
+
+    own = _mock_pokemon(status=status_par)
+    incoming = _mock_pokemon("blastoise")
+    incoming.damage_multiplier.return_value = 1.0
+
+    opp = _mock_pokemon()
+    opp.moves = {}
+    opp.damage_multiplier.return_value = 1.0
+
+    battle = _mock_battle(available_switches=[incoming], own=own, opp=opp)
+    ss = score_actions(battle)["switch_scores"][0]
+    assert any("paralyz" in n.lower() for n in ss["notes"])
