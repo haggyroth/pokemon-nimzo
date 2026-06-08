@@ -107,9 +107,30 @@ export function useBattleStream() {
         // state_update: Showdown just resolved a turn — refresh HP bars and active
         // Pokémon immediately, before the LLM has started deliberating.
         // Don't add to the events log and don't clear the thinking indicator.
+        //
+        // Render-only (zero-lag) updates omit decision context (heuristics,
+        // available_moves, …) because those are stale until poke-env parses the
+        // next request. Merge so we keep the last full turn's advisory rather
+        // than blanking the heuristic drawer / PP display.
         if (event.type === 'state_update') {
-          if (event.player_role === 'p1') setP1State(event)
-          if (event.player_role === 'p2') setP2State(event)
+          const merge = (prev) => {
+            if (!prev?.state) return event
+            const incoming = event.state || {}
+            const keep = (next, old) =>
+              (Array.isArray(next) ? next.length : next != null) ? next : old
+            return {
+              ...event,
+              state: {
+                ...incoming,
+                heuristics:          keep(incoming.heuristics,          prev.state.heuristics),
+                available_moves:     keep(incoming.available_moves,     prev.state.available_moves),
+                available_switches:  keep(incoming.available_switches,  prev.state.available_switches),
+                opponent_threat_map: keep(incoming.opponent_threat_map, prev.state.opponent_threat_map),
+              },
+            }
+          }
+          if (event.player_role === 'p1') setP1State(merge)
+          if (event.player_role === 'p2') setP2State(merge)
           return
         }
 

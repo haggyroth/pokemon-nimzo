@@ -24,13 +24,25 @@ from nidozo.battle.heuristics import score_actions
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def serialize_battle(battle: AbstractBattle) -> dict[str, Any]:
+def serialize_battle(battle: AbstractBattle, *, light: bool = False) -> dict[str, Any]:
     """Return a structured dict representing the current battle state.
 
     The returned dict is safe to render into either player's prompt — it
     encodes perspective-correct information for the player whose turn it is.
+
+    Args:
+        light: When True, return a *render-only* snapshot: every field needed
+            to draw the battlefield (active/bench Pokémon, HP, status, weather,
+            fields, side conditions) but **without** decision-context fields
+            (``heuristics``, ``opponent_threat_map``, ``available_moves``,
+            ``available_switches``).  Those are (a) expensive — ``score_actions``
+            runs damage/type math over every legal option — and (b) *stale*
+            between a turn resolving and poke-env parsing the next ``|request|``,
+            because ``battle.available_moves`` still reflects the previous turn.
+            Used for zero-lag ``state_update`` events (OP-01); the frontend
+            preserves the last full turn's advisory when it merges these in.
     """
-    return {
+    state: dict[str, Any] = {
         "turn": battle.turn,
         "format": battle.format,
         "weather": _serialize_weather(battle),
@@ -52,15 +64,26 @@ def serialize_battle(battle: AbstractBattle) -> dict[str, Any]:
             if not p.active
         ],
         "opponent_team_size_seen": len(battle.opponent_team),
-        "available_moves": [_serialize_move(m) for m in battle.available_moves],
-        "available_switches": [p.species for p in battle.available_switches],
         "force_switch": battle.force_switch,
-        "heuristics": score_actions(battle),
-        "opponent_threat_map": _compute_threat_map(battle),
         # recent_events is injected by LLMPlayer (stateful, not derivable from
         # a single battle snapshot). Absent here; always present in prompts.
         "recent_events": [],
     }
+
+    if light:
+        # Render-only: omit decision context. Keys are still present (empty/None)
+        # so the shape is stable and the frontend can detect "no advisory here".
+        state["available_moves"] = []
+        state["available_switches"] = []
+        state["heuristics"] = None
+        state["opponent_threat_map"] = []
+        return state
+
+    state["available_moves"] = [_serialize_move(m) for m in battle.available_moves]
+    state["available_switches"] = [p.species for p in battle.available_switches]
+    state["heuristics"] = score_actions(battle)
+    state["opponent_threat_map"] = _compute_threat_map(battle)
+    return state
 
 
 # ---------------------------------------------------------------------------

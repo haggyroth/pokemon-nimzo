@@ -8,7 +8,7 @@ These tests enforce the hidden-information contract:
 We use mocks to construct precise battle states without needing a live server.
 """
 
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 from nidozo.battle.serializer import (
     _serialize_opponent_pokemon,
@@ -221,6 +221,68 @@ def test_serialize_battle_structure() -> None:
     }
     assert expected_keys == set(result.keys())
     assert result["turn"] == 3
+
+
+def _mock_render_battle() -> MagicMock:
+    """Battle mock whose decision-context accessors raise if touched.
+
+    Used to prove the light serializer never computes heuristics / legal actions.
+    """
+    battle = MagicMock()
+    battle.turn = 7
+    battle.format = "gen3randombattle"
+    battle.weather = {}
+    battle.fields = {}
+    battle.side_conditions = {}
+    battle.opponent_side_conditions = {}
+    own = _mock_own_pokemon()
+    opp = _mock_opponent_pokemon()
+    battle.active_pokemon = own
+    battle.opponent_active_pokemon = opp
+    battle.team = {"pikachu": _mock_own_pokemon()}
+    battle.opponent_team = {"charmander": _mock_opponent_pokemon()}
+    battle.force_switch = False
+    return battle
+
+
+def test_serialize_battle_light_omits_decision_context() -> None:
+    """light=True returns render fields but blanks heuristics / legal actions."""
+    battle = _mock_render_battle()
+    # Accessing these would compute the heavy/stale advisory — they must NOT be
+    # touched in light mode.
+    type(battle).available_moves = PropertyMock(side_effect=AssertionError("touched available_moves"))
+    type(battle).available_switches = PropertyMock(side_effect=AssertionError("touched available_switches"))
+
+    result = serialize_battle(battle, light=True)
+
+    # Same top-level shape as the full serializer (stable contract for the UI)…
+    expected_keys = {
+        "turn", "format", "weather", "fields",
+        "my_side_conditions", "opponent_side_conditions",
+        "my_active", "my_team",
+        "opponent_active", "opponent_team",
+        "opponent_team_size_seen",
+        "available_moves", "available_switches", "force_switch",
+        "heuristics", "opponent_threat_map", "recent_events",
+    }
+    assert expected_keys == set(result.keys())
+    # …but decision context is empty.
+    assert result["heuristics"] is None
+    assert result["opponent_threat_map"] == []
+    assert result["available_moves"] == []
+    assert result["available_switches"] == []
+    # Render fields are still populated.
+    assert result["turn"] == 7
+    assert result["my_active"] is not None
+    assert result["opponent_active"] is not None
+
+
+def test_serialize_battle_light_does_not_call_heuristics() -> None:
+    """light=True must not invoke score_actions (the expensive path)."""
+    battle = _mock_render_battle()
+    with patch("nidozo.battle.serializer.score_actions") as mock_score:
+        serialize_battle(battle, light=True)
+    mock_score.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

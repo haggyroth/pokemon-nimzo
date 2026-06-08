@@ -1,4 +1,27 @@
-"""StreamingPlayer — wraps any Player subclass and pushes turn events to the EventBus."""
+"""StreamingPlayer — wraps any Player subclass and pushes battle events to the EventBus.
+
+Zero-lag state updates (OP-01)
+------------------------------
+Pokémon Showdown delivers each ``>battle-…`` update as one WebSocket frame, which
+poke-env turns into a single ``_handle_battle_message`` call. Crucially, the
+turn-resolution frame (``|move|``, ``|-damage|``, …, ``|turn|N|``) and the next
+``|request|`` arrive as *separate* frames. poke-env only invokes ``choose_move``
+when the request frame is parsed — so emitting battle state purely from
+``choose_move`` leaves the UI stale for the gap between the two frames, and never
+reflects intermediate changes (faints, forced switches) until the next decision.
+
+We close this by hooking ``_handle_battle_message``: we let poke-env parse the
+frame as usual (``super()`` — so all the fragile protocol handling stays in the
+library), then, if that frame changed visible state but did **not** result in a
+``choose_move`` call, we publish a render-only ``state_update`` immediately. The
+battlefield therefore refreshes the instant Showdown resolves a turn, regardless
+of whose turn comes next.
+
+The emit is render-only (``serialize_battle(light=True)``): it carries HP, status,
+active/bench Pokémon, weather and fields, but not the heuristic advisory or legal
+actions — those are both expensive and stale until poke-env parses the request.
+The frontend preserves the last full turn's advisory when it merges these in.
+"""
 
 from __future__ import annotations
 
@@ -15,14 +38,48 @@ if TYPE_CHECKING:
     from nidozo.api.events import EventBus
 
 
+# Showdown protocol message types that change what the battlefield renders.
+# A frame containing any of these warrants an immediate render-only state_update.
+# Cosmetic / control messages (|c| chat, |inactive|, |upkeep|, |-anim|, …) are
+# intentionally excluded so we don't emit on no-op frames.
+_STATE_CHANGE_MESSAGES = frozenset({
+    # major actions
+    "turn", "switch", "drag", "replace", "detailschange", "faint",
+    # hp / status
+    "-damage", "-heal", "-sethp", "-status", "-curestatus", "-cureteam",
+    # stat stages
+    "-boost", "-unboost", "-setboost", "-clearboost", "-clearallboost",
+    "-clearnegativeboost", "-clearpositiveboost", "-copyboost", "-swapboost",
+    "-invertboost",
+    # field / weather / side
+    "-weather", "-fieldstart", "-fieldend", "-sidestart", "-sideend",
+    # items / abilities / forme
+    "-item", "-enditem", "-ability", "-endability",
+    "-transform", "-formechange", "-mega", "-primal", "-terastallize",
+})
+
+
+def _frame_changes_state(split_messages: list[list[str]]) -> bool:
+    """Return True if a parsed battle frame contains a render-affecting message.
+
+    ``split_messages`` is poke-env's representation of one WebSocket frame: a
+    list of pipe-split protocol lines, e.g. ``['', 'turn', '6']``. The leading
+    line (``['>battle-…']``) and blank lines are ignored.
+    """
+    return any(
+        len(m) > 1 and m[1] in _STATE_CHANGE_MESSAGES
+        for m in split_messages
+    )
+
+
 def _state_event(
     battle: AbstractBattle, player_role: str, state: dict[str, Any]
 ) -> dict[str, Any]:
-    """Lightweight state snapshot emitted at the START of choose_move.
+    """Lightweight render-only snapshot.
 
-    Fires before the LLM is consulted so the frontend can refresh HP bars
-    and active Pokémon immediately when Showdown resolves a turn, rather
-    than waiting for the full LLM round-trip.
+    Emitted (a) the instant Showdown resolves a turn — before the next request
+    arrives — and (b) at the start of choose_move, so the frontend refreshes HP
+    bars and active Pokémon without waiting for the LLM round-trip.
     """
     return {
         "type": "state_update",
@@ -47,8 +104,58 @@ def _turn_event(
     }
 
 
-class StreamingLLMPlayer(LLMPlayer):
-    """LLMPlayer that additionally pushes turn/thinking events to the EventBus."""
+class _StreamingMixin:
+    """Shared zero-lag streaming behaviour for the LLM player and the random bot.
+
+    Must precede the poke-env ``Player`` subclass in the MRO so that this
+    ``_handle_battle_message`` override is found first and ``super()`` resolves
+    to the library implementation.
+    """
+
+    # Set by _init_streaming; declared for type-checkers.
+    _bus: EventBus
+    _player_role: str
+    _battles: dict[str, AbstractBattle]
+
+    def _init_streaming(self, event_bus: EventBus, player_role: str) -> None:
+        self._bus = event_bus
+        self._player_role = player_role
+        # Tracks whether choose_move ran during the current frame, so the
+        # post-parse hook doesn't double-emit a state_update.
+        self._chose_during_frame = False
+
+    async def _emit_state_update(self, battle: AbstractBattle) -> None:
+        """Publish a render-only snapshot of the current battle state."""
+        await self._bus.publish(
+            _state_event(battle, self._player_role, serialize_battle(battle, light=True))
+        )
+
+    async def _handle_battle_message(self, split_messages: list[list[str]]) -> None:  # type: ignore[override]
+        # Let poke-env parse the frame (mutating the battle, possibly invoking
+        # choose_move on a request). Delegating keeps us robust to library
+        # internals changing between versions.
+        self._chose_during_frame = False
+        await super()._handle_battle_message(split_messages)  # type: ignore[misc]
+
+        # If choose_move already ran for this frame, it has emitted a fresh
+        # (full) state_update — nothing to add.
+        if self._chose_during_frame:
+            return
+        # Only emit when the frame actually changed something visible.
+        if not _frame_changes_state(split_messages):
+            return
+        try:
+            battle_tag = split_messages[0][0][1:]  # strip leading '>'
+            battle = self._battles.get(battle_tag)
+        except (IndexError, AttributeError):
+            return
+        if battle is None or battle.finished:
+            return
+        await self._emit_state_update(battle)
+
+
+class StreamingLLMPlayer(_StreamingMixin, LLMPlayer):
+    """LLMPlayer that pushes state_update / thinking / turn events to the EventBus."""
 
     def __init__(
         self,
@@ -64,21 +171,20 @@ class StreamingLLMPlayer(LLMPlayer):
             lessons=lessons,
             **kwargs,
         )
-        self._bus: EventBus = event_bus
-        self._player_role = player_role
+        self._init_streaming(event_bus, player_role)
 
     async def _emit_thinking(self, event: dict[str, Any]) -> None:
         await self._bus.publish(event)
 
     async def choose_move(self, battle: AbstractBattle) -> BattleOrder:
-        # Serialize once; reuse for both the early state_update and the final turn event.
-        # The battle object is not mutated during choose_move (Showdown sends no new
-        # messages while we're deliberating), so both events share the same snapshot.
+        # The request has just been parsed, so available_moves / heuristics are
+        # fresh here — emit a FULL snapshot the UI can use for the advisory.
         state = serialize_battle(battle)
 
-        # Emit immediately so the UI refreshes HP bars / active Pokémon right when
-        # Showdown resolves the previous turn, rather than after LLM think-time.
+        # Emit immediately so the UI refreshes before LLM think-time, and flag
+        # that this frame produced a choose_move so the post-parse hook skips.
         await self._bus.publish(_state_event(battle, self._player_role, state))
+        self._chose_during_frame = True
 
         order = await super().choose_move(battle)
         action_label = getattr(order, "message", str(order))
@@ -86,17 +192,17 @@ class StreamingLLMPlayer(LLMPlayer):
         return order
 
 
-class StreamingRandomBot(RandomBot):
-    """RandomBot that pushes a turn event to the EventBus after each move."""
+class StreamingRandomBot(_StreamingMixin, RandomBot):
+    """RandomBot that pushes state_update / turn events to the EventBus."""
 
     def __init__(self, event_bus: EventBus, player_role: str = "p1", **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._bus: EventBus = event_bus
-        self._player_role = player_role
+        self._init_streaming(event_bus, player_role)
 
     async def choose_move(self, battle: AbstractBattle) -> BattleOrder:  # type: ignore[override]
         state = serialize_battle(battle)
         await self._bus.publish(_state_event(battle, self._player_role, state))
+        self._chose_during_frame = True
         order = self.choose_random_move(battle)
         action_label = getattr(order, "message", str(order))
         await self._bus.publish(_turn_event(battle, action_label, self._player_role, state))
