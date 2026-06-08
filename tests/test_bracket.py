@@ -243,6 +243,98 @@ class TestDoubleElimResults:
 
 
 # ---------------------------------------------------------------------------
+# Double-elimination — non-power-of-two (bye stall regression, issue #55)
+# ---------------------------------------------------------------------------
+
+class TestDoubleElimByes:
+    """6-player bracket has 2 bye seeds.  Before the fix, bye losers dropped into LB
+    and the affected LB matches were permanently skipped by get_pending_matches,
+    causing the while-loop to drain to empty with champion_seed=None."""
+
+    def _full_run(self, n: int) -> dict:
+        state = build_double_elim(_players(n))
+        battle_id = 0
+        for _ in range(50):
+            if state["champion_seed"] is not None:
+                break
+            pending = get_pending_matches(state)
+            if not pending:
+                break
+            for m in pending:
+                battle_id += 1
+                record_result(state, m["match_id"], 1, battle_id)
+                break  # one match at a time
+        return state
+
+    def test_6p_double_elim_produces_champion(self) -> None:
+        """6 players (non-power-of-two) must yield a champion, not stall."""
+        state = self._full_run(6)
+        assert state["champion_seed"] is not None
+
+    def test_5p_double_elim_produces_champion(self) -> None:
+        state = self._full_run(5)
+        assert state["champion_seed"] is not None
+
+    def test_3p_double_elim_produces_champion(self) -> None:
+        state = self._full_run(3)
+        assert state["champion_seed"] is not None
+
+    def test_6p_no_pending_match_has_bye_flag(self) -> None:
+        """get_pending_matches must never return a match with a bye slot."""
+        state = build_double_elim(_players(6))
+        pending = get_pending_matches(state)
+        for m in pending:
+            assert not m.get("p1_is_bye"), f"Bye flag on pending match {m['match_id']}"
+            assert not m.get("p2_is_bye"), f"Bye flag on pending match {m['match_id']}"
+
+    def test_lb_bye_walkover_propagates(self) -> None:
+        """After the fix, an LB match seeded with (real_player, bye) resolves as 'bye'
+        and the winner is placed in the downstream match."""
+        from nidozo.tournament.bracket import _resolve_lb_byes_double
+        # Build a minimal match_index with one LB match: p1=real, p2=bye
+        lb_match: dict = {
+            "match_id": "LR1-1",
+            "bracket": "losers",
+            "round_num": 1,
+            "p1_seed": 3,
+            "p2_seed": 7,
+            "p1_is_bye": False,
+            "p2_is_bye": True,
+            "status": "pending",
+            "winner_seed": None,
+            "loser_seed": None,
+            "winner_to": "LR2-1",
+            "winner_slot": 1,
+            "loser_to": None,
+            "loser_slot": None,
+            "battle_id": None,
+        }
+        next_match: dict = {
+            "match_id": "LR2-1",
+            "bracket": "losers",
+            "round_num": 2,
+            "p1_seed": None,
+            "p2_seed": None,
+            "p1_is_bye": False,
+            "p2_is_bye": False,
+            "status": "pending",
+            "winner_seed": None,
+            "loser_seed": None,
+            "winner_to": None,
+            "winner_slot": None,
+            "loser_to": None,
+            "loser_slot": None,
+            "battle_id": None,
+        }
+        mi = {"LR1-1": lb_match, "LR2-1": next_match}
+        _resolve_lb_byes_double(mi)
+        assert lb_match["status"] == "bye"
+        assert lb_match["winner_seed"] == 3
+        # Winner should have been forwarded into the downstream match
+        assert next_match["p1_seed"] == 3
+
+
+# ---------------------------------------------------------------------------
 # build_bracket dispatch
 # ---------------------------------------------------------------------------
 
