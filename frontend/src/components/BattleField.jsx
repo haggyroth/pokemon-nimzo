@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import PokemonCard from './PokemonCard'
+import { TypeBadge } from './PokemonCard'
 import BattleLog from './BattleLog'
 
 const TIER_LABELS = {
@@ -21,9 +22,15 @@ function TierBadge({ tier, className = '' }) {
   )
 }
 
-function HeuristicDrawer({ heuristics }) {
+function HeuristicDrawer({ heuristics, moves }) {
   const [open, setOpen] = useState(false)
   if (!heuristics?.move_scores?.length) return null
+
+  // Build a lookup from move_id → {type, pp, max_pp} using available_moves
+  const moveInfo = {}
+  ;(moves ?? []).forEach(m => {
+    if (m.id) moveInfo[m.id] = { type: m.type, pp: m.pp, max_pp: m.max_pp }
+  })
 
   return (
     <div className="heuristic-drawer">
@@ -36,11 +43,24 @@ function HeuristicDrawer({ heuristics }) {
           {heuristics.move_scores.map((ms, i) => {
             const isSuper  = ms.effectiveness_label?.includes('super')
             const isImmune = ms.effectiveness_label?.includes('immune')
+            const info = moveInfo[ms.move_id] ?? {}
+            const ppLow = info.pp != null && info.max_pp > 0 && (info.pp / info.max_pp) <= 0.25
+            const ppEmpty = info.pp === 0
             return (
               <div key={i} className="heuristic-move">
-                <span className="hmove-name">
-                  {`move ${i + 1}`} — {ms.move_id.replace(/_/g, ' ')}
-                </span>
+                <div className="hmove-header">
+                  <span className="hmove-name">
+                    {`move ${i + 1}`} — {ms.move_id.replace(/_/g, ' ')}
+                  </span>
+                  <div className="hmove-badges">
+                    {info.type && <TypeBadge type={info.type.toUpperCase()} />}
+                    {info.pp != null && (
+                      <span className={`hmove-pp${ppLow ? ' hmove-pp--low' : ''}${ppEmpty ? ' hmove-pp--empty' : ''}`}>
+                        {info.pp}/{info.max_pp} PP
+                      </span>
+                    )}
+                  </div>
+                </div>
                 <span className={`hmove-effectiveness ${isSuper ? 'super' : isImmune ? 'immune' : ''}`}>
                   {ms.effectiveness_label}
                   {ms.estimated_damage_pct && ` · ${ms.estimated_damage_pct}`}
@@ -164,7 +184,7 @@ function PlayerLabel({ label, side }) {
 
 export default function BattleField({
   p1State, p2State, battleInfo, battleResult, events, thinking, coachThinking,
-  onDismiss, tournament, onTournamentScoreboard,
+  onDismiss, onReplaySelected, tournament, onTournamentScoreboard,
 }) {
   const p1Mon   = p1State?.state?.my_active ?? null
   const p2Mon   = p2State?.state?.my_active ?? null
@@ -183,6 +203,17 @@ export default function BattleField({
   const currentBattleId = battleInfo?.battle_id
   const battleTier = battleInfo?.tier
   const battleDrafted = battleInfo?.drafted
+
+  // Keyboard shortcut: R = watch replay when battle is done
+  useEffect(() => {
+    if (!battleResult || !currentBattleId || !onReplaySelected) return
+    function onKey(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      if (e.key === 'r' || e.key === 'R') onReplaySelected(currentBattleId)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [battleResult, currentBattleId, onReplaySelected])
 
   // Fetch drafted teams when a result arrives (only for drafted battles)
   const teams = useTeams(currentBattleId, !!battleResult && !!battleDrafted)
@@ -264,7 +295,7 @@ export default function BattleField({
         style={!lastState?.heuristics?.move_scores?.length ? { gridTemplateColumns: '1fr' } : {}}
       >
         <BattleLog events={events} />
-        <HeuristicDrawer heuristics={lastState?.heuristics} />
+        <HeuristicDrawer heuristics={lastState?.heuristics} moves={lastState?.available_moves} />
       </div>
 
       {/* Winner / cancelled banner */}
@@ -313,7 +344,16 @@ export default function BattleField({
                 )}
               </>
             )}
-            <button className="btn-dismiss" onClick={onDismiss}>CLOSE</button>
+            <div className="winner-actions">
+              {onReplaySelected && currentBattleId && (
+                <button
+                  className="btn-replay"
+                  onClick={() => onReplaySelected(currentBattleId)}
+                  title="Watch replay (R)"
+                >▶ REPLAY</button>
+              )}
+              <button className="btn-dismiss" onClick={onDismiss}>CLOSE</button>
+            </div>
           </div>
         </div>
       )}

@@ -864,6 +864,8 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onSe
   const [lmLoading, setLmLoading]     = useState(true)
   const [formTab, setFormTab]         = useState('battle')   // 'battle' | 'tournament' | 'season'
   const [lbTier, setLbTier]          = useState('all')       // leaderboard tier filter
+  const [lbSearch, setLbSearch]      = useState('')          // model name/provider filter
+  const [copyFlash, setCopyFlash]    = useState(null)        // model_id that was just copied
 
   useEffect(() => {
     let cancelled = false
@@ -909,6 +911,14 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onSe
     return <span className="rank-badge">{i + 1}</span>
   }
 
+  function copyModelId(r) {
+    const text = `${r.provider}/${r.model_name}`
+    navigator.clipboard.writeText(text).then(() => {
+      setCopyFlash(r.model_id)
+      setTimeout(() => setCopyFlash(null), 1500)
+    }).catch(() => {})
+  }
+
   return (
     <div className="home-grid">
       {/* Left: leaderboard + recent battles */}
@@ -928,59 +938,99 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onSe
               ))}
             </div>
           </div>
-          {rows.length === 0 ? (
-            <div className="empty-state">
-              {lbTier === 'all' ? 'No battles recorded yet' : `No ${lbTier.toUpperCase()} battles recorded yet`}
-            </div>
-          ) : (
-            <table className="leaderboard-table">
-              <thead>
-                <tr>
-                  <th>#</th><th>MODEL</th><th>ELO</th><th>GAMES</th><th>W / L / T</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i}>
-                    <td>{rankBadge(i)}</td>
-                    <td>
-                      <div className="model-name">{r.model_name}</div>
-                      <div className="provider-tag">
-                        {r.provider}
-                        {r.versions && (
-                          <span className="version-tags">
-                            {r.versions.split(',').map(v => (
-                              <span key={v} className="version-tag">{v}</span>
-                            ))}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td><span className="elo-value">{r.rating.toFixed(1)}</span></td>
-                    <td>{r.games}</td>
-                    <td className="wlt">
-                      <span className="w">{r.wins}W</span>
-                      {' / '}
-                      <span className="l">{r.losses}L</span>
-                      {' / '}
-                      {r.ties}T
-                    </td>
-                    <td>
-                      {r.model_id != null && (
-                        <button
-                          className="btn-stats"
-                          onClick={() => onModelSelected?.(r.model_id)}
-                          title="View model stats"
-                        >
-                          STATS →
-                        </button>
-                      )}
-                    </td>
+          <div className="lb-search-row">
+            <input
+              className="lb-search-input"
+              type="text"
+              placeholder="search models…"
+              value={lbSearch}
+              onChange={e => setLbSearch(e.target.value)}
+              spellCheck={false}
+            />
+            {lbSearch && (
+              <button className="lb-search-clear" onClick={() => setLbSearch('')} title="Clear">✕</button>
+            )}
+          </div>
+          {(() => {
+            const q = lbSearch.trim().toLowerCase()
+            const filtered = q
+              ? rows.filter(r =>
+                  r.model_name?.toLowerCase().includes(q) ||
+                  r.provider?.toLowerCase().includes(q))
+              : rows
+            if (filtered.length === 0) return (
+              <div className="empty-state">
+                {q ? 'No matching models' : lbTier === 'all' ? 'No battles recorded yet' : `No ${lbTier.toUpperCase()} battles recorded yet`}
+              </div>
+            )
+            return (
+              <table className="leaderboard-table">
+                <thead>
+                  <tr>
+                    <th>#</th><th>MODEL</th><th>ELO</th><th>GAMES</th><th>W / L / T</th><th>STREAK</th><th></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {filtered.map((r, i) => (
+                    <tr key={i}>
+                      <td>{rankBadge(i)}</td>
+                      <td>
+                        <div className="model-name-cell">
+                          <div className="model-name">{r.model_name}</div>
+                          <button
+                            className={`btn-copy${copyFlash === r.model_id ? ' copied' : ''}`}
+                            onClick={() => copyModelId(r)}
+                            title={`Copy ${r.provider}/${r.model_name}`}
+                          >
+                            {copyFlash === r.model_id ? '✓' : '⎘'}
+                          </button>
+                        </div>
+                        <div className="provider-tag">
+                          {r.provider}
+                          {r.versions && (
+                            <span className="version-tags">
+                              {r.versions.split(',').map(v => (
+                                <span key={v} className="version-tag">{v}</span>
+                              ))}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td><span className="elo-value">{r.rating.toFixed(1)}</span></td>
+                      <td>{r.games}</td>
+                      <td className="wlt">
+                        <span className="w">{r.wins}W</span>
+                        {' / '}
+                        <span className="l">{r.losses}L</span>
+                        {' / '}
+                        {r.ties}T
+                      </td>
+                      <td>
+                        {r.streak > 0 ? (
+                          <span className={`streak-badge${r.streak >= 3 ? ' streak-badge--hot' : ''}`}>
+                            🔥{r.streak}
+                          </span>
+                        ) : (
+                          <span className="streak-badge streak-badge--cold">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {r.model_id != null && (
+                          <button
+                            className="btn-stats"
+                            onClick={() => onModelSelected?.(r.model_id)}
+                            title="View model stats"
+                          >
+                            STATS →
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          })()}
           <MatchupMatrix lbTier={lbTier} />
         </div>
 
