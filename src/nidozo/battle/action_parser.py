@@ -37,6 +37,10 @@ _ACTION_RE = re.compile(
     r"ACTION:[\s*]*(move|switch)\s+(\S+)", re.IGNORECASE
 )
 
+# Strips <think>...</think> blocks emitted by reasoning models (Qwen, DeepSeek R1, etc.)
+# before action parsing so the actual response content is always reached.
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+
 # Matches "ACTION: <bare_name>" with no move/switch keyword
 _BARE_ACTION_RE = re.compile(
     r"ACTION:\s*([A-Za-z][\w]*)", re.IGNORECASE
@@ -204,6 +208,14 @@ def parse_action(
     regex-based text parser (v1 prompt). Using the last valid ACTION line
     so a model that self-corrects mid-response gets the right answer.
     """
+    if not response:
+        return None
+
+    # Strip <think>...</think> blocks before all parsing.
+    # Reasoning models (Qwen 3, DeepSeek R1, etc.) emit these before their actual
+    # response.  The raw response is preserved in the DB for analysis — we only
+    # strip at parse time.
+    response = _THINK_RE.sub("", response).strip()
     if not response:
         return None
 
