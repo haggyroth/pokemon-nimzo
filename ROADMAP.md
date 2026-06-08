@@ -114,10 +114,10 @@
 
 ~~**Live win-probability bar**~~ ✅ *shipped in v0.9.0*
 
-**Season concept**
-- Named tournament seasons (e.g. "Season 1 — Gen 3 OU") with a fixed participant list and schedule
-- Final standings page; per-season leaderboard separate from all-time
-- Makes the arena feel like an ongoing competition rather than ad-hoc battles
+~~**Season concept**~~ ✅ *shipped in v0.14.0*
+- Named seasons with a fixed participant list, round-robin scheduling, and isolated per-season ELO
+- Live standings page, progress bar, and battle history per season
+- Season history panel in the leaderboard; start/cancel from the UI
 
 ---
 
