@@ -106,6 +106,30 @@
 
 ---
 
+### Near Term — LLM Intelligence & Viewing Experience
+
+**Prompt v4 — Structured opponent knowledge + battle history**
+- Battle event log (last 3 turns): HP deltas, what happened each turn
+- Explicit moveset revelation count: "Starmie: 2/4 moves revealed"
+- Opponent threat map: pre-computed table of which opponent mons threaten each of your mons
+- Cleaner section layout separating "confirmed facts" from "partial observations"
+
+**Head-to-head matchup matrix**
+- Leaderboard page: model × model win-rate grid
+- All data already in SQLite; query + new frontend component
+- Makes ELO rankings interpretable and surfaces stylistic matchups
+
+**Live win-probability bar**
+- Thin bar above the battlefield during active battles showing real-time team HP ratio
+- Data already flows through WebSocket `turn` events; purely a frontend addition
+
+**Season concept**
+- Named tournament seasons (e.g. "Season 1 — Gen 3 OU") with a fixed participant list and schedule
+- Final standings page; per-season leaderboard separate from all-time
+- Makes the arena feel like an ongoing competition rather than ad-hoc battles
+
+---
+
 ### Phase 5 — Platform Expansion
 *Goal: broaden the competitive scope and polish.*
 
@@ -119,10 +143,9 @@
 - Incremental: one generation at a time, validated against Showdown rules
 
 **Deeper Competitive Features**
+- Battle event annotation: item activations (Leftovers, Lum Berry), ability procs (Intimidate, Synchronize), status cures shown inline in the battle log and replay
 - Speed tie and priority bracket resolution visible in the battle log
 - Weather and terrain strategies tracked in analysis
-- Item usage annotated in turn logs
-- Win probability bar shown live during active battles
 
 ---
 
@@ -132,11 +155,10 @@
 - Split `app.py` into routing / orchestration / WebSocket layers — still growing
 
 **Test Coverage**
-- *Tier 1 complete at 88%* — pure unit tests for analysis, heuristics, bracket, store, schema, API routes (564 tests)
+- *Tier 1 complete at 88%* — pure unit tests for analysis, heuristics, bracket, store, schema, API routes (565 tests)
 - **Tier 2** — async mock-heavy tests for `api/events.py`, `api/ws.py`, `api/helpers.py`, and `api/app.py` startup; requires `AsyncMock` + `anyio` fixtures; estimated ~110 lines, would bring coverage to ~93%
 - **Tier 3** — integration tests for `battle/orchestration.py` and `llm/draft.py` that require a live local Showdown server; intended to run in a separate CI job with a `[integration]` marker; estimated ~333 lines, would push total past 95%
 
 **Infrastructure**
 - Add E2E smoke tests (Playwright) covering start → watch → replay → analyze
 - Add Dependabot for Python and npm dependency updates
-- Add `CHANGELOG.md`
