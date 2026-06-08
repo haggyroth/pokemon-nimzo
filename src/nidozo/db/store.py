@@ -503,7 +503,53 @@ class BattleStore:
                ORDER BY MAX(e.rating) DESC""",
             {"tier": tier},
         )
-        return [dict(r) for r in cur.fetchall()]
+        rows = [dict(r) for r in cur.fetchall()]
+        streaks = self._win_streaks()
+        for row in rows:
+            row["streak"] = streaks.get(row["model_id"], 0)
+        return rows
+
+    def _win_streaks(self) -> dict[int, int]:
+        """Return the current consecutive-win streak for every model.
+
+        Uses a window-function CTE to rank each model's completed battles from
+        most-recent to oldest, then counts how many wins appear before the first
+        non-win.  Models with no battles or whose last result was not a win get 0.
+        """
+        cur = self._conn.execute(
+            """
+            WITH all_results AS (
+                SELECT p1_model_id AS model_id, finished_at,
+                       CASE WHEN winner = 1 THEN 1 ELSE 0 END AS is_win
+                FROM battles
+                WHERE finished_at IS NOT NULL AND status = 'completed'
+                UNION ALL
+                SELECT p2_model_id, finished_at,
+                       CASE WHEN winner = 2 THEN 1 ELSE 0 END AS is_win
+                FROM battles
+                WHERE finished_at IS NOT NULL AND status = 'completed'
+            ),
+            ranked AS (
+                SELECT model_id, is_win,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY model_id ORDER BY finished_at DESC
+                       ) AS rn
+                FROM all_results
+            ),
+            first_non_win AS (
+                SELECT model_id, MIN(rn) AS at
+                FROM ranked WHERE is_win = 0
+                GROUP BY model_id
+            )
+            SELECT r.model_id, COUNT(*) AS streak
+            FROM ranked r
+            LEFT JOIN first_non_win fnw ON fnw.model_id = r.model_id
+            WHERE r.is_win = 1
+              AND r.rn < COALESCE(fnw.at, 9999999)
+            GROUP BY r.model_id
+            """
+        )
+        return {row["model_id"]: row["streak"] for row in cur.fetchall()}
 
     def _leaderboard_per_version(self) -> list[dict[str, Any]]:
         """One row per (provider, model_name, prompt_version) — original behaviour."""

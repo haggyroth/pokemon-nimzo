@@ -83,7 +83,7 @@ function PokemonSprite({ species, size = 80, isThinking = false, animClass = '' 
   )
 }
 
-function TypeBadge({ type }) {
+export function TypeBadge({ type }) {
   const color = TYPE_COLORS[type] || '#666'
   return (
     <span className="type-badge" style={{ background: color }}>

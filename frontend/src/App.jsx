@@ -213,6 +213,7 @@ function App() {
                 coachThinking={coachThinking}
                 tournament={tournament}
                 onDismiss={() => setDismissed(true)}
+                onReplaySelected={handleReplaySelected}
                 onTournamentScoreboard={() => {
                   if (tournament?.id) {
                     setTournamentId(tournament.id)

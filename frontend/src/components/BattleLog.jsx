@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 function formatEntry(event) {
   if (event.type === 'battle_start') {
@@ -17,13 +17,15 @@ function formatEntry(event) {
     const opp = role === 'p1' ? event.state?.opponent_active : event.state?.my_active
     const oppHp = opp ? ` · opp ${Math.round((opp.hp_fraction ?? 1) * 100)}% HP` : ''
     const action = event.action?.split('/').pop() || '?'
+    const actionText = action.replace('|/choose ', '')
     return {
       cls: 'turn-event',
+      searchText: `T${event.turn} ${role} ${actionText} ${oppHp}`.toLowerCase(),
       jsx: (
         <span>
           <span className="log-turn-num">T{event.turn}</span>
           <span className={roleCls}>{role.toUpperCase()}</span>
-          <span className="log-action"> → {action.replace('|/choose ', '')}</span>
+          <span className="log-action"> → {actionText}</span>
           <span className="log-hp">{oppHp}</span>
         </span>
       ),
@@ -34,31 +36,53 @@ function formatEntry(event) {
 
 export default function BattleLog({ events }) {
   const bottomRef = useRef(null)
+  const [filter, setFilter] = useState('')
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [events.length])
+    if (!filter) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [events.length, filter])
 
-  const entries = events
+  const allEntries = events
     .map((e, i) => ({ ...formatEntry(e, i), key: i }))
     .filter(Boolean)
+
+  const q = filter.trim().toLowerCase()
+  const entries = q
+    ? allEntries.filter(e => {
+        const haystack = e.searchText ?? e.text ?? ''
+        return haystack.includes(q)
+      })
+    : allEntries
 
   return (
     <div className="battle-log-panel">
       <div className="battle-log-header">
         <span className="battle-log-title">BATTLE LOG</span>
-        <span className="log-count">{entries.length} events</span>
+        <span className="log-count">{entries.length}{q ? `/${allEntries.length}` : ''} events</span>
+      </div>
+      <div className="log-filter-row">
+        <input
+          className="log-filter-input"
+          type="text"
+          placeholder="filter log…"
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          spellCheck={false}
+        />
+        {filter && (
+          <button className="log-filter-clear" onClick={() => setFilter('')} title="Clear filter">✕</button>
+        )}
       </div>
       <div className="battle-log-entries">
         {entries.length === 0 && (
-          <div className="empty-state">Waiting for battle events…</div>
+          <div className="empty-state">{q ? 'No matching events' : 'Waiting for battle events…'}</div>
         )}
         {entries.map(({ cls, text, jsx, key }) => (
           <div key={key} className={`log-entry ${cls}`}>
             {jsx ?? text}
           </div>
         ))}
-        <div ref={bottomRef} />
+        {!q && <div ref={bottomRef} />}
       </div>
     </div>
   )
