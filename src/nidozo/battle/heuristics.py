@@ -237,6 +237,56 @@ def _active_matchup_quality(own: Pokemon | None, opp: Pokemon | None) -> str:
     return "neutral"
 
 
+def _estimate_incoming_damage(
+    move: Move,
+    attacker: Pokemon,
+    defender: Pokemon,
+    weather: str | None,
+) -> float | None:
+    """Estimate damage % dealt to *defender* by *attacker* using *move*.
+
+    Mirrors the formula in ``_score_move`` but from the opponent's perspective.
+    Returns a float (percentage of defender's HP) or None on any error.
+    """
+    try:
+        is_physical = move.category == MoveCategory.PHYSICAL
+        atk_key = "atk" if is_physical else "spa"
+        def_key = "def" if is_physical else "spd"
+
+        # Attacker's offensive stat — base stat only (opponent stats are unknown)
+        opp_atk_base = float(attacker.base_stats.get(atk_key, 80))
+        opp_atk_stage = attacker.boosts.get(atk_key, 0)
+        opp_atk = opp_atk_base * _stage_mult(int(opp_atk_stage))
+
+        # Defender's defensive stat — use actual stats when available
+        defender_stats = defender.stats or {}
+        own_def_base = float(
+            defender_stats.get(def_key)
+            or defender.base_stats.get(def_key, 80)
+        )
+        own_def_stage = defender.boosts.get(def_key, 0)
+        own_def = own_def_base * _stage_mult(int(own_def_stage))
+
+        type_mult = defender.damage_multiplier(move)
+        if type_mult == 0.0:
+            return 0.0
+
+        move_type_name = move.type.name if hasattr(move, "type") else ""
+        w_mod = _weather_damage_mod(weather, move_type_name)
+
+        # Gen 3 damage formula (level 100, no crit, no random roll)
+        raw = ((42 * move.base_power * opp_atk / own_def) / 50 + 2) * type_mult * w_mod
+
+        # Defender HP pool — use actual HP stat if known, else base-stat approximation
+        own_hp = float(
+            defender_stats.get("hp")
+            or (defender.base_stats.get("hp", 80) * 2 + 110)
+        )
+        return raw / own_hp * 100
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _battle_context(
     own: Pokemon | None,
     opp: Pokemon | None,
@@ -256,6 +306,7 @@ def _battle_context(
         "own_status_impact": None,
         "opp_status": None,
         "opp_status_impact": None,
+        "ko_risk_note": None,  # set when opponent's last move threatens a KO
     }
 
     # Speed comparison
@@ -327,6 +378,31 @@ def _battle_context(
     if opp is not None and opp.status:
         ctx["opp_status"] = opp.status.name
         ctx["opp_status_impact"] = _STATUS_IMPACT.get(opp.status.name, opp.status.name)
+
+    # KO risk: estimate whether the opponent's last-used move can KO us this turn.
+    # Uses our actual stats (if available) and the opponent's base stats for the estimate.
+    if own is not None and opp is not None:
+        try:
+            opp_last = opp.last_move
+            if opp_last is not None and opp_last.category != MoveCategory.STATUS and opp_last.base_power > 0:
+                incoming_pct = _estimate_incoming_damage(opp_last, opp, own, weather)
+                if incoming_pct is not None:
+                    own_hp_pct = own.current_hp_fraction * 100
+                    move_name = opp_last.id.replace("_", " ").title()
+                    if incoming_pct >= own_hp_pct:
+                        ctx["ko_risk_note"] = (
+                            f"⚠ KO RISK: opponent's last move ({move_name}) estimated "
+                            f"~{incoming_pct:.0f}% damage — at {own_hp_pct:.0f}% HP "
+                            f"you will likely be KO'd if they use it again. Consider switching."
+                        )
+                    elif incoming_pct >= own_hp_pct * 0.75:
+                        ctx["ko_risk_note"] = (
+                            f"Damage risk: opponent's last move ({move_name}) estimated "
+                            f"~{incoming_pct:.0f}% — at {own_hp_pct:.0f}% HP you may survive "
+                            f"one more hit, but barely. Prioritize finishing them or switching."
+                        )
+        except Exception:  # noqa: BLE001
+            pass
 
     return ctx
 
@@ -570,6 +646,11 @@ def _score_switch(
         "species": incoming.species,
         "hp_fraction": round(incoming.current_hp_fraction, 3),
         "switch_quality": 0,   # integer from -3 (bad) to +3 (excellent)
+        # defensive_vs_opp: how the incoming mon fares against the opponent's last move /
+        # STAB types. One of: "immune", "resists", "neutral", "weak", "unknown"
+        "defensive_vs_opp": "unknown",
+        # speed_vs_opp: whether incoming is faster, slower, or similar speed to opponent
+        "speed_vs_opp": None,
         "notes": [],
     }
 
@@ -611,10 +692,33 @@ def _score_switch(
 
     if immune_to:
         score["notes"].append(f"Immune to {', '.join(immune_to)}")
+        score["defensive_vs_opp"] = "immune"
+    elif resists and not weak_to:
+        score["defensive_vs_opp"] = "resists"
+    elif weak_to and not resists:
+        score["defensive_vs_opp"] = "weak"
+    elif not weak_to and not resists and not immune_to:
+        score["defensive_vs_opp"] = "neutral"
+    # else mixed — leave as "unknown"
+
     if resists:
         score["notes"].append(f"Resists {', '.join(resists)}")
     if weak_to:
         score["notes"].append(f"Weak to {', '.join(weak_to)}")
+
+    # Speed comparison vs opponent — helps the model decide whether it gets a free
+    # hit on switch-in or eats a hit first.
+    try:
+        incoming_spd = _effective_speed(incoming, is_own=True)
+        opp_spd = _effective_speed(opp, is_own=False)
+        if incoming_spd > opp_spd * 1.05:
+            score["speed_vs_opp"] = f"faster ({incoming_spd:.0f} vs ~{opp_spd:.0f})"
+        elif incoming_spd < opp_spd * 0.95:
+            score["speed_vs_opp"] = f"slower ({incoming_spd:.0f} vs ~{opp_spd:.0f})"
+        else:
+            score["speed_vs_opp"] = f"similar speed ({incoming_spd:.0f} vs ~{opp_spd:.0f})"
+    except Exception:  # noqa: BLE001
+        pass
 
     # Offensive type coverage vs opponent
     hitting_types = []

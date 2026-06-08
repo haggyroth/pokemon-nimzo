@@ -205,6 +205,14 @@ class LLMPlayer(Player):
                     f"Your {key.title()} {direction} (now {curr * 100:.0f}%)"
                 )
 
+        # What move did the opponent use last turn?
+        opp_pokemon = battle.opponent_active_pokemon
+        if opp_pokemon is not None:
+            opp_last = opp_pokemon.last_move
+            if opp_last is not None:
+                move_name = opp_last.id.replace("_", " ").title()
+                lines.append(f"Opponent used: {move_name}")
+
         # HP changes for opponent's active Pokémon
         opp_active = state.get("opponent_active")
         if opp_active:

@@ -11,7 +11,7 @@ class StartBattleRequest(BaseModel):
     p1_model: str | None = None
     p2_model: str | None = None
     model: str | None = None
-    prompt_version: str = "v2"
+    prompt_version: str = "v5"
     n_battles: int = Field(1, ge=1, le=50)
     tier: str = "random"   # "random" | "ou" | "ubers" | "uu" | "nu" | "lc" | "freeforall"
     draft: bool = False    # If True and tier != "random", run LLM draft phase first
@@ -38,7 +38,7 @@ class PlayerSpec(BaseModel):
 class StartTournamentRequest(BaseModel):
     players: list[PlayerSpec] = Field(..., min_length=2, max_length=12)
     rounds: int = Field(1, ge=1, le=10)
-    prompt_version: str = "v2"
+    prompt_version: str = "v5"
     tier: str = "random"   # "random" | "ou" | "ubers" | "uu" | "nu" | "lc" | "freeforall"
     draft: bool = False    # If True and tier != "random", run LLM draft phase before each battle
     tournament_format: str = "round_robin"  # "round_robin" | "single_elim" | "double_elim"
@@ -55,7 +55,7 @@ class StartSeasonRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     players: list[PlayerSpec] = Field(..., min_length=2, max_length=12)
     rounds: int = Field(1, ge=1, le=10)
-    prompt_version: str = "v4"
+    prompt_version: str = "v5"
     tier: str = "random"
     draft: bool = False
 
