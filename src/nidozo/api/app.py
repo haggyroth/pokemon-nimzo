@@ -48,6 +48,7 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
 
     app = FastAPI(title="Nidozo", version=__version__, lifespan=lifespan)
     app.state.store = store
+    app.state.active_tasks = _active_tasks
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
