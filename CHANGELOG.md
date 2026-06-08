@@ -1,194 +1,185 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
-
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Versioning follows [Semantic Versioning](https://semver.org/).
+All notable changes to Nidozo are documented here.
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
 ## [Unreleased]
 
 ### Added
-- **Multi-agent coach mode** — before each turn, a configurable "coach" model receives the same battle state (same hidden-information rules) and returns free-form strategic analysis in plain English; that advice is then injected into the player model's prompt before it chooses an action. Configurable per player in both the battle form and the tournament form. Coach advice is stored in the `turns` table (`coach_advice TEXT`), surfaced in the battle-replay turn panel (🎓 toggle), and emitted as typed WebSocket events (`agent: "coach" | "player"`) so the live battlefield shows a distinct teal "COACH ANALYZING" badge. Supports any provider (Anthropic, OpenAI, LM Studio) independently of the player's provider (#50)
-- **Tournament brackets** — single-elimination and double-elimination formats alongside existing round-robin. SE: correctly seeded bracket (seed 1 meets seed 2 only in the final) with bye handling for non-power-of-2 player counts. DE: winners bracket + losers bracket with correct WB→LB loser routing, LB survivor vs WB-loser pairing per round, grand final + bracket-reset match (GFR activated if the LB player wins the GF). Brackets are created lazily (one round at a time) so future matchups aren't pre-committed. Champion identity included in `tournament_end` event. Bracket state persisted to SQLite and surfaced via API; `bracket_update` WebSocket event after each match. 27 new bracket unit tests (#51)
-- **Bracket visualizer** in TournamentView — "BRACKET" tab (default for elim formats) shows a scrollable match-card grid: seeds, player names, live-pulsing highlight for the running match, winner ✓ / loser dimming, replay button per match. Double-elim shows WB, LB, and Grand Final as separate sections
-- **Format selector** in the tournament form — three chips: Round Robin / Single Elimination / Double Elimination; rounds-per-matchup field hidden for elimination formats; battle count estimate updates instantly
-- Live win-probability bar in the BattleField view — updates each turn from team HP data; animates with a smooth CSS transition (#48)
-
-### Changed
-- DB schema bumped to v8 (non-breaking: v7 adds `tournament_format`/`bracket_state` to `tournaments`; v8 adds `coach_advice TEXT` to `turns`)
-- `api/app.py` (1009 lines) split into focused modules: `models.py`, `helpers.py`, `orchestration.py`, `routes.py`, `ws.py`; `app.py` is now a slim factory (#47)
+- **Prompt v4** — battle event history (last 3 turns of HP deltas), explicit
+  moveset revelation count per opponent mon, opponent threat map (which of your
+  mons each revealed opponent threatens), cleaner section layout
 
 ---
 
-## [0.11.0] — 2026-05-24
+## [0.12.0] — 2026-06-08
 
 ### Added
-- **Cross-battle lessons** — after each battle the LLM generates a short lesson; stored per model in SQLite; injected into future system prompts so models adapt strategy over time
-- **Per-model stats page** — W/L/T history, ELO sparkline, opponent breakdown, decision-quality distribution, lesson log — all in-browser
-- **Draft critique** — post-game team composition analysis: STAB offensive type spread, shared defensive weaknesses (Gen 3 type chart), coverage gaps, execution quality (blunders + decision_quality_pct); rendered as a new panel in Battle Replay
-- **Variance report** — structured tally of all inferred RNG events (crits + misses) with per-player benefit counts and plain-English verdict; rendered as a new panel in Battle Replay
-- **Richer post-game analysis** — per-turn key moments list (blunders, RNG events, turning point); key moments are clickable in the UI and seek the replay to the relevant turn
-- **Gen 3 pool expansion** — 93 → 153 species with Smogon ADV competitive sets: all missing starters (Blaziken, Charizard, Venusaur, Blastoise), legendaries (Raikou, Entei, Regirock, Registeel), and popular UU/NU picks; all Gen 3 legal
-- **Tournament mode** — configure N models and rounds in the browser; round-robin; live progress + standings overlay; cancel individual battles mid-run; full tournament history page
-
-### Changed
-- Heuristic engine overhauled: speed-tier awareness (Gen 3 paralysis ×0.25), weather damage modifier, accuracy-adjusted damage estimates, low-PP warnings, battle context block (matchup quality, remaining counts, status impact), switch quality scoring with matchup labels
-- Enhanced lesson generation grounds reflection in specific blunders, RNG events, and draft critique rather than generic battle summary
-- `mypy --strict` enforced across all 32 source files
-
-### Fixed
-- `_load_species_data()` mypy `[no-any-return]` error under `--strict` (explicit local annotation on `json.load()` result)
-- Seviper EV total exceeded 510; fixed by removing the stray HP entry
+- **Coach mode** — optional pre-turn advisor: any model can query a separate
+  "coach" model before acting; coach advice appended to the player's turn
+  prompt; `agent: "coach"|"player"` field in WebSocket thinking events;
+  `coach_advice TEXT` column added to turns table (schema v8)
+- **Tournament brackets** — single-elimination and double-elimination formats
+  with seeded byes for non-power-of-2 fields; lazy battle creation;
+  `bracket_update` WebSocket event; `BracketView` React component;
+  `tournament_format` and `bracket_state` columns added to tournaments table
+  (schema v7)
+- **Richer lesson prompting** — draft critique, variance report, and
+  win-probability timeline now fully surfaced in the lesson generation prompt;
+  lessons grounded in specific blunders and turning-point turns rather than
+  generic reflection; new helper functions in `lesson_generator.py`
+- **Tier 1 test coverage** — 565 tests at 88% overall coverage; targeted unit
+  tests for all pure-Python modules: analyzer RNG inference paths, heuristic
+  edge cases, bracket routing, schema migration idempotency, API validation
 
 ---
 
-## [0.10.0] — 2026-04-12
+## [0.11.0] — 2026-05
 
 ### Added
-- `failed` battle status wired end-to-end (previously battles could silently stall)
-- 6 DB indexes for hot read paths (leaderboard, ELO history, turn lookups)
-- `uv.lock` committed for reproducible builds
-- 35 new tests covering `LLMPlayer`, `StreamingLLMPlayer`, `AnthropicBackend`, `OpenAIBackend`, `BattleStore`, and schema migrations; overall coverage 85%
-- Dependabot configuration for Python and npm dependencies
+- **Cross-battle lessons** — LLM generates a 2–3 sentence lesson after each
+  battle; stored in SQLite `lessons` table; injected into future system prompts
+  so models adapt strategy over time
+- **Per-model stats page** — W/L/T history, ELO sparkline, opponent breakdown,
+  decision-quality distribution, lesson log
+- **Richer post-game analysis** — per-turn key moments (blunders, RNG events,
+  turning point); `AnalysisSummary` panel in Battle Replay with clickable
+  moments; blunder flagging (≥40% score gap); probable crit/miss inference from
+  HP delta; win-probability timeline from team HP ratio
+- **Tournament mode** — round-robin with live progress, standings overlay, and
+  mid-run cancel support; full tournament history page
+- **Drafted teams + Smogon meta tiers** — LLM snake-drafts a 6-mon team from a
+  curated pool; 8 tier formats (Random / OU / UU / NU / LC / Ubers /
+  Freeforall); DraftPhase UI; `teams` table in DB; rosters on result card
+- **Heuristic overhaul** — speed-tier awareness (Gen 3 paralysis ×0.25),
+  weather damage modifier, accuracy-adjusted damage estimates, low-PP warnings,
+  battle context block, switch quality scoring with matchup labels
+- **Draft critique** — team composition analysis: STAB coverage, shared
+  weaknesses, coverage gaps, execution quality
+- **Variance report** — structured RNG tally with per-player benefit counts and
+  plain-English verdict
+- **Gen 3 pool expansion** — 93 → 153 species with Smogon ADV sets
+- mypy strict mode enforced across all source files; 358 tests
 
-### Changed
-- `finish_battle` + ELO update made fully atomic to prevent ELO drift on crash
-- EventBus queues bounded (256 events) with drop-oldest overflow
-- Frontend events list capped at 500 entries
-- CORS restricted to known origins
+---
+
+## [0.10.0] — 2026-05
+
+### Added
+- Frontend ESLint v10 CI gate; pytest coverage gate at 65%
 - Pydantic `Field(ge/le)` bounds on all API inputs (422 on bad requests)
+- 6 DB indexes for hot read paths
+- Atomic `finish_battle` + ELO update; EventBus queues bounded at 256
 
 ### Fixed
-- Schema migration bug: `migrate()` would crash on v1 databases because an index was created before the column it referenced existed
-- `AnthropicBackend` multi-block crash on extended thinking responses
-- Opponent `ability` leaking through the hidden-information guard
-- Heuristic bogus token annotations removed from advisory output
-- `serve.py --reload` broken by relative import; fixed
-
----
-
-## [0.9.0] — 2026-03-18
-
-### Added
-- **Battle Replay** — step through any completed battle turn by turn; HP timeline SVG; scrub slider; keyboard nav (← → Space Esc); auto-play
-- **Win probability timeline** — team HP ratio per turn; sparkline in the analysis drawer and replay HP chart
-- **Turning-point detection** — turn with the largest single-turn win-prob swing, highlighted in replay and analysis
-- **Blunder flagging** — suboptimal moves where the score gap ≥ 40% of the best option; blunders panel in analysis with ⚠ badge
-- **RNG inference** — possible crit / possible miss inferred from actual vs expected HP drop; badges in replay and analysis log
-- **Tournament UI** — configure N players and rounds in the browser; cancel individual battles mid-run; live progress bar + final standings overlay
-- **Type-themed card backgrounds** — 18-type colour map; single-type corner wash; dual-type diagonal gradient split
-- **Battle animations** — hit flash, sprite shake, heal pulse, faint fade driven by HP delta tracking with `useRef`
-- **Live pipeline** — all battles (UI or CLI) routed through the shared EventBus; tournament progress visible in real time
-
-### Fixed
-- Parser fix for `"switch 1"` identifier form (numeric switch actions were silently rejected)
-
----
-
-## [0.8.0] — 2026-02-22
-
-### Added
-- **v2 prompt** — JSON structured output (`{"reasoning","action_type","identifier"}`); grammar-sampled on LM Studio and OpenAI for near-certain parse reliability
-- `reasoning_content` fallback for Qwen 3 thinking models
-- Fuzzy species name matching (`difflib`, cutoff=0.82) for switch typos
-- Retry on empty LLM response; logs `finish_reason` for diagnosis
-- Thinking events — amber pulsing indicator while the model reasons
-- Gen 3 sprites via Showdown CDN with pixelated rendering
-- Bench row — reserve Pokémon with mini-sprites + HP bars
-- Model selector queries LM Studio `/v1/models` for live chips
-- WebSocket keepalive pings (25 s) — eliminates reconnection churn
-- CI pipeline — ruff lint + pytest + frontend build in parallel
+- `failed` battle status wired end-to-end
+- `migrate()` crash on v1 databases (index before column existed)
+- `AnthropicBackend` multi-block response crash
+- Opponent `ability` hidden-information guard; `serve.py --reload`
 
 ### Changed
-- Leaderboard grouped by model; aggregates across prompt versions with v1/v2 pill tags
-
-### Fixed
-- Leaderboard SQL bug: `UNION ALL` produced duplicate rows
+- Inline SQL consolidated into `BattleStore`; heuristic bogus tokens removed
+- 203 tests
 
 ---
 
-## [0.7.0] — 2026-01-30
+## [0.9.0] — 2026-04
+
+### Added
+- Live pipeline — all battles routed through shared EventBus
+- Battle Replay — scrub slider, keyboard nav, auto-play, HP timeline SVG
+- Type-themed card backgrounds (18-type colour map, diagonal dual-type gradient)
+- Battle animations — hit flash, sprite shake, heal pulse, faint fade
+- Win probability timeline, turning-point detection, blunder flagging, RNG
+  inference; tournament UI with live progress and cancel
+
+### Fixed
+- Parser fix for `"switch 1"` identifier form
+
+### Changed
+- 154 tests
+
+---
+
+## [0.8.0] — 2026-04
+
+### Added
+- Prompt v2 — JSON structured output; LM Studio grammar sampling
+- Fuzzy species name matching (difflib, cutoff 0.82)
+- Thinking events (amber pulse), Gen 3 sprites (Showdown CDN), bench row
+- Model selector (live LM Studio `/v1/models`), WebSocket keepalive (25 s)
+- CI pipeline: ruff + pytest + frontend build in parallel
+
+### Fixed
+- `reasoning_content` fallback for Qwen 3 thinking models
+- Leaderboard duplicate rows (UNION ALL bug)
+
+### Changed
+- 127 tests; first ELO results: gemma-4-e2b 7-3 vs ministral-3-3b
+
+---
+
+## [0.7.0] — 2026-03
 
 ### Added
 - Round-robin tournament CLI (`scripts/tournament.py`)
-- Per-player model fields in the API and UI
-- First live LLM battles: Ministral-3-3b vs Granite-4-h-tiny (12-0 result)
+- Per-player model fields (separate p1/p2 provider + model in API and UI)
+- Parser hardening for name-based actions and markdown-wrapped output
 
-### Fixed
-- Parser hardened for name-based actions and markdown-wrapped output
-- Leaderboard duplicate-row bug from `UNION ALL`
-
----
-
-## [0.6.0] — 2025-12-15
-
-### Added
-- Per-turn decision quality annotation: optimal / good / suboptimal / fallback
-- Analysis compares chosen action against heuristic ranking
-- `/api/battles/{id}/analysis` REST endpoint
-- Analysis panel in the UI with quality bars and turn-by-turn breakdown
+### Changed
+- First live LLM battles: Ministral-3-3b vs Granite-4-h-tiny (12-0)
 
 ---
 
-## [0.5.0] — 2025-11-28
+## [0.6.0] — 2026-03
 
 ### Added
-- FastAPI backend with WebSocket live-battle feed (`/ws/battles`)
-- REST endpoints: leaderboard, battles, turns, start-battle
-- React + Vite frontend with retro CRT dark-theme battlefield visualizer
-- Live Pokémon cards with animated HP bars, type badges, status, stat boosts
-- Battle log, heuristic advisory drawer, winner banner
+- Post-game analysis: per-turn decision quality annotation (optimal / good /
+  suboptimal / fallback); `/api/battles/{id}/analysis`; analysis panel in UI
 
 ---
 
-## [0.4.0] — 2025-11-10
+## [0.5.0] — 2026-02
 
 ### Added
-- SQLite schema: battles, turns, elo_ratings, elo_history, models, prompt versions
-- ELO calculation (K=32) updated after each battle
-- Per-model stats, turn logging, leaderboard CLI
+- FastAPI backend + WebSocket live-battle feed (`/ws/battles`)
+- React + Vite frontend: retro CRT dark-theme battlefield visualizer
+- Live Pokémon cards (animated HP bars, type badges, status, stat boosts),
+  battle log, heuristic advisory drawer, winner banner
 
 ---
 
-## [0.3.0] — 2025-10-25
+## [0.4.0] — 2026-02
 
 ### Added
-- Type effectiveness, estimated damage %, stat stages, priority, status annotation
-- Switch matchup scoring
-- Heuristic scores surfaced to LLM as advisory context (not a hard filter)
+- SQLite persistence: battles, turns, elo_ratings, elo_history, models
+- ELO calculation (K=32) updated after each battle; leaderboard CLI
 
 ---
 
-## [0.2.0] — 2025-10-08
+## [0.3.0] — 2026-01
 
 ### Added
-- Pluggable model backend: Anthropic + OpenAI cloud APIs
-- Local model support via LM Studio (OpenAI-compatible API)
+- Heuristic engine: type effectiveness, estimated damage %, stat stages,
+  priority, status annotation, switch matchup scoring; advisory not prescriptive
+
+---
+
+## [0.2.0] — 2026-01
+
+### Added
+- Pluggable model backend: Anthropic + OpenAI cloud; LM Studio local
 - Battle state serializer with hidden-information enforcement
-- System prompt v1: battle state format, legal actions, `ACTION: move N` output schema
-- Versioned prompts for correlating changes with ELO shifts
-- `LLMPlayer` full loop: state → prompt → backend → action parser → `BattleOrder`
+- Prompt v1: battle state, legal actions, `ACTION: move N` output format
+- Versioned prompts; `LLMPlayer` full loop
 
 ---
 
-## [0.1.0] — 2025-09-20
+## [0.1.0] — 2026-01
 
 ### Added
-- Repo scaffold, Python project, venv, pyproject.toml
-- Local Pokémon Showdown server wired up with poke-env
+- Repo scaffold, Python project (`uv`, `pyproject.toml`)
+- Local Pokémon Showdown server wired with poke-env
 - Two RandomBots complete a Gen 3 random singles battle end to end
-
-[Unreleased]: https://github.com/haggyroth/nidozo/compare/v0.11.0...HEAD
-[0.11.0]: https://github.com/haggyroth/nidozo/compare/v0.10.0...v0.11.0
-[0.10.0]: https://github.com/haggyroth/nidozo/compare/v0.9.0...v0.10.0
-[0.9.0]: https://github.com/haggyroth/nidozo/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/haggyroth/nidozo/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/haggyroth/nidozo/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/haggyroth/nidozo/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/haggyroth/nidozo/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/haggyroth/nidozo/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/haggyroth/nidozo/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/haggyroth/nidozo/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/haggyroth/nidozo/releases/tag/v0.1.0

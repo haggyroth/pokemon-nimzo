@@ -210,8 +210,11 @@ def test_serialize_battle_structure() -> None:
         "my_side_conditions", "opponent_side_conditions",
         "my_active", "my_team",
         "opponent_active", "opponent_team",
+        "opponent_team_size_seen",
         "available_moves", "available_switches", "force_switch",
         "heuristics",
+        "opponent_threat_map",
+        "recent_events",
     }
     assert expected_keys == set(result.keys())
     assert result["turn"] == 3

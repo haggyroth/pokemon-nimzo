@@ -51,10 +51,15 @@ def serialize_battle(battle: AbstractBattle) -> dict[str, Any]:
             for p in battle.opponent_team.values()
             if not p.active
         ],
+        "opponent_team_size_seen": len(battle.opponent_team),
         "available_moves": [_serialize_move(m) for m in battle.available_moves],
         "available_switches": [p.species for p in battle.available_switches],
         "force_switch": battle.force_switch,
         "heuristics": score_actions(battle),
+        "opponent_threat_map": _compute_threat_map(battle),
+        # recent_events is injected by LLMPlayer (stateful, not derivable from
+        # a single battle snapshot). Absent here; always present in prompts.
+        "recent_events": [],
     }
 
 
@@ -107,6 +112,9 @@ def _serialize_opponent_pokemon(mon: Pokemon | None) -> dict[str, Any] | None:
         "item": mon.item if mon.item not in (None, "unknown") else None,
         "ability": mon.ability if mon.ability not in (None, "unknown") else None,
         "revealed_moves": revealed_moves,
+        # Explicit count so the prompt can show "N/4 moves revealed" without
+        # the model having to count dictionary entries itself.
+        "moves_revealed": len(mon.moves),
     }
 
 
@@ -162,6 +170,62 @@ def _serialize_move_basic(move: Move) -> dict[str, Any]:
     except (KeyError, AttributeError):
         return {"id": move.id, "type": "NORMAL", "category": "STATUS",
                 "base_power": 0, "accuracy": True, "priority": 0}
+
+
+# ---------------------------------------------------------------------------
+# Opponent threat map — which of YOUR mons each revealed opponent threatens
+# ---------------------------------------------------------------------------
+
+def _compute_threat_map(battle: AbstractBattle) -> list[dict[str, Any]]:
+    """For each revealed opponent mon, list your non-fainted mons it threatens.
+
+    "Threatens" means at least one of the opponent's types deals ≥2× damage to
+    that mon.  Also records mons that resist all of the opponent's types (≤0.5×).
+    This is type-chart only — it does not account for moveset (the opponent may
+    not have a STAB move for every type it has).
+    """
+    result: list[dict[str, Any]] = []
+
+    # All YOUR mons (active + bench, not fainted)
+    your_mons = [
+        m for m in battle.team.values()
+        if not m.fainted
+    ]
+    if not your_mons:
+        return result
+
+    # All REVEALED opponent mons (active + bench)
+    opp_mons = [
+        m for m in [battle.opponent_active_pokemon, *battle.opponent_team.values()]
+        if m is not None and not m.fainted
+    ]
+
+    for opp in opp_mons:
+        opp_types = opp.types
+        threatens: list[str] = []
+        resists: list[str] = []
+
+        for own in your_mons:
+            try:
+                # Max damage multiplier from any of opponent's STAB types
+                max_mult = max(
+                    (own.damage_multiplier(t) for t in opp_types),
+                    default=1.0,
+                )
+                if max_mult >= 2.0:
+                    threatens.append(own.species)
+                elif max_mult <= 0.5:
+                    resists.append(own.species)
+            except Exception:  # noqa: BLE001
+                pass
+
+        result.append({
+            "species": opp.species,
+            "threatens": threatens,
+            "resists": resists,
+        })
+
+    return result
 
 
 # ---------------------------------------------------------------------------
