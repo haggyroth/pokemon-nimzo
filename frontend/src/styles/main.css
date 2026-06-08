@@ -4526,3 +4526,110 @@ body::after {
 
 .rng-crit { color: #ffd700; font-weight: 600; }
 .rng-miss  { color: var(--text-dim); font-weight: 600; }
+
+/* ---- Arena player column wrappers ---- */
+.arena-player-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+/* ---- Player model name labels on battle scene ---- */
+.player-label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+.player-label--p1 { border-left: 2px solid var(--accent-cyan); }
+.player-label--p2 { border-right: 2px solid var(--accent-amber); justify-content: flex-end; }
+
+.player-label-provider {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.52rem;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.player-label-name {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 20ch;
+}
+
+.player-label--p1 .player-label-name { color: var(--accent-cyan); }
+.player-label--p2 .player-label-name { color: var(--accent-amber); }
+
+/* ---- Own Pokémon moves on card ---- */
+.own-moves {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.own-move-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.62rem;
+  color: var(--text-secondary);
+  padding: 0.12rem 0;
+}
+
+.own-move-row.low-pp { opacity: 0.65; }
+
+.own-move-type-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.own-move-name {
+  flex: 1;
+  text-transform: capitalize;
+  font-size: 0.63rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.own-move-meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.own-move-pp {
+  color: var(--text-dim);
+}
+.own-move-pp.low-pp { color: var(--accent-red); }
+
+/* ---- Model dropdown in battle start form ---- */
+.model-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-random-label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-style: italic;
+}

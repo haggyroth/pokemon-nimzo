@@ -158,12 +158,15 @@ function TierBadge({ tier }) {
 
 const STATIC_PRESETS = {
   anthropic: [
-    { label: 'Sonnet 4.5', value: 'claude-sonnet-4-5' },
-    { label: 'Haiku 3.5',  value: 'claude-haiku-3-5'  },
+    { label: 'Claude Sonnet 4.5', value: 'claude-sonnet-4-5' },
+    { label: 'Claude Sonnet 4',   value: 'claude-sonnet-4'   },
+    { label: 'Claude Haiku 3.5',  value: 'claude-haiku-3-5'  },
+    { label: 'Claude Opus 4',     value: 'claude-opus-4'     },
   ],
   openai: [
     { label: 'GPT-4o mini', value: 'gpt-4o-mini' },
     { label: 'GPT-4o',      value: 'gpt-4o'      },
+    { label: 'o4-mini',     value: 'o4-mini'      },
   ],
 }
 
@@ -182,9 +185,13 @@ async function fetchLMStudioModels() {
 // ---------------------------------------------------------------------------
 
 function ModelSelector({ label, provider, model, onProviderChange, onModelChange, lmModels, lmLoading }) {
-  const chips = provider === 'lmstudio'
+  // Build the model options available for the current provider
+  const options = provider === 'lmstudio'
     ? lmModels.map(id => ({ label: id.split('/').pop(), value: id }))
     : (STATIC_PRESETS[provider] || [])
+
+  // Use a dropdown when we have known options; text input as fallback
+  const useDropdown = provider !== 'random' && options.length > 0
 
   return (
     <div className="model-selector">
@@ -197,36 +204,46 @@ function ModelSelector({ label, provider, model, onProviderChange, onModelChange
         >
           {PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
+
+        {provider === 'random' ? (
+          <span className="model-random-label">—</span>
+        ) : useDropdown ? (
+          <select
+            className="form-select model-select"
+            value={model}
+            onChange={e => onModelChange(e.target.value)}
+          >
+            <option value="">select model…</option>
+            {options.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+            <option value="__custom__">custom…</option>
+          </select>
+        ) : (
+          <input
+            className="form-input model-input"
+            placeholder="model id"
+            value={model}
+            onChange={e => onModelChange(e.target.value)}
+          />
+        )}
+      </div>
+
+      {/* Custom model text input — shown when "custom…" is selected from dropdown */}
+      {useDropdown && model === '__custom__' && (
         <input
           className="form-input model-input"
-          placeholder={provider === 'random' ? '—' : 'model id'}
-          value={model}
-          disabled={provider === 'random'}
+          placeholder="enter model id…"
+          autoFocus
           onChange={e => onModelChange(e.target.value)}
         />
-      </div>
+      )}
 
       {provider === 'lmstudio' && lmLoading && (
         <div className="model-presets-status">querying LM Studio…</div>
       )}
       {provider === 'lmstudio' && !lmLoading && lmModels.length === 0 && (
         <div className="model-presets-status offline">LM Studio offline — enter model id manually</div>
-      )}
-
-      {chips.length > 0 && provider !== 'random' && (
-        <div className="model-presets">
-          {chips.map(p => (
-            <button
-              key={p.value}
-              type="button"
-              className={`preset-chip ${model === p.value ? 'active' : ''}`}
-              onClick={() => onModelChange(p.value)}
-              title={p.value}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
       )}
     </div>
   )
@@ -237,6 +254,11 @@ function ModelSelector({ label, provider, model, onProviderChange, onModelChange
 // ---------------------------------------------------------------------------
 
 function CoachSelector({ label, provider, model, onProviderChange, onModelChange, lmModels }) {
+  const options = provider === 'lmstudio'
+    ? lmModels.map(id => ({ label: id.split('/').pop(), value: id }))
+    : (STATIC_PRESETS[provider] || [])
+  const useDropdown = provider !== 'none' && options.length > 0
+
   return (
     <div className="coach-selector">
       <label className="coach-selector-label">🎓 {label} COACH</label>
@@ -248,28 +270,37 @@ function CoachSelector({ label, provider, model, onProviderChange, onModelChange
         >
           {COACH_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
+
+        {provider === 'none' ? (
+          <span className="model-random-label">— no coach —</span>
+        ) : useDropdown ? (
+          <select
+            className="form-select model-select"
+            value={model}
+            onChange={e => onModelChange(e.target.value)}
+          >
+            <option value="">select model…</option>
+            {options.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+            <option value="__custom__">custom…</option>
+          </select>
+        ) : (
+          <input
+            className="form-input model-input"
+            placeholder="model id (optional)"
+            value={model}
+            onChange={e => onModelChange(e.target.value)}
+          />
+        )}
+      </div>
+      {useDropdown && model === '__custom__' && (
         <input
           className="form-input model-input"
-          placeholder={provider === 'none' ? '— no coach —' : 'model id (optional)'}
-          value={model}
-          disabled={provider === 'none'}
+          placeholder="enter model id…"
+          autoFocus
           onChange={e => onModelChange(e.target.value)}
         />
-      </div>
-      {provider === 'lmstudio' && lmModels.length > 0 && (
-        <div className="model-presets">
-          {lmModels.slice(0, 4).map(id => (
-            <button
-              key={id}
-              type="button"
-              className={`preset-chip ${model === id ? 'active' : ''}`}
-              onClick={() => onModelChange(id)}
-              title={id}
-            >
-              {id.split('/').pop()}
-            </button>
-          ))}
-        </div>
       )}
     </div>
   )

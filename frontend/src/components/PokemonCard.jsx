@@ -135,6 +135,39 @@ function BenchSlot({ mon }) {
 // PokemonCard
 // ---------------------------------------------------------------------------
 
+const MOVE_TYPE_COLORS = {
+  NORMAL: '#9a9a7a', FIRE: '#ff6b35', WATER: '#4d9de0', ELECTRIC: '#f7c948',
+  GRASS: '#4caf50', ICE: '#80deea', FIGHTING: '#e53935', POISON: '#ab47bc',
+  GROUND: '#c6a34a', FLYING: '#9575cd', PSYCHIC: '#e91e8c', BUG: '#8bc34a',
+  ROCK: '#a1887f', GHOST: '#5e35b1', DRAGON: '#5c6bc0', DARK: '#6d4c41',
+  STEEL: '#90a4ae', FAIRY: '#f48fb1',
+}
+
+function MoveList({ moves }) {
+  const entries = Object.values(moves || {})
+  if (entries.length === 0) return null
+  return (
+    <div className="own-moves">
+      {entries.map((m, i) => {
+        const color = MOVE_TYPE_COLORS[m.type] ?? '#666'
+        const ppLow = m.pp != null && m.max_pp != null && m.pp / m.max_pp <= 0.25
+        return (
+          <div key={m.id ?? i} className={`own-move-row${ppLow ? ' low-pp' : ''}`}>
+            <span className="own-move-type-dot" style={{ background: color }} title={m.type} />
+            <span className="own-move-name">{(m.id ?? '').replace(/_/g, ' ')}</span>
+            <span className="own-move-meta">
+              {m.base_power > 0 ? `${m.base_power}` : '—'}
+              {m.pp != null && m.max_pp != null && (
+                <span className={`own-move-pp${ppLow ? ' low-pp' : ''}`}> {m.pp}/{m.max_pp}</span>
+              )}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function PokemonCard({ mon, side, isOpponent = false, isThinking = false, bench = [] }) {
   // ---- Animation state ----
   // Track HP changes to trigger hit / heal / faint animations.
@@ -186,6 +219,7 @@ export default function PokemonCard({ mon, side, isOpponent = false, isThinking 
 
   const boostEntries  = Object.entries(mon.boosts || {}).filter(([, v]) => v !== 0)
   const revealedMoves = isOpponent ? Object.values(mon.revealed_moves || {}) : null
+  const ownMoves      = !isOpponent ? (mon.moves ?? {}) : null
   const bg            = typeBackground(mon.types)
   const accentStyle   = typeAccentStyle(mon.types, side)
 
@@ -225,6 +259,8 @@ export default function PokemonCard({ mon, side, isOpponent = false, isThinking 
             ))}
           </div>
         )}
+
+        {!isOpponent && ownMoves && <MoveList moves={ownMoves} />}
 
         {isOpponent && revealedMoves && revealedMoves.length > 0 && (
           <div className="revealed-moves">
