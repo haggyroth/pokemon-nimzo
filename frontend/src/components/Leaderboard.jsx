@@ -1,6 +1,128 @@
 import { useState, useEffect, useCallback } from 'react'
 import BattleAnalysis from './BattleAnalysis'
 
+// ---------------------------------------------------------------------------
+// Head-to-head matchup matrix
+// ---------------------------------------------------------------------------
+
+function MatchupMatrix({ lbTier }) {
+  const [data, setData]         = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [open, setOpen]         = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      try {
+        const url = lbTier && lbTier !== 'all'
+          ? `/api/leaderboard/matchups?tier=${lbTier}`
+          : '/api/leaderboard/matchups'
+        const res = await fetch(url)
+        if (!res.ok || cancelled) return
+        setData(await res.json())
+      } catch {
+        // silent — stale data retained
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [open, lbTier])
+
+  // Build sorted list of unique models (row = col order)
+  const models = (() => {
+    const seen = new Set()
+    const list = []
+    for (const r of data) {
+      const key = `${r.row_provider}::${r.row_model}`
+      if (!seen.has(key)) { seen.add(key); list.push({ provider: r.row_provider, model: r.row_model }) }
+    }
+    return list
+  })()
+
+  // Lookup map: "row_model::col_model" → { wins, losses, ties, games }
+  const lookup = {}
+  for (const r of data) {
+    lookup[`${r.row_model}::${r.col_model}`] = r
+  }
+
+  function cellContent(rowModel, colModel) {
+    if (rowModel === colModel) return null  // diagonal
+    const cell = lookup[`${rowModel}::${colModel}`]
+    if (!cell || cell.games === 0) return <span className="mm-cell-empty">—</span>
+    const wr = cell.wins / cell.games
+    const cls = wr > 0.6 ? 'mm-cell-win'
+              : wr < 0.4 ? 'mm-cell-loss'
+              : 'mm-cell-even'
+    return (
+      <span className={`mm-cell-record ${cls}`} title={`${cell.wins}W / ${cell.losses}L / ${cell.ties}T`}>
+        {cell.wins}–{cell.losses}{cell.ties > 0 ? `–${cell.ties}` : ''}
+      </span>
+    )
+  }
+
+  function shortName(model) {
+    // Take last segment after '/' for long lmstudio paths
+    return model.split('/').pop()
+  }
+
+  return (
+    <div className="mm-container">
+      <button className="mm-toggle" onClick={() => setOpen(o => !o)}>
+        {open ? '▲' : '▼'} HEAD-TO-HEAD MATRIX
+      </button>
+      {open && (
+        <div className="mm-body">
+          {loading ? (
+            <div className="mm-loading">Loading…</div>
+          ) : models.length < 2 ? (
+            <div className="mm-empty">Not enough data yet — run some battles first.</div>
+          ) : (
+            <div className="mm-scroll">
+              <table className="mm-table">
+                <thead>
+                  <tr>
+                    <th className="mm-th-corner"></th>
+                    {models.map(c => (
+                      <th key={c.model} className="mm-th-col" title={c.model}>
+                        <span className="mm-col-label">{shortName(c.model)}</span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {models.map(row => (
+                    <tr key={row.model}>
+                      <td className="mm-td-row" title={row.model}>{shortName(row.model)}</td>
+                      {models.map(col => (
+                        <td
+                          key={col.model}
+                          className={`mm-cell ${row.model === col.model ? 'mm-cell-diag' : ''}`}
+                        >
+                          {cellContent(row.model, col.model)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="mm-legend">
+            <span className="mm-legend-item mm-cell-win">win-rate &gt;60%</span>
+            <span className="mm-legend-item mm-cell-even">even (40–60%)</span>
+            <span className="mm-legend-item mm-cell-loss">win-rate &lt;40%</span>
+            <span className="mm-legend-note">W–L (–T if any ties) from row model's perspective</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const PROVIDERS = ['random', 'anthropic', 'openai', 'lmstudio']
 const COACH_PROVIDERS = ['none', 'anthropic', 'openai', 'lmstudio']
 
@@ -631,6 +753,7 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
               </tbody>
             </table>
           )}
+          <MatchupMatrix lbTier={lbTier} />
         </div>
 
         <div className="panel">

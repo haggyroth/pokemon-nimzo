@@ -81,6 +81,15 @@ def create_router(
     def get_leaderboard(grouped: bool = True, tier: str | None = None) -> list[dict[str, Any]]:
         return store.leaderboard(grouped=grouped, tier=tier)
 
+    @router.get("/api/leaderboard/matchups")
+    def get_matchup_matrix(tier: str | None = None) -> list[dict[str, Any]]:
+        """Head-to-head win/loss/tie counts for every model pair.
+
+        Each entry is model A's record vs model B (A's perspective).
+        Pass ``tier`` to restrict to battles of a specific tier.
+        """
+        return store.matchup_matrix(tier=tier)
+
     @router.get("/api/battles")
     def get_battles(limit: int = 20) -> list[dict[str, Any]]:
         return store.recent_battles(limit=limit)

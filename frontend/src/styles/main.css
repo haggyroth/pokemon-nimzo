@@ -4166,3 +4166,150 @@ body::after {
   color: var(--text-muted);
   letter-spacing: 0.06em;
 }
+
+/* ============================================================
+   Head-to-head matchup matrix
+   ============================================================ */
+
+.mm-container {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.mm-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-pixel);
+  font-size: 0.42rem;
+  letter-spacing: 0.12em;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--transition);
+}
+.mm-toggle:hover {
+  color: var(--accent-cyan);
+}
+
+.mm-body {
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.mm-loading,
+.mm-empty {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  padding: 0.5rem 0;
+}
+
+.mm-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mm-table {
+  border-collapse: collapse;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.mm-th-corner {
+  min-width: 6rem;
+}
+
+.mm-th-col {
+  font-family: var(--font-pixel);
+  font-size: 0.38rem;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  text-align: center;
+  padding: 0.35rem 0.5rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  max-width: 7rem;
+  overflow: hidden;
+}
+
+.mm-col-label {
+  display: block;
+  max-width: 6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mm-td-row {
+  font-family: var(--font-pixel);
+  font-size: 0.38rem;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  padding: 0.4rem 0.75rem 0.4rem 0;
+  text-align: right;
+  border-right: 1px solid var(--border);
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mm-cell {
+  text-align: center;
+  padding: 0.3rem 0.6rem;
+  border-bottom: 1px solid rgba(30,58,95,0.35);
+  border-right: 1px solid rgba(30,58,95,0.35);
+  min-width: 4.5rem;
+}
+
+.mm-cell-diag {
+  background: rgba(255,255,255,0.02);
+}
+
+.mm-cell-empty {
+  color: rgba(120,140,165,0.4);
+  font-size: 0.7rem;
+}
+
+.mm-cell-record {
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+}
+
+.mm-cell-win {
+  color: #4ade80;
+  background: rgba(74,222,128,0.08);
+}
+
+.mm-cell-even {
+  color: var(--accent-amber);
+  background: rgba(255,185,0,0.07);
+}
+
+.mm-cell-loss {
+  color: #f87171;
+  background: rgba(248,113,113,0.08);
+}
+
+.mm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.mm-legend-item {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+}
+
+.mm-legend-note {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  margin-left: auto;
+}

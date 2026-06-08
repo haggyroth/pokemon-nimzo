@@ -588,3 +588,87 @@ def test_get_teams_for_model_bad_pokemon_json(store) -> None:
     assert len(teams) == 1
     # pokemon field kept as raw string since json.loads failed
     assert teams[0]["pokemon"] == "BAD_JSON"
+
+
+# ------------------------------------------------------------------
+# matchup_matrix
+# ------------------------------------------------------------------
+
+def _finish(store, tag, p1, p2, winner):
+    """Helper: create and finish a battle, returning the battle id."""
+    bid = store.create_battle(tag, "gen3randombattle", p1, p2)
+    store.finish_battle(bid, winner=winner, total_turns=5)
+    return bid
+
+
+def test_matchup_matrix_empty_when_no_battles(store) -> None:
+    """Returns an empty list when there are no completed battles."""
+    assert store.matchup_matrix() == []
+
+
+def test_matchup_matrix_symmetric_games(store) -> None:
+    """Each ordered pair (A,B) and (B,A) is reported independently."""
+    a = store.get_or_create_model("random", "model-a")
+    b = store.get_or_create_model("random", "model-b")
+    # Two battles: A wins one, B wins one
+    _finish(store, "tag-mm1", a, b, winner=1)  # A(p1) wins
+    _finish(store, "tag-mm2", b, a, winner=1)  # B(p1) wins → B wins as A's opponent
+
+    matrix = store.matchup_matrix()
+    # Build a lookup keyed by (row_model, col_model)
+    lookup = {(r["row_model"], r["col_model"]): r for r in matrix}
+
+    a_vs_b = lookup[("model-a", "model-b")]
+    assert a_vs_b["wins"] == 1
+    assert a_vs_b["losses"] == 1
+    assert a_vs_b["ties"] == 0
+    assert a_vs_b["games"] == 2
+
+    b_vs_a = lookup[("model-b", "model-a")]
+    assert b_vs_a["wins"] == 1
+    assert b_vs_a["losses"] == 1
+    assert b_vs_a["games"] == 2
+
+
+def test_matchup_matrix_tie_counted(store) -> None:
+    """Tied battles (winner=None) appear in ties column."""
+    a = store.get_or_create_model("random", "alpha")
+    b = store.get_or_create_model("random", "beta")
+    _finish(store, "tag-tie", a, b, winner=None)
+
+    lookup = {(r["row_model"], r["col_model"]): r for r in store.matchup_matrix()}
+    assert lookup[("alpha", "beta")]["ties"] == 1
+    assert lookup[("alpha", "beta")]["wins"] == 0
+
+
+def test_matchup_matrix_excludes_unfinished(store) -> None:
+    """Battles without finished_at are not counted."""
+    a = store.get_or_create_model("random", "aa")
+    b = store.get_or_create_model("random", "bb")
+    store.create_battle("tag-unfinished", "gen3randombattle", a, b)
+    # Do NOT call finish_battle — battle stays unfinished
+    assert store.matchup_matrix() == []
+
+
+def test_matchup_matrix_tier_filter(store) -> None:
+    """tier= filter restricts results to that tier's battles."""
+    a = store.get_or_create_model("random", "a-tier")
+    b = store.get_or_create_model("random", "b-tier")
+
+    # Create battles with explicit tier by patching the tier column
+    bid_ou  = store.create_battle("tag-ou",  "gen3ou",           a, b)
+    bid_rnd = store.create_battle("tag-rnd", "gen3randombattle", a, b)
+    store._conn.execute("UPDATE battles SET tier='ou'     WHERE id=?", (bid_ou,))
+    store._conn.execute("UPDATE battles SET tier='random' WHERE id=?", (bid_rnd,))
+    store._conn.commit()
+    store.finish_battle(bid_ou,  winner=1, total_turns=3)
+    store.finish_battle(bid_rnd, winner=2, total_turns=3)
+
+    ou_matrix  = store.matchup_matrix(tier="ou")
+    all_matrix = store.matchup_matrix()
+
+    ou_lookup  = {(r["row_model"], r["col_model"]): r for r in ou_matrix}
+    all_lookup = {(r["row_model"], r["col_model"]): r for r in all_matrix}
+
+    assert ou_lookup[("a-tier", "b-tier")]["games"] == 1
+    assert all_lookup[("a-tier", "b-tier")]["games"] == 2
