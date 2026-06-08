@@ -4441,3 +4441,89 @@ body::after {
   color: var(--text-bright);
   font-size: 0.8rem;
 }
+
+/* ---- Battle Story (LLM narrative) ---- */
+.battle-story {
+  background: linear-gradient(135deg, rgba(0,200,255,0.05) 0%, rgba(0,100,200,0.04) 100%);
+  border: 1px solid rgba(0,200,255,0.18);
+  border-left: 3px solid var(--accent-cyan);
+  border-radius: 6px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.battle-story-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  color: var(--accent-cyan);
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.battle-story-text {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+  font-style: italic;
+}
+
+/* ---- Variance / RNG report ---- */
+.variance-panel {
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(120,120,120,0.25);
+  background: rgba(60,60,60,0.12);
+}
+
+.variance-panel.variance-heavy {
+  border-color: rgba(255,215,0,0.35);
+  background: rgba(255,215,0,0.04);
+}
+
+.variance-panel.variance-some {
+  border-color: rgba(255,170,50,0.25);
+  background: rgba(255,170,50,0.03);
+}
+
+.variance-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 0.35rem;
+}
+
+.variance-panel.variance-heavy .variance-title { color: #ffd700; }
+.variance-panel.variance-some  .variance-title { color: var(--accent-amber); }
+
+.variance-verdict {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.4rem;
+}
+
+.variance-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  margin-top: 0.25rem;
+}
+
+.variance-event {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+  color: var(--text-dim);
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.rng-crit { color: #ffd700; font-weight: 600; }
+.rng-miss  { color: var(--text-dim); font-weight: 600; }
+}

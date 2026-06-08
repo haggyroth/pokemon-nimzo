@@ -1,26 +1,93 @@
 import { useState, useEffect } from 'react'
 
 const QUALITY_COLOR = {
-  optimal:    'var(--clr-optimal)',
-  good:       'var(--clr-good)',
-  suboptimal: 'var(--clr-suboptimal)',
-  fallback:   'var(--clr-fallback)',
-  switch:     'var(--clr-switch)',
-  no_data:    'var(--clr-no-data)',
+  optimal:        'var(--clr-optimal)',
+  good:           'var(--clr-good)',
+  suboptimal:     'var(--clr-suboptimal)',
+  fallback:       'var(--clr-fallback)',
+  switch:         'var(--clr-switch)',
+  good_switch:    'var(--clr-good)',
+  bad_switch:     'var(--clr-suboptimal)',
+  neutral_switch: 'var(--clr-switch)',
+  forced_switch:  'rgba(120,120,140,0.7)',
+  no_data:        'var(--clr-no-data)',
 }
 
 const QUALITY_LABEL = {
-  optimal:    'OPTIMAL',
-  good:       'GOOD',
-  suboptimal: 'SUBOPTIMAL',
-  fallback:   'FALLBACK',
-  switch:     'SWITCH',
-  no_data:    '—',
+  optimal:        'OPTIMAL',
+  good:           'GOOD',
+  suboptimal:     'SUBOPTIMAL',
+  fallback:       'FALLBACK',
+  switch:         'SWITCH',
+  good_switch:    'GOOD SWITCH',
+  bad_switch:     'BAD SWITCH',
+  neutral_switch: 'SWITCH',
+  forced_switch:  'FORCED',
+  no_data:        '—',
 }
 
 const RNG_ICON = {
   possible_crit: { icon: '⚡', label: 'CRIT?', cls: 'rng-crit' },
   possible_miss: { icon: '✕',  label: 'MISS?', cls: 'rng-miss' },
+}
+
+// Switch quality keys — treated as "switches" for QualityBar segment counting
+const SWITCH_QUALITY_KEYS = new Set(['switch', 'good_switch', 'bad_switch', 'neutral_switch', 'forced_switch'])
+
+// ---------------------------------------------------------------------------
+// Battle narrative ("Battle Story")
+// ---------------------------------------------------------------------------
+
+function BattleStory({ narrative }) {
+  if (!narrative) return null
+  return (
+    <div className="battle-story">
+      <div className="battle-story-title">📖 BATTLE STORY</div>
+      <p className="battle-story-text">{narrative}</p>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Variance report (crits / misses)
+// ---------------------------------------------------------------------------
+
+function VarianceReport({ report, p1Label, p2Label }) {
+  if (!report || report.total_events === 0) return null
+
+  const { crits = [], misses = [], verdict = '' } = report
+  const verdictClass = verdict.toLowerCase().includes('heavily')
+    ? 'variance-heavy'
+    : verdict.toLowerCase().includes('some')
+      ? 'variance-some'
+      : 'variance-minimal'
+
+  return (
+    <div className={`variance-panel ${verdictClass}`}>
+      <div className="variance-title">🎲 RNG REPORT</div>
+      <div className="variance-verdict">{verdict}</div>
+      {crits.length > 0 && (
+        <div className="variance-row">
+          <span className="rng-crit">⚡ POSSIBLE CRITS</span>
+          {crits.map((c, i) => (
+            <span key={i} className="variance-event">
+              T{c.turn_number} {c.player_role === 'p1' ? p1Label : p2Label}
+            </span>
+          ))}
+        </div>
+      )}
+      {misses.length > 0 && (
+        <div className="variance-row">
+          <span className="rng-miss">✕ POSSIBLE MISSES</span>
+          {misses.map((m, i) => (
+            <span key={i} className="variance-event">
+              T{m.turn_number} {m.player_role === 'p1' ? p1Label : p2Label}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -38,6 +105,13 @@ function QualityBar({ summary }) {
     { key: 'suboptimal', count: summary.suboptimal || 0 },
     { key: 'fallback',   count: summary.fallback   || 0 },
   ].filter(s => s.count > 0)
+
+  // Switch quality breakdown (new — may be absent in older analyses)
+  const goodSwitches    = summary.good_switches    || 0
+  const badSwitches     = summary.bad_switches     || 0
+  const neutralSwitches = summary.neutral_switches || 0
+  const forcedSwitches  = summary.forced_switches  || 0
+  const hasDetailedSwitches = goodSwitches + badSwitches + neutralSwitches + forcedSwitches > 0
 
   return (
     <div className="quality-bar-wrap">
@@ -61,11 +135,39 @@ function QualityBar({ summary }) {
             {s.count} {QUALITY_LABEL[s.key]}
           </span>
         ))}
-        {summary.switch_turns > 0 && (
+        {!hasDetailedSwitches && summary.switch_turns > 0 && (
           <span className="legend-item">
             <span className="legend-dot" style={{ background: QUALITY_COLOR.switch }} />
             {summary.switch_turns} SWITCH
           </span>
+        )}
+        {hasDetailedSwitches && (
+          <>
+            {goodSwitches > 0 && (
+              <span className="legend-item">
+                <span className="legend-dot" style={{ background: QUALITY_COLOR.good_switch }} />
+                {goodSwitches} GOOD SW
+              </span>
+            )}
+            {badSwitches > 0 && (
+              <span className="legend-item">
+                <span className="legend-dot" style={{ background: QUALITY_COLOR.bad_switch }} />
+                {badSwitches} BAD SW
+              </span>
+            )}
+            {neutralSwitches > 0 && (
+              <span className="legend-item">
+                <span className="legend-dot" style={{ background: QUALITY_COLOR.neutral_switch }} />
+                {neutralSwitches} SW
+              </span>
+            )}
+            {forcedSwitches > 0 && (
+              <span className="legend-item">
+                <span className="legend-dot" style={{ background: QUALITY_COLOR.forced_switch }} />
+                {forcedSwitches} FORCED
+              </span>
+            )}
+          </>
         )}
         {summary.blunders > 0 && (
           <span className="legend-item legend-blunders">
@@ -265,11 +367,18 @@ export default function BattleAnalysis({ battleId, p1Label, p2Label }) {
   if (error)   return <div className="analysis-error">Analysis failed: {error}</div>
   if (!data)   return null
 
-  const { p1_summary, p2_summary, turns, win_probability_timeline, turning_point, blunders } = data
+  const {
+    p1_summary, p2_summary, turns,
+    win_probability_timeline, turning_point,
+    blunders, narrative, variance_report,
+  } = data
   const hasTurnData = turns.some(t => t.decision_quality !== 'no_data')
 
   return (
     <div className="analysis-panel">
+
+      {/* Battle narrative */}
+      <BattleStory narrative={narrative} />
 
       {/* Win probability sparkline */}
       {win_probability_timeline?.length >= 2 && (
@@ -280,6 +389,9 @@ export default function BattleAnalysis({ battleId, p1Label, p2Label }) {
           p2Label={p2}
         />
       )}
+
+      {/* Variance / RNG report */}
+      <VarianceReport report={variance_report} p1Label={p1} p2Label={p2} />
 
       {/* Decision quality bars */}
       <div className="analysis-summaries">

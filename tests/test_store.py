@@ -952,3 +952,42 @@ def test_get_season_standings_multi_battle_elo_progression(store) -> None:
     assert by_name["bb"]["elo"] == pytest.approx(r_bb, abs=0.1)
     assert by_name["aa"]["wins"] == 2
     assert by_name["bb"]["losses"] == 2
+
+
+# ------------------------------------------------------------------
+# Battle narrative
+# ------------------------------------------------------------------
+
+def test_set_battle_narrative_stores_and_retrieves(store) -> None:
+    """set_battle_narrative persists narrative; get_battle returns it."""
+    p1 = store.get_or_create_model("anthropic", "claude-test", "v5")
+    p2 = store.get_or_create_model("random", "random", "v1")
+    bid = store.create_battle("tag-narr-1", "gen3randombattle", p1, p2)
+
+    store.set_battle_narrative(bid, "P1 swept P2 in 12 turns.")
+    row = store.get_battle(bid)
+    assert row is not None
+    assert row["narrative"] == "P1 swept P2 in 12 turns."
+
+
+def test_set_battle_narrative_overwrites_existing(store) -> None:
+    """Calling set_battle_narrative twice updates the stored value."""
+    p1 = store.get_or_create_model("openai", "gpt-4o", "v5")
+    p2 = store.get_or_create_model("random", "random", "v1")
+    bid = store.create_battle("tag-narr-2", "gen3randombattle", p1, p2)
+
+    store.set_battle_narrative(bid, "First version.")
+    store.set_battle_narrative(bid, "Updated version.")
+    row = store.get_battle(bid)
+    assert row is not None
+    assert row["narrative"] == "Updated version."
+
+
+def test_battle_narrative_defaults_to_none(store) -> None:
+    """A newly created battle has narrative=None until set."""
+    p1 = store.get_or_create_model("anthropic", "claude-test", "v5")
+    p2 = store.get_or_create_model("random", "random", "v1")
+    bid = store.create_battle("tag-narr-3", "gen3randombattle", p1, p2)
+    row = store.get_battle(bid)
+    assert row is not None
+    assert row["narrative"] is None

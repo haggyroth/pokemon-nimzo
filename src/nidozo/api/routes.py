@@ -178,7 +178,12 @@ def create_router(
         p1_ids: list[str] | None = p1_team.get("pokemon") if p1_team else None
         p2_ids: list[str] | None = p2_team.get("pokemon") if p2_team else None
         sd = _load_species_data() if (p1_ids or p2_ids) else None
-        return analyze_battle(turns, p1_team_ids=p1_ids, p2_team_ids=p2_ids, species_data=sd)
+        result = analyze_battle(turns, p1_team_ids=p1_ids, p2_team_ids=p2_ids, species_data=sd)
+        # Attach pre-generated narrative if available
+        battle_row = store.get_battle(battle_id)
+        if battle_row and battle_row.get("narrative"):
+            result["narrative"] = battle_row["narrative"]
+        return result
 
     @router.get("/api/models/{model_id}/lessons")
     def get_model_lessons(model_id: int, limit: int = 10) -> list[dict[str, Any]]:

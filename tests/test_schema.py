@@ -532,8 +532,164 @@ def test_migration_v9_to_v10_adds_seasons_table(tmp_path) -> None:
     cols = {r[1] for r in conn2.execute("PRAGMA table_info(battles)").fetchall()}
     assert "season_id" in cols, "season_id column not added to battles by v10 migration"
 
-    # schema version must be 10
+    # schema version must be current (v10 migration runs through to latest)
     version = conn2.execute("SELECT version FROM schema_version").fetchone()[0]
-    assert version == 10
+    assert version == SCHEMA_VERSION
 
     conn2.close()
+
+
+def test_migration_v10_to_v11_adds_narrative_column(tmp_path) -> None:
+    """A v10 database gains the narrative column on battles after migrate()."""
+    import sqlite3
+
+    db_path = tmp_path / "v10.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+
+    # Minimal v10 schema — battles table without narrative column
+    conn.executescript("""
+        PRAGMA foreign_keys=ON;
+        CREATE TABLE schema_version (version INTEGER NOT NULL);
+        INSERT INTO schema_version VALUES (10);
+        CREATE TABLE models (
+            id INTEGER PRIMARY KEY,
+            provider TEXT NOT NULL,
+            model_name TEXT NOT NULL,
+            prompt_version TEXT NOT NULL DEFAULT 'v1',
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE TABLE elo_ratings (
+            model_id INTEGER PRIMARY KEY,
+            rating REAL NOT NULL DEFAULT 1000.0,
+            games INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE TABLE tournaments (
+            id INTEGER PRIMARY KEY,
+            players TEXT NOT NULL,
+            rounds INTEGER NOT NULL DEFAULT 1,
+            prompt_version TEXT NOT NULL DEFAULT 'v2',
+            total_battles INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'running',
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            finished_at TEXT
+        );
+        CREATE TABLE seasons (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            tier TEXT NOT NULL DEFAULT 'random',
+            format TEXT NOT NULL DEFAULT 'gen3randombattle',
+            participants TEXT NOT NULL,
+            rounds INTEGER NOT NULL DEFAULT 1,
+            prompt_version TEXT NOT NULL DEFAULT 'v4',
+            total_battles INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            started_at TEXT,
+            finished_at TEXT
+        );
+        CREATE TABLE battles (
+            id INTEGER PRIMARY KEY,
+            battle_tag TEXT NOT NULL UNIQUE,
+            format TEXT NOT NULL,
+            p1_model_id INTEGER NOT NULL,
+            p2_model_id INTEGER NOT NULL,
+            tournament_id INTEGER,
+            p1_team_id INTEGER,
+            p2_team_id INTEGER,
+            tier TEXT,
+            season_id INTEGER,
+            winner INTEGER,
+            total_turns INTEGER,
+            status TEXT NOT NULL DEFAULT 'pending',
+            started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            finished_at TEXT
+        );
+        CREATE TABLE elo_history (
+            id INTEGER PRIMARY KEY,
+            battle_id INTEGER NOT NULL,
+            model_id INTEGER NOT NULL,
+            rating_before REAL NOT NULL,
+            rating_after REAL NOT NULL,
+            delta REAL NOT NULL
+        );
+        CREATE TABLE turns (
+            id INTEGER PRIMARY KEY,
+            battle_id INTEGER NOT NULL,
+            turn_number INTEGER NOT NULL,
+            player_role TEXT NOT NULL,
+            prompt_version TEXT NOT NULL,
+            action_chosen TEXT,
+            parse_success INTEGER NOT NULL DEFAULT 1,
+            llm_response TEXT,
+            state_json TEXT,
+            coach_advice TEXT
+        );
+        CREATE TABLE lessons (
+            id INTEGER PRIMARY KEY,
+            model_id INTEGER NOT NULL,
+            battle_id INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE TABLE teams (
+            id INTEGER PRIMARY KEY,
+            model_id INTEGER NOT NULL,
+            tier TEXT NOT NULL,
+            format TEXT NOT NULL,
+            pokemon TEXT NOT NULL,
+            team_string TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE TABLE draft_sessions (
+            id INTEGER PRIMARY KEY,
+            model_id INTEGER NOT NULL,
+            tier TEXT NOT NULL,
+            pool_size INTEGER NOT NULL,
+            picked TEXT NOT NULL,
+            prompt_version TEXT NOT NULL DEFAULT 'v3',
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE UNIQUE INDEX idx_elohist_battle ON elo_history(battle_id, model_id);
+    """)
+    conn.commit()
+    conn.close()
+
+    # Re-open and migrate
+    conn2 = sqlite3.connect(str(db_path))
+    conn2.row_factory = sqlite3.Row
+    migrate(conn2)
+    conn2.close()
+
+    # Verify
+    conn3 = sqlite3.connect(str(db_path))
+    conn3.row_factory = sqlite3.Row
+
+    cols = {r[1] for r in conn3.execute("PRAGMA table_info(battles)").fetchall()}
+    assert "narrative" in cols, "narrative column not added to battles by v11 migration"
+
+    version = conn3.execute("SELECT version FROM schema_version").fetchone()[0]
+    assert version == SCHEMA_VERSION
+
+    conn3.close()
+
+
+def test_migration_v11_narrative_column_already_exists(tmp_path) -> None:
+    """v11 migration must not fail if narrative column already exists."""
+    import sqlite3
+
+    db_path = tmp_path / "v10b.db"
+    conn = sqlite3.connect(str(db_path))
+    # Fresh install — narrative column is present from the start
+    migrate(conn)
+
+    # Simulate re-running from v10
+    conn.execute("UPDATE schema_version SET version=10")
+    conn.commit()
+
+    # Should silently skip the duplicate ALTER TABLE
+    migrate(conn)
+    version = conn.execute("SELECT version FROM schema_version").fetchone()[0]
+    assert version == SCHEMA_VERSION
+    conn.close()

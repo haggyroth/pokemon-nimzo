@@ -228,6 +228,69 @@ def _score_gap(move_scores: list[dict[str, Any]], slot: int) -> float | None:
 # Per-turn annotation
 # ---------------------------------------------------------------------------
 
+def _annotate_switch_quality(
+    action: str,
+    state: dict[str, Any],
+) -> tuple[str, str]:
+    """Return (decision_quality, notes) for a switch action.
+
+    Uses the heuristic switch_scores stored in the turn state to evaluate
+    whether the switch was into a good, neutral, bad, or forced matchup.
+
+    Returns one of: forced_switch / good_switch / neutral_switch / bad_switch
+    """
+    # Forced switch — model had no choice (faint or forced out)
+    if state.get("force_switch"):
+        return "forced_switch", "forced switch (faint or forced out)"
+
+    # Extract the species being switched in from the action string
+    m = _ORDER_RE.search(action or "")
+    incoming_species: str | None = None
+    if m and m.group(1).lower() == "switch":
+        incoming_species = _norm(m.group(2))
+
+    switch_scores: list[dict[str, Any]] = (
+        state.get("heuristics", {}).get("switch_scores") or []
+    )
+
+    if incoming_species and switch_scores:
+        # Find the matching switch score entry
+        for ss in switch_scores:
+            if _norm(str(ss.get("species", ""))) == incoming_species:
+                sq = ss.get("switch_quality", 0)
+                defensive = ss.get("defensive_vs_opp", "unknown")
+                speed_note = ss.get("speed_vs_opp") or ""
+                notes_list = ss.get("notes") or []
+
+                # Build a concise note
+                matchup_note = defensive.replace("_", " ")
+                speed_snippet = f", {speed_note}" if speed_note else ""
+                key_note = f"{notes_list[0]}" if notes_list else ""
+
+                if sq >= 2:
+                    label = "good_switch"
+                    note = f"good switch — {incoming_species.title()} ({matchup_note}{speed_snippet})"
+                elif sq >= 1:
+                    label = "good_switch"
+                    note = f"good switch — {incoming_species.title()} ({matchup_note})"
+                elif sq <= -2:
+                    label = "bad_switch"
+                    note = f"bad switch — {incoming_species.title()} ({matchup_note}{speed_snippet})"
+                elif sq <= -1:
+                    label = "bad_switch"
+                    note = f"bad switch — {incoming_species.title()} ({matchup_note})"
+                else:
+                    label = "neutral_switch"
+                    note = f"neutral switch — {incoming_species.title()} ({matchup_note})"
+                if key_note:
+                    note += f"; {key_note}"
+                return label, note
+
+    # No matching score found — fallback to neutral
+    species_str = incoming_species.title() if incoming_species else "unknown"
+    return "neutral_switch", f"switched to {species_str}"
+
+
 def annotate_turn(turn: dict[str, Any]) -> dict[str, Any]:
     """Produce a decision-quality annotation for one DB turn row."""
     base: dict[str, Any] = {
@@ -263,8 +326,14 @@ def annotate_turn(turn: dict[str, Any]) -> dict[str, Any]:
     action = turn.get("action_chosen") or ""
 
     if _is_switch(action):
-        base["decision_quality"] = "switch"
-        base["notes"] = "chose to switch"
+        # Evaluate switch quality using the heuristic switch_scores.
+        # forced_switch → model had no choice (faint / forced out)
+        # good_switch   → switched into a favorable matchup
+        # bad_switch    → switched into a weak matchup
+        # neutral_switch → matchup is neutral or no scoring data
+        quality, notes = _annotate_switch_quality(action, state)
+        base["decision_quality"] = quality
+        base["notes"] = notes
         return base
 
     slot = _resolve_move_slot(action, move_scores)
@@ -320,12 +389,26 @@ def annotate_turn(turn: dict[str, Any]) -> dict[str, Any]:
     else:
         gap_pct = f"{round((gap or 0) * 100)}%" if gap else ""
         blunder_tag = " [BLUNDER]" if base["is_blunder"] else ""
+        # Enrich with specific damage estimates for both the chosen move and best move
+        chosen_dmg = chosen.get("estimated_damage_pct", "")
+        chosen_eff = chosen.get("effectiveness_label", "")
+        best_dmg   = best.get("estimated_damage_pct", "")
+        best_eff   = best.get("effectiveness_label", "")
+        best_notes = best.get("notes") or []
+        best_ko    = next((n for n in best_notes if "HKO" in n or "OHKO" in n), "")
+
+        chosen_detail = ""
+        if chosen_eff or chosen_dmg:
+            chosen_detail = f" ({chosen_eff}{', ' + chosen_dmg if chosen_dmg else ''})"
+        best_detail = ""
+        if best_eff or best_dmg:
+            best_detail = f" ({best_eff}{', ' + best_dmg if best_dmg else ''}{', ' + best_ko if best_ko else ''})"
+
         base["notes"] = (
-            f"chose {chosen.get('move_id','?')} (rank {chosen_rank}/{n_moves}"
+            f"chose {chosen.get('move_id','?')}{chosen_detail} (rank {chosen_rank}/{n_moves}"
             + (f", {gap_pct} below best" if gap_pct else "")
             + f"){blunder_tag}; "
-            f"heuristic top: {best.get('move_id','?')} "
-            f"({best.get('effectiveness_label','')})"
+            f"heuristic top: {best.get('move_id','?')}{best_detail}"
         )
 
     return base
@@ -682,6 +765,13 @@ def _player_summary(annotations: list[dict[str, Any]], role: str) -> dict[str, A
 
     blunders = sum(1 for a in turns if a.get("is_blunder"))
 
+    good_switches    = counts.get("good_switch",    0)
+    bad_switches     = counts.get("bad_switch",     0)
+    neutral_switches = counts.get("neutral_switch", 0)
+    forced_switches  = counts.get("forced_switch",  0)
+    legacy_switches  = counts.get("switch",         0)
+    total_switches   = good_switches + bad_switches + neutral_switches + forced_switches + legacy_switches
+
     return {
         "player_role": role,
         "total_turns": total,
@@ -689,7 +779,11 @@ def _player_summary(annotations: list[dict[str, Any]], role: str) -> dict[str, A
         "good": counts.get("good", 0),
         "suboptimal": counts.get("suboptimal", 0),
         "fallback": counts.get("fallback", 0),
-        "switch_turns": counts.get("switch", 0),
+        "switch_turns": total_switches,
+        "good_switches": good_switches,
+        "bad_switches": bad_switches,
+        "neutral_switches": neutral_switches,
+        "forced_switches": forced_switches,
         "no_data_turns": counts.get("no_data", 0),
         "blunders": blunders,
         "avg_heuristic_rank": round(sum(ranked) / len(ranked), 2) if ranked else None,
@@ -704,9 +798,73 @@ def _player_summary(annotations: list[dict[str, Any]], role: str) -> dict[str, A
 # Key moments synthesis
 # ---------------------------------------------------------------------------
 
+def _turning_point_description(
+    turn_number: int,
+    merged_turns: list[dict[str, Any]],
+    win_prob_timeline: list[dict[str, Any]],
+) -> str:
+    """Build a richer description for the turning point.
+
+    Includes: moves used on that turn by each player, HP situation, and
+    the win-probability swing magnitude.  Falls back gracefully if data
+    is missing.
+    """
+    # Win-probability before and after
+    by_turn = {row["turn_number"]: row["p1_win_prob"] for row in win_prob_timeline if row.get("p1_win_prob") is not None}
+    wp_before = by_turn.get(turn_number)
+    # Find the next turn's probability
+    turns_sorted = sorted(by_turn.keys())
+    wp_after: float | None = None
+    for t in turns_sorted:
+        if t > turn_number:
+            wp_after = by_turn[t]
+            break
+
+    # Find merged turn data for this turn number
+    mt: dict[str, Any] = {}
+    for m in merged_turns:
+        if m["turn_number"] == turn_number:
+            mt = m
+            break
+
+    # Extract moves used
+    action_parts: list[str] = []
+    for role in ("p1", "p2"):
+        action = (mt.get(role) or {}).get("action") or ""
+        m = _ORDER_RE.search(action)
+        if m:
+            move_type = m.group(1).lower()
+            identifier = m.group(2)
+            if move_type == "move":
+                # Try to get move name from state heuristics
+                state = (mt.get(role) or {}).get("state") or {}
+                move_scores = state.get("heuristics", {}).get("move_scores", [])
+                slot = _resolve_move_slot(action, move_scores)
+                if slot and 1 <= slot <= len(move_scores):
+                    identifier = move_scores[slot - 1].get("move_id", identifier)
+            action_parts.append(f"{role.upper()} {move_type} {identifier.replace('_', ' ')}")
+
+    actions_str = ", ".join(action_parts) if action_parts else "actions unknown"
+
+    # Win-probability swing
+    swing_str = ""
+    if wp_before is not None and wp_after is not None:
+        swing = round(abs(wp_after - wp_before) * 100)
+        direction = "P1 gained" if wp_after > wp_before else "P2 gained"
+        p1_before = round(wp_before * 100)
+        p1_after = round(wp_after * 100)
+        swing_str = f" — P1 win-prob {p1_before}% → {p1_after}% ({direction} +{swing}pp)"
+    elif wp_before is not None:
+        swing_str = f" — P1 win-prob ~{round(wp_before * 100)}%"
+
+    return f"Turn {turn_number}: {actions_str}{swing_str}"
+
+
 def _build_key_moments(
     annotations: list[dict[str, Any]],
     turning_point: int | None,
+    merged_turns: list[dict[str, Any]] | None = None,
+    win_prob_timeline: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Build a chronological list of the most significant events in the battle.
 
@@ -720,11 +878,17 @@ def _build_key_moments(
 
     # Turning point is neutral — neither player's "fault"
     if turning_point is not None:
+        if merged_turns and win_prob_timeline:
+            description = _turning_point_description(
+                turning_point, merged_turns, win_prob_timeline
+            )
+        else:
+            description = "Largest win-probability swing of the battle"
         moments.append({
             "turn_number": turning_point,
             "player_role": None,
             "type": "turning_point",
-            "description": "Largest win-probability swing of the battle",
+            "description": description,
         })
 
     for ann in annotations:
@@ -823,7 +987,7 @@ def analyze_battle(
         if a.get("is_blunder")
     ]
 
-    key_moments = _build_key_moments(annotations, turning_point)
+    key_moments = _build_key_moments(annotations, turning_point, merged, win_prob_timeline)
 
     # Variance report — always computed from RNG-annotated turns
     variance_report = _build_variance_report(annotations)

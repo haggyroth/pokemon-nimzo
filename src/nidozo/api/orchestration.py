@@ -138,6 +138,12 @@ async def run_battles(
                 p1_provider=req.p1_provider, p1_model=p1_model, p1_id=p1_id, p1_opponent=p2_label,
                 p2_provider=req.p2_provider, p2_model=p2_model, p2_id=p2_id, p2_opponent=p1_label,
             ))
+            _nt: asyncio.Task[None] = asyncio.create_task(generate_and_store_narrative(
+                store, battle_id, winner, total_turns,
+                p1_label=p1_label, p2_label=p2_label,
+                p1_provider=req.p1_provider, p1_model=p1_model,
+                p2_provider=req.p2_provider, p2_model=p2_model,
+            ))
 
         except asyncio.CancelledError:
             logger.info("Battle %d cancelled", battle_id)
@@ -343,6 +349,12 @@ async def run_tournament(
                 p2_provider=t_p2_prov, p2_model=battle_info["p2_model"],
                 p2_id=t_p2_id, p2_opponent=p1_label,
             ))
+            _nt2: asyncio.Task[None] = asyncio.create_task(generate_and_store_narrative(
+                store, battle_id, winner, total_turns,
+                p1_label=p1_label, p2_label=p2_label,
+                p1_provider=t_p1_prov, p1_model=battle_info["p1_model"],
+                p2_provider=t_p2_prov, p2_model=battle_info["p2_model"],
+            ))
 
         except asyncio.CancelledError:
             logger.info("Tournament %d cancelled at battle %d", tournament_id, battle_id)
@@ -463,6 +475,67 @@ async def generate_and_store_lessons(
                 "Failed to generate/store lesson for model %d battle %d: %s",
                 model_id, battle_id, exc,
             )
+
+
+async def generate_and_store_narrative(
+    store: Any,
+    battle_id: int,
+    winner: int | None,
+    total_turns: int,
+    *,
+    p1_label: str,
+    p2_label: str,
+    p1_provider: str,
+    p1_model: str | None,
+    p2_provider: str,
+    p2_model: str | None,
+) -> None:
+    """Generate and persist an LLM battle narrative for a completed battle.
+
+    Runs as a fire-and-forget asyncio task.  Errors are logged but never
+    propagate — the battle pipeline must not be affected.
+    """
+    from nidozo.analysis import analyze_battle
+    from nidozo.analysis.analyzer import _load_species_data
+    from nidozo.llm.narrator import generate_battle_narrative
+
+    # Pick a backend — prefer p1; fall back to p2; skip if both random.
+    if p1_provider != "random" and p1_model:
+        narrator_provider, narrator_model = p1_provider, p1_model
+    elif p2_provider != "random" and p2_model:
+        narrator_provider, narrator_model = p2_provider, p2_model
+    else:
+        return  # both random — no LLM available for narrative generation
+
+    try:
+        turns_with_state = store.get_turns_with_state(battle_id)
+        if not turns_with_state:
+            return
+
+        p1_team, p2_team = store.get_battle_teams(battle_id)
+        p1_ids: list[str] | None = p1_team.get("pokemon") if p1_team else None
+        p2_ids: list[str] | None = p2_team.get("pokemon") if p2_team else None
+        sd = _load_species_data() if (p1_ids or p2_ids) else None
+        analysis = analyze_battle(
+            turns_with_state, p1_team_ids=p1_ids, p2_team_ids=p2_ids, species_data=sd
+        )
+
+        backend = _build_backend(narrator_provider, narrator_model, json_mode=False)
+        narrative = await generate_battle_narrative(
+            backend=backend,
+            analysis=analysis,
+            p1_label=p1_label,
+            p2_label=p2_label,
+            winner=winner,
+            total_turns=total_turns,
+        )
+        if narrative:
+            store.set_battle_narrative(battle_id, narrative)
+            logger.info(
+                "Narrative stored for battle %d (%d chars)", battle_id, len(narrative)
+            )
+    except Exception as exc:
+        logger.error("Failed to generate narrative for battle %d: %s", battle_id, exc)
 
 
 async def run_bracket_tournament(
@@ -660,6 +733,14 @@ async def run_bracket_tournament(
                             p1_id=t_p1_id, p1_opponent=p2_label,
                             p2_provider=p2_prov, p2_model=p2_model,
                             p2_id=t_p2_id, p2_opponent=p1_label,
+                        )
+                    )
+                    _nt3: asyncio.Task[None] = asyncio.create_task(
+                        generate_and_store_narrative(
+                            store, battle_id, winner_slot, total_turns,
+                            p1_label=p1_label, p2_label=p2_label,
+                            p1_provider=p1_prov, p1_model=p1_model,
+                            p2_provider=p2_prov, p2_model=p2_model,
                         )
                     )
 
