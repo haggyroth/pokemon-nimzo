@@ -993,9 +993,8 @@ def test_infer_rng_event_no_prev_turn():
 def test_infer_rng_event_possible_miss():
     """Flags possible_miss when estimated damage > 5% but actual HP drop is 0.
 
-    _infer_rng_event reads:
-      - prev_hp from prev_def["opponent_active"]["hp_fraction"]  (prev merged turn, p2 side)
-      - curr_hp from curr_def["my_active"]["hp_fraction"]        (curr merged turn, p2 side)
+    _infer_rng_event reads the defender's my_active.hp_fraction from both turns
+    (prev and curr). Same species must be present in both turns.
     """
     from nidozo.analysis.analyzer import _infer_rng_event
 
@@ -1006,10 +1005,10 @@ def test_infer_rng_event_possible_miss():
             ],
         },
     }
-    # p2's state in the PREVIOUS turn has opponent_active.hp_fraction (= p2's perspective of itself)
-    p2_prev_state = {"opponent_active": {"hp_fraction": 0.8}}
-    # p2's state in the CURRENT turn has my_active.hp_fraction (still 0.8 → no drop = miss)
-    p2_curr_state = {"my_active": {"hp_fraction": 0.8}}
+    # p2's state in the PREVIOUS turn: Charmander at 80%
+    p2_prev_state = {"my_active": {"species": "Charmander", "hp_fraction": 0.8}}
+    # p2's state in the CURRENT turn: still 0.8 → no drop = miss
+    p2_curr_state = {"my_active": {"species": "Charmander", "hp_fraction": 0.8}}
 
     mt = {
         "turn_number": 2,
@@ -1259,8 +1258,8 @@ def test_infer_rng_healing_skipped() -> None:
         },
     }
     # HP went UP (healing) — prev_hp < curr_hp → actual_drop < 0
-    def_state_prev = {"opponent_active": {"hp_fraction": 0.5}}
-    def_state_curr = {"my_active": {"hp_fraction": 0.8}}  # higher than before = healing
+    def_state_prev = {"my_active": {"species": "Charmander", "hp_fraction": 0.5}}
+    def_state_curr = {"my_active": {"species": "Charmander", "hp_fraction": 0.8}}  # higher = healing
 
     mt = {
         "p1": {"state": atk_state, "action": "move 1", "parse_success": True},
@@ -1286,8 +1285,8 @@ def test_infer_rng_possible_crit() -> None:
         },
     }
     # HP dropped by 30% when only 10% was expected → crit (ratio=3 > threshold)
-    def_state_prev = {"opponent_active": {"hp_fraction": 0.9}}
-    def_state_curr = {"my_active": {"hp_fraction": 0.6}}  # 30% drop
+    def_state_prev = {"my_active": {"species": "Charmander", "hp_fraction": 0.9}}
+    def_state_curr = {"my_active": {"species": "Charmander", "hp_fraction": 0.6}}  # 30% drop
 
     mt = {
         "p1": {"state": atk_state, "action": "move 1", "parse_success": True},
@@ -1302,38 +1301,33 @@ def test_infer_rng_possible_crit() -> None:
     assert result["p1"] == "possible_crit"
 
 
-def test_infer_rng_alt_hp_found_but_still_continues() -> None:
-    """Line 472: prev_hp/curr_hp are None but curr_atk has opponent_active.hp_fraction.
+def test_infer_rng_species_change_skips_comparison() -> None:
+    """Species guard: if the defender's active Pokémon changed between turns, skip.
 
-    This hits the else branch of ``if prev_hp_alt is None`` — line 472 continue.
-    prev_def and curr_def have no usable HP keys, so prev_hp and curr_hp are None.
-    curr_atk DOES have opponent_active.hp_fraction (not None), so prev_hp_alt is
-    not None → falls through to line 472 (the unconditional continue after the
-    dead-end comment).
+    A switch or faint+send-in means the HP delta is meaningless (different mons).
+    Even if the raw drop looks like a crit, we should return None.
     """
     from nidozo.analysis.analyzer import _infer_rng_event
 
     atk_state = {
         "heuristics": {
             "move_scores": [
-                {"move_id": "thunderbolt", "estimated_damage_pct": "~30%"},
+                {"move_id": "thunderbolt", "estimated_damage_pct": "~10%"},
             ],
         },
-        # curr_atk HAS opponent_active so prev_hp_alt is not None
-        "opponent_active": {"hp_fraction": 0.7},
-        "my_active": {"species": "Pikachu"},
     }
-    # Non-empty but missing the specific keys _infer_rng_event looks for
-    def_state_no_hp = {"my_team": [{"species": "Charmander"}]}
+    # Defender had Pikachu at 90% last turn, then switched to Charmander at 60%
+    def_state_prev = {"my_active": {"species": "Pikachu", "hp_fraction": 0.9}}
+    def_state_curr = {"my_active": {"species": "Charmander", "hp_fraction": 0.6}}
 
     mt = {
         "p1": {"state": atk_state, "action": "move 1", "parse_success": True},
-        "p2": {"state": def_state_no_hp, "action": None, "parse_success": True},
+        "p2": {"state": def_state_curr, "action": None, "parse_success": True},
     }
     prev_mt = {
         "p1": {"state": atk_state, "action": None, "parse_success": True},
-        "p2": {"state": def_state_no_hp, "action": None, "parse_success": True},
+        "p2": {"state": def_state_prev, "action": None, "parse_success": True},
     }
     result = _infer_rng_event(mt, prev_mt)
-    # No rng flag — we fell through to line 472 continue
+    # Species changed — HP delta is invalid, must not flag as crit/miss
     assert result["p1"] is None

@@ -275,6 +275,13 @@ def annotate_turn(turn: dict[str, Any]) -> dict[str, Any]:
     if idx < 0 or idx >= len(move_scores):
         return base
 
+    # Status moves are not comparable against damaging moves on a damage scale —
+    # exclude them from ranking entirely (same treatment as switches).
+    if move_scores[idx].get("is_status"):
+        base["decision_quality"] = "status"
+        base["notes"] = f"{move_scores[idx].get('move_id', '?')} — status move (un-ranked)"
+        return base
+
     ranks = _rank_moves(move_scores)
     chosen_rank = ranks[idx]
     n_moves = len(move_scores)
@@ -329,15 +336,17 @@ def annotate_turn(turn: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def _team_hp_score(state: dict[str, Any]) -> float:
-    """Sum of hp_fraction across all known alive team members.
+    """Sum of hp_fraction across the active Pokémon plus all bench members.
 
-    Falls back to just the active Pokémon if my_team is unavailable.
+    my_team contains bench only (active is excluded by the serializer), so we
+    must explicitly include my_active to get the true total team HP.
     """
-    team: list[dict[str, Any]] = state.get("my_team") or []
-    if team:
-        return float(sum(max(0.0, m.get("hp_fraction", 0.0)) for m in team))
-    active: dict[str, Any] = state.get("my_active") or {}
-    return float(max(0.0, active.get("hp_fraction", 0.5)))
+    active = state.get("my_active")
+    bench: list[dict[str, Any]] = state.get("my_team") or []
+    all_mons: list[dict[str, Any]] = ([active] if active else []) + bench
+    if not all_mons:
+        return 0.5  # no state available
+    return float(sum(max(0.0, m.get("hp_fraction", 0.0)) for m in all_mons))
 
 
 def _win_prob(p1_state: dict[str, Any] | None, p2_state: dict[str, Any] | None) -> float | None:
@@ -459,16 +468,19 @@ def _infer_rng_event(
         if est_dmg <= 0:
             continue  # status move — skip
 
-        # Actual HP drop on the defender's active Pokémon
-        prev_hp = (prev_def.get("opponent_active") or {}).get("hp_fraction")
+        # Actual HP drop on the defender's active Pokémon.
+        # Use the defender's own state (my_active) on both turns — NOT
+        # opponent_active from the defender's previous-turn state, which is the
+        # attacker's Pokémon and produces garbage deltas.
+        prev_species = (prev_def.get("my_active") or {}).get("species")
+        curr_species = (curr_def.get("my_active") or {}).get("species")
+        if prev_species != curr_species:
+            continue  # defender switched between turns — HP delta is invalid
+
+        prev_hp = (prev_def.get("my_active") or {}).get("hp_fraction")
         curr_hp = (curr_def.get("my_active") or {}).get("hp_fraction")
 
         if prev_hp is None or curr_hp is None:
-            # Try opponent_active from attacker's side for both turns
-            prev_hp_alt = (curr_atk.get("opponent_active") or {}).get("hp_fraction")
-            if prev_hp_alt is None:
-                continue
-            # Can't easily get the previous turn's opponent hp from same side
             continue
 
         actual_drop = prev_hp - curr_hp
