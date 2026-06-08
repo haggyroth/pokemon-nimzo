@@ -4,12 +4,29 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from typing import Any
 
 from nidozo.api.helpers import _build_backend, _build_streaming_player, _model_name
 from nidozo.api.models import StartBattleRequest, StartSeasonRequest, StartTournamentRequest
 
 logger = logging.getLogger(__name__)
+
+
+def _random_preset_team(tier: str) -> str:
+    """Build a random 6-Pokémon team string from the tier's preset pool.
+
+    Used when a non-random tier battle is started with *draft=False* — the
+    format (e.g. gen3ubers) requires a real team, but no draft was run.
+    Each player gets a fresh random selection so they aren't mirror teams.
+    """
+    from nidozo.battle.team_builder import all_species, build_team_string, load_movesets
+    from nidozo.battle.tiers import get_pool
+
+    movesets = load_movesets()
+    pool = get_pool(tier, all_species(movesets))
+    picks = random.sample(pool, min(6, len(pool)))
+    return build_team_string(picks, movesets)
 
 
 async def run_battles(
@@ -83,6 +100,12 @@ async def run_battles(
 
             if do_draft:
                 store.set_battle_teams(battle_id, p1_team_id, p2_team_id, req.tier)
+            elif req.tier != "random":
+                # Non-random format (e.g. gen3ubers) requires a real team even
+                # when the draft phase was skipped.  Auto-generate random preset
+                # teams from the tier pool so Showdown doesn't reject the battle.
+                p1_team = _random_preset_team(req.tier)
+                p2_team = _random_preset_team(req.tier)
 
             p1 = _build_streaming_player(
                 req.p1_provider, p1_model, "p1",
@@ -277,6 +300,9 @@ async def run_tournament(
 
             if do_draft:
                 store.set_battle_teams(battle_id, t_p1_team_id, t_p2_team_id, req.tier)
+            elif req.tier != "random":
+                t_p1_team = _random_preset_team(req.tier)
+                t_p2_team = _random_preset_team(req.tier)
 
             t_p1_coach_prov, t_p1_coach_model = coach_lookup.get(
                 (t_p1_prov, battle_info["p1_model"]), (None, None)
@@ -928,6 +954,9 @@ async def run_season(
 
             if do_draft:
                 store.set_battle_teams(battle_id, s_p1_team_id, s_p2_team_id, req.tier)
+            elif req.tier != "random":
+                s_p1_team = _random_preset_team(req.tier)
+                s_p2_team = _random_preset_team(req.tier)
 
             s_p1_coach_prov, s_p1_coach_model = coach_lookup.get(
                 (s_p1_prov, battle_info["p1_model"]), (None, None)

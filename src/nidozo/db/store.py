@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +17,11 @@ _DEFAULT_DB = Path(__file__).parent.parent.parent.parent / "nidozo.db"
 class BattleStore:
     """SQLite store for battle results, ELO ratings, and turn logs.
 
-    Uses a single connection with WAL mode.  **Not safe for concurrent
-    writers** — serialise all writes through one instance.  Multi-step
-    mutations (e.g. finish_battle + ELO update) are wrapped in
-    ``with self._conn:`` for atomic commit/rollback.
+    Uses per-thread SQLite connections so FastAPI's thread-pool workers never
+    share a connection object.  SQLite's WAL journal mode (set by the schema
+    migration) allows concurrent reads across threads while serialising writes
+    at the file level.  Multi-step mutations (e.g. finish_battle + ELO update)
+    are wrapped in ``with self._conn:`` for atomic commit/rollback.
 
     Args:
         db_path: Path to the SQLite file. Created if it doesn't exist.
@@ -27,9 +29,41 @@ class BattleStore:
 
     def __init__(self, db_path: Path | str = _DEFAULT_DB) -> None:
         self._path = Path(db_path)
-        self._conn = sqlite3.connect(str(self._path), check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
+        self._local = threading.local()
+        self._closed = False
+        # Run the schema migration on the main thread's connection so WAL mode
+        # and all tables are created before any worker thread connects.
         migrate(self._conn)
+
+    # ------------------------------------------------------------------
+    # Internal connection management
+    # ------------------------------------------------------------------
+
+    def _get_conn(self) -> sqlite3.Connection:
+        """Return this thread's SQLite connection, creating it on first access.
+
+        Each OS thread gets its own connection so concurrent route handlers
+        never share state.  ``PRAGMA foreign_keys=ON`` is re-applied per
+        connection because it is not persisted to disk; WAL mode *is*
+        persisted, so it only needs to be set once (the migration does it).
+
+        Raises:
+            sqlite3.ProgrammingError: If ``close()`` has been called.
+        """
+        if self._closed:
+            raise sqlite3.ProgrammingError(
+                "Cannot operate on a closed BattleStore."
+            )
+        if not hasattr(self._local, "conn"):
+            conn = sqlite3.connect(str(self._path), check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys=ON")
+            self._local.conn = conn
+        return self._local.conn  # type: ignore[no-any-return]  # threading.local attrs are Any
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        return self._get_conn()
 
     # ------------------------------------------------------------------
     # Models
@@ -1224,4 +1258,14 @@ class BattleStore:
         return [dict(r) for r in rows]
 
     def close(self) -> None:
-        self._conn.close()
+        """Mark the store as closed and release the calling thread's connection.
+
+        After this call, any further access via ``_conn`` raises
+        ``sqlite3.ProgrammingError`` regardless of which thread calls it.
+        Other threads' open connections are not explicitly closed — the OS
+        releases them when those threads exit or the process ends.
+        """
+        self._closed = True
+        if hasattr(self._local, "conn"):
+            self._local.conn.close()
+            del self._local.conn
