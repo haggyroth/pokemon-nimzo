@@ -392,7 +392,7 @@ def test_migrate_v9_idempotent() -> None:
     assert _version(conn) == SCHEMA_VERSION
 
 
-def test_finish_battle_idempotent_elo(tmp_path: "Path") -> None:
+def test_finish_battle_idempotent_elo(tmp_path) -> None:
     """Calling finish_battle twice for the same battle must not apply ELO twice."""
     from nidozo.db.store import BattleStore
 
