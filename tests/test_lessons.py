@@ -596,3 +596,434 @@ def test_format_analysis_context_with_fallback_turns() -> None:
     }
     ctx = _format_analysis_context(analysis, "p1")
     assert "fallback" in ctx.lower() or "parse failures" in ctx.lower()
+
+
+# ---------------------------------------------------------------------------
+# Richer lesson prompting — draft critique, variance, win-prob context
+# ---------------------------------------------------------------------------
+
+def _make_critique(
+    *,
+    team: list[str] | None = None,
+    shared_weaknesses: list[str] | None = None,
+    offensive_types: list[str] | None = None,
+    quality_pct: float | None = 75.0,
+    blunders: int = 0,
+    deviation_turns: list[dict] | None = None,
+) -> dict:
+    return {
+        "team": team or ["Pikachu", "Swampert"],
+        "shared_weaknesses": shared_weaknesses or [],
+        "offensive_types": offensive_types or ["ELECTRIC", "WATER", "GROUND"],
+        "coverage_gaps": ["DARK", "GHOST"],
+        "execution": {
+            "total_turns": 10,
+            "blunders": blunders,
+            "decision_quality_pct": quality_pct,
+            "optimal_rate": 50.0,
+            "deviation_turns": deviation_turns or [],
+        },
+    }
+
+
+def _make_variance(
+    *,
+    total_events: int = 2,
+    p1_benefit: int = 1,
+    p2_benefit: int = 1,
+    verdict: str = "Variance was roughly even between both players",
+    crits: list[dict] | None = None,
+    misses: list[dict] | None = None,
+) -> dict:
+    return {
+        "total_events": total_events,
+        "crits": crits or [],
+        "misses": misses or [],
+        "p1_benefit_events": p1_benefit,
+        "p2_benefit_events": p2_benefit,
+        "verdict": verdict,
+    }
+
+
+def _make_timeline(*turn_probs: tuple[int, float]) -> list[dict]:
+    """Build a minimal win-prob timeline: list of (turn_number, p1_win_prob) pairs."""
+    return [{"turn_number": t, "p1_win_prob": p} for t, p in turn_probs]
+
+
+# ── Draft critique ────────────────────────────────────────────────────────────
+
+def test_format_draft_critique_includes_team_names() -> None:
+    """Team member names appear in the analysis context."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {"total_turns": 6, "optimal": 4, "good": 1, "suboptimal": 1,
+                       "fallback": 0, "blunders": 0, "avg_heuristic_rank": 1.3},
+        "p1_draft_critique": _make_critique(team=["Blaziken", "Gyarados", "Tyranitar"]),
+        "key_moments": [],
+        "blunders": [],
+        "turning_point": None,
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    assert "Blaziken" in ctx
+    assert "Gyarados" in ctx
+    assert "Tyranitar" in ctx
+
+
+def test_format_draft_critique_shared_weaknesses() -> None:
+    """Shared team weaknesses are surfaced explicitly."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {"total_turns": 4, "optimal": 4, "good": 0, "suboptimal": 0,
+                       "fallback": 0, "blunders": 0, "avg_heuristic_rank": 1.0},
+        "p1_draft_critique": _make_critique(shared_weaknesses=["FIRE", "GROUND"]),
+        "key_moments": [],
+        "blunders": [],
+        "turning_point": None,
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    assert "Fire" in ctx or "FIRE" in ctx
+    assert "Ground" in ctx or "GROUND" in ctx
+    assert "weak" in ctx.lower()
+
+
+def test_format_draft_critique_deviation_turns_show_move_names() -> None:
+    """Deviation turns expose the chosen vs. recommended move names."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    dev_turns = [
+        {
+            "turn_number": 7,
+            "chose": "/choose move surf",
+            "best": "move 2 (thunderbolt)",
+            "gap_pct": 48,
+            "was_blunder": True,
+        },
+    ]
+    analysis = {
+        "p1_summary": {"total_turns": 8, "optimal": 5, "good": 1, "suboptimal": 2,
+                       "fallback": 0, "blunders": 1, "avg_heuristic_rank": 1.5},
+        "p1_draft_critique": _make_critique(blunders=1, deviation_turns=dev_turns),
+        "key_moments": [],
+        "blunders": [
+            {
+                "turn_number": 7,
+                "player_role": "p1",
+                "action": "/choose move surf",
+                "score_gap": 0.48,
+                "notes": "chose surf (rank 3/4, 48% below best) [BLUNDER]; heuristic top: thunderbolt (super effective)",
+            }
+        ],
+        "turning_point": 7,
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    assert "surf" in ctx.lower()
+    assert "thunderbolt" in ctx.lower()
+    assert "7" in ctx   # turn number appears
+
+
+def test_format_draft_critique_not_shown_for_opponent_role() -> None:
+    """p2_draft_critique is not shown when generating for p1."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {"total_turns": 4, "optimal": 4, "good": 0, "suboptimal": 0,
+                       "fallback": 0, "blunders": 0, "avg_heuristic_rank": 1.0},
+        "p2_draft_critique": _make_critique(team=["Mew", "Celebi"]),
+        "key_moments": [],
+        "blunders": [],
+        "turning_point": None,
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    # Opponent's team should NOT leak into p1's lesson context
+    assert "Mew" not in ctx
+    assert "Celebi" not in ctx
+
+
+# ── Structured blunders (sorted by score_gap) ────────────────────────────────
+
+def test_blunders_sorted_worst_first() -> None:
+    """Structured blunders are shown worst-gap first, not chronologically."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {"total_turns": 10, "optimal": 6, "good": 1, "suboptimal": 3,
+                       "fallback": 0, "blunders": 2, "avg_heuristic_rank": 1.6},
+        "key_moments": [],
+        "blunders": [
+            {
+                "turn_number": 3,
+                "player_role": "p1",
+                "action": "/choose move tackle",
+                "score_gap": 0.42,
+                "notes": "chose tackle (rank 3/4, 42% below best) [BLUNDER]; heuristic top: flamethrower",
+            },
+            {
+                "turn_number": 9,
+                "player_role": "p1",
+                "action": "/choose move splash",
+                "score_gap": 0.71,
+                "notes": "chose splash (rank 4/4, 71% below best) [BLUNDER]; heuristic top: earthquake",
+            },
+        ],
+        "turning_point": None,
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    # Turn 9 (larger gap 0.71) should appear before turn 3 (0.42)
+    assert ctx.index("Turn 9") < ctx.index("Turn 3")
+
+
+def test_blunders_only_for_correct_player() -> None:
+    """Blunders for the other player are not included in this player's context."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {"total_turns": 6, "optimal": 6, "good": 0, "suboptimal": 0,
+                       "fallback": 0, "blunders": 0, "avg_heuristic_rank": 1.0},
+        "key_moments": [],
+        "blunders": [
+            {
+                "turn_number": 5,
+                "player_role": "p2",   # opponent's blunder
+                "action": "/choose move splash",
+                "score_gap": 0.80,
+                "notes": "chose splash [BLUNDER]; heuristic top: surf",
+            },
+        ],
+        "turning_point": None,
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    # p2's blunder should not appear in p1's lesson
+    assert "splash" not in ctx.lower()
+
+
+# ── Variance report ───────────────────────────────────────────────────────────
+
+def test_variance_verdict_included() -> None:
+    """The plain-English variance verdict appears in the context."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {"total_turns": 5, "optimal": 5, "good": 0, "suboptimal": 0,
+                       "fallback": 0, "blunders": 0, "avg_heuristic_rank": 1.0},
+        "key_moments": [],
+        "blunders": [],
+        "turning_point": None,
+        "variance_report": _make_variance(verdict="Variance was roughly even between both players"),
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    assert "roughly even" in ctx
+
+
+def test_variance_labels_benefit_direction() -> None:
+    """RNG events are framed as 'in your favour' vs 'against you'."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {"total_turns": 6, "optimal": 6, "good": 0, "suboptimal": 0,
+                       "fallback": 0, "blunders": 0, "avg_heuristic_rank": 1.0},
+        "key_moments": [],
+        "blunders": [],
+        "turning_point": None,
+        "variance_report": _make_variance(
+            total_events=3,
+            p1_benefit=1,
+            p2_benefit=2,
+            verdict="Variance slightly favored p2",
+            crits=[
+                {"turn_number": 4, "attacker": "p2"},  # hurt p1
+                {"turn_number": 8, "attacker": "p1"},  # helped p1
+            ],
+            misses=[
+                {"turn_number": 6, "attacker": "p1"},  # hurt p1
+            ],
+        ),
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    # p1 benefited from the turn-8 crit
+    assert "favour" in ctx.lower() or "favor" in ctx.lower()
+    # p1 was hurt by opponent's turn-4 crit and p1's turn-6 miss
+    assert "against" in ctx.lower()
+
+
+def test_variance_not_included_when_zero_events() -> None:
+    """When total_events==0, variance section is omitted."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {"total_turns": 4, "optimal": 4, "good": 0, "suboptimal": 0,
+                       "fallback": 0, "blunders": 0, "avg_heuristic_rank": 1.0},
+        "key_moments": [],
+        "blunders": [],
+        "turning_point": None,
+        "variance_report": _make_variance(total_events=0, verdict="No notable RNG events detected"),
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    # With zero events the variance block is still emitted (verdict is set),
+    # but there should be no per-event lines
+    assert "favour" not in ctx.lower()
+    assert "against you" not in ctx.lower()
+
+
+# ── Win-probability context ───────────────────────────────────────────────────
+
+def test_win_prob_context_shows_swing_magnitude() -> None:
+    """The turning-point win-probability swing is shown with before/after values."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {"total_turns": 10, "optimal": 8, "good": 1, "suboptimal": 1,
+                       "fallback": 0, "blunders": 0, "avg_heuristic_rank": 1.2},
+        "key_moments": [],
+        "blunders": [],
+        "turning_point": 6,
+        "win_probability_timeline": _make_timeline((5, 0.62), (6, 0.62), (7, 0.31)),
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    assert "62" in ctx   # before %
+    assert "31" in ctx   # after %
+    assert "6" in ctx    # turning point turn
+
+
+def test_win_prob_context_flipped_for_p2() -> None:
+    """p2's win probability is correctly shown as (1 - p1_win_prob)."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p2_summary": {"total_turns": 8, "optimal": 7, "good": 1, "suboptimal": 0,
+                       "fallback": 0, "blunders": 0, "avg_heuristic_rank": 1.1},
+        "key_moments": [],
+        "blunders": [],
+        "turning_point": 4,
+        "win_probability_timeline": _make_timeline((4, 0.30), (5, 0.70)),
+    }
+    # p1 prob = 0.30 at turn 4 → p2 prob = 0.70
+    ctx = _format_analysis_context(analysis, "p2")
+    assert "70" in ctx   # p2's win prob at turning point
+
+
+def test_win_prob_context_omitted_when_no_timeline() -> None:
+    """When timeline is empty, win-prob section falls back to plain turn number."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {"total_turns": 6, "optimal": 4, "good": 1, "suboptimal": 1,
+                       "fallback": 0, "blunders": 0, "avg_heuristic_rank": 1.3},
+        "key_moments": [],
+        "blunders": [],
+        "turning_point": 5,
+        "win_probability_timeline": [],
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    # Falls back to the plain "Turning point: turn 5..." line
+    assert "5" in ctx
+    assert "Turning point" in ctx
+
+
+# ── Lesson instruction quality ────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_lesson_prompt_instructs_specificity_when_blunder_present() -> None:
+    """When blunders exist the prompt includes a directive to name the move."""
+    from unittest.mock import AsyncMock
+
+    from nidozo.llm.lesson_generator import generate_lesson
+
+    backend = AsyncMock()
+    backend.complete = AsyncMock(return_value="I should have used earthquake on turn 5.")
+
+    analysis = {
+        "p1_summary": {"total_turns": 6, "optimal": 4, "good": 1, "suboptimal": 1,
+                       "fallback": 0, "blunders": 1, "avg_heuristic_rank": 1.4},
+        "key_moments": [],
+        "blunders": [
+            {
+                "turn_number": 5,
+                "player_role": "p1",
+                "action": "/choose move tackle",
+                "score_gap": 0.55,
+                "notes": "chose tackle (rank 3/3, 55% below best) [BLUNDER]; heuristic top: earthquake (super effective)",
+            }
+        ],
+        "turning_point": 5,
+    }
+
+    await generate_lesson(
+        backend=backend,
+        player_role="p1",
+        winner=2,
+        total_turns=6,
+        opponent_label="random/random",
+        turns=[],
+        analysis=analysis,
+    )
+
+    call_args = backend.complete.call_args
+    user_msg = call_args[0][0][1]["content"]
+    # Must instruct the model to reference the blunder specifically
+    assert "blunder" in user_msg.lower() or "Blunder" in user_msg
+    assert "centerpiece" in user_msg.lower() or "name the move" in user_msg.lower()
+
+
+@pytest.mark.asyncio
+async def test_lesson_prompt_instructs_rng_attribution_when_variance_present() -> None:
+    """When variance data exists the prompt instructs correct RNG attribution."""
+    from unittest.mock import AsyncMock
+
+    from nidozo.llm.lesson_generator import generate_lesson
+
+    backend = AsyncMock()
+    backend.complete = AsyncMock(return_value="The crits were significant but I still made mistakes.")
+
+    analysis = {
+        "p1_summary": {"total_turns": 5, "optimal": 5, "good": 0, "suboptimal": 0,
+                       "fallback": 0, "blunders": 0, "avg_heuristic_rank": 1.0},
+        "key_moments": [],
+        "blunders": [],
+        "turning_point": None,
+        "variance_report": _make_variance(
+            total_events=4,
+            p1_benefit=1,
+            p2_benefit=3,
+            verdict="Variance slightly favored p2 (3 vs 1 beneficial events)",
+        ),
+    }
+
+    await generate_lesson(
+        backend=backend,
+        player_role="p1",
+        winner=2,
+        total_turns=5,
+        opponent_label="random/random",
+        turns=[],
+        analysis=analysis,
+    )
+
+    user_msg = backend.complete.call_args[0][0][1]["content"]
+    assert "RNG" in user_msg or "variance" in user_msg.lower()
+
+
+# ── _extract_move_name helper ─────────────────────────────────────────────────
+
+def test_extract_move_name_poke_env_format() -> None:
+    from nidozo.llm.lesson_generator import _extract_move_name
+    assert _extract_move_name("/choose move fireblast") == "fireblast"
+    assert _extract_move_name("move thunderbolt") == "thunderbolt"
+
+
+def test_extract_move_name_annotator_format() -> None:
+    from nidozo.llm.lesson_generator import _extract_move_name
+    assert _extract_move_name("move 2 (thunderbolt)") == "thunderbolt"
+    assert _extract_move_name("move 1 (surf)") == "surf"
+
+
+def test_extract_move_name_switch_format() -> None:
+    from nidozo.llm.lesson_generator import _extract_move_name
+    assert _extract_move_name("/choose switch Swampert") == "Swampert"
+
+
+def test_extract_move_name_none() -> None:
+    from nidozo.llm.lesson_generator import _extract_move_name
+    assert _extract_move_name(None) == "?"
+    assert _extract_move_name("") == "?"
