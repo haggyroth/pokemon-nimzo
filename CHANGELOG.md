@@ -7,10 +7,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.13.0] — 2026-06-08
+
 ### Added
 - **Prompt v4** — battle event history (last 3 turns of HP deltas), explicit
-  moveset revelation count per opponent mon, opponent threat map (which of your
-  mons each revealed opponent threatens), cleaner section layout
+  moveset revelation count per opponent mon, opponent threat map pre-computed
+  per threatened mon, cleaner section layout separating confirmed facts from
+  partial observations
+
+### Fixed
+- **Double-elimination bye stall** — LB bye slots no longer stall when two WB
+  byes feed the same losers-bracket column; fixed-point resolver handles chains
+- **Tournament failure handling** — unhandled match exceptions now cleanly
+  abort the bracket loop, mark the tournament `failed`, and emit a
+  `tournament_failed` WebSocket event; seed-resolution failures also abort
+  rather than silently continuing
+- **ELO idempotency** — `finish_battle` is now fully idempotent: `AND
+  finished_at IS NULL` guard prevents double-apply; `INSERT OR IGNORE` on
+  `elo_history`; `UNIQUE(battle_id, model_id)` index enforced at DB level
+  (schema v9)
+- **Transaction atomicity** — `status='completed'` folded into the same UPDATE
+  as `finish_battle`; eliminated redundant `set_battle_status` calls after
+  `finish_battle` in orchestration
+- **Analysis correctness** — RNG inference now uses defender's own `my_active`
+  key (not opponent's) so HP-delta comparisons are from the correct perspective;
+  `_team_hp_score` includes the active Pokémon in win-probability calculation;
+  status moves get an early-return (no blunder flag) in `annotate_turn`
+- **Serializer deduplication** — opponent threat map no longer double-counts
+  the active Pokémon (it is already in `opponent_team`)
+- **Dead code removed** — `CoachAgent.max_tokens` parameter eliminated;
+  `__version__` now sourced from package metadata via `importlib.metadata`
+- **Leaderboard games count** — `games` now computed as `wins + losses + ties`
+  from a filtered per-tournament subquery instead of the raw global sum
 
 ---
 
