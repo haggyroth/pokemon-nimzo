@@ -1,5 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import HPBar from './HPBar'
+import PokemonTooltip from './PokemonTooltip'
+import { useTooltip } from '../hooks/useTooltip'
 
 // Official Pokémon type colours
 const TYPE_COLORS = {
@@ -101,33 +103,38 @@ function StatusBadge({ status }) {
 }
 
 function BenchSlot({ mon }) {
+  const tooltip = useTooltip()
   if (!mon) return <div className="bench-slot empty" />
   const url = spriteUrl(mon.species)
   return (
-    <div
-      className={`bench-slot${mon.fainted ? ' fainted' : ''}`}
-      title={`${mon.species} — ${Math.round((mon.hp_fraction ?? 0) * 100)}% HP${mon.status ? ` [${mon.status}]` : ''}`}
-    >
-      {url ? (
-        <img
-          src={url}
-          alt={mon.species}
-          className="bench-sprite"
-          onError={e => { e.currentTarget.style.display = 'none' }}
-          style={{ imageRendering: 'pixelated' }}
-        />
-      ) : (
-        <div className="bench-sprite-fallback">{mon.species?.slice(0, 2).toUpperCase()}</div>
-      )}
+    <>
       <div
-        className="bench-hp-bar"
-        style={{
-          '--hp': `${Math.round((mon.hp_fraction ?? 0) * 100)}%`,
-          '--hp-color': (mon.hp_fraction ?? 0) > 0.5 ? '#4caf50'
-            : (mon.hp_fraction ?? 0) > 0.2 ? '#f7c948' : '#ff4455',
-        }}
-      />
-    </div>
+        className={`bench-slot${mon.fainted ? ' fainted' : ''}`}
+        onMouseEnter={tooltip.onEnter}
+        onMouseLeave={tooltip.onLeave}
+      >
+        {url ? (
+          <img
+            src={url}
+            alt={mon.species}
+            className="bench-sprite"
+            onError={e => { e.currentTarget.style.display = 'none' }}
+            style={{ imageRendering: 'pixelated' }}
+          />
+        ) : (
+          <div className="bench-sprite-fallback">{mon.species?.slice(0, 2).toUpperCase()}</div>
+        )}
+        <div
+          className="bench-hp-bar"
+          style={{
+            '--hp': `${Math.round((mon.hp_fraction ?? 0) * 100)}%`,
+            '--hp-color': (mon.hp_fraction ?? 0) > 0.5 ? '#4caf50'
+              : (mon.hp_fraction ?? 0) > 0.2 ? '#f7c948' : '#ff4455',
+          }}
+        />
+      </div>
+      <PokemonTooltip mon={mon} anchor={tooltip.anchor} />
+    </>
   )
 }
 
@@ -169,6 +176,9 @@ function MoveList({ moves }) {
 }
 
 export default function PokemonCard({ mon, side, isOpponent = false, isThinking = false, bench = [] }) {
+  // ---- Tooltip ----
+  const tooltip = useTooltip()
+
   // ---- Animation state ----
   // Track HP changes to trigger hit / heal / faint animations.
   // Reset when the species changes (new Pokémon switched in).
@@ -217,6 +227,8 @@ export default function PokemonCard({ mon, side, isOpponent = false, isThinking 
     )
   }
 
+  // Pass bench slot mon as tooltip target; for the card itself use mon directly.
+
   const boostEntries  = Object.entries(mon.boosts || {}).filter(([, v]) => v !== 0)
   const revealedMoves = isOpponent ? Object.values(mon.revealed_moves || {}) : null
   const ownMoves      = !isOpponent ? (mon.moves ?? {}) : null
@@ -224,9 +236,12 @@ export default function PokemonCard({ mon, side, isOpponent = false, isThinking 
   const accentStyle   = typeAccentStyle(mon.types, side)
 
   return (
+    <>
     <div
       className={`pokemon-card ${side}${isThinking ? ' is-thinking' : ''} ${animClass}`}
       style={{ background: bg, ...accentStyle }}
+      onMouseEnter={tooltip.onEnter}
+      onMouseLeave={tooltip.onLeave}
     >
       {/* Sprite — shake animation attaches here */}
       <PokemonSprite
@@ -282,5 +297,7 @@ export default function PokemonCard({ mon, side, isOpponent = false, isThinking 
         </div>
       )}
     </div>
+    <PokemonTooltip mon={mon} anchor={tooltip.anchor} />
+    </>
   )
 }

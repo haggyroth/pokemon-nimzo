@@ -4633,3 +4633,189 @@ body::after {
   font-size: 0.7rem;
   font-style: italic;
 }
+
+/* ============================================================
+   POKÉMON TOOLTIP
+   ============================================================ */
+
+.pokemon-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: #0a0a14;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 0;
+  pointer-events: none;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255,255,255,0.04);
+  font-family: 'IBM Plex Mono', monospace;
+  animation: tt-fade-in 0.12s ease;
+  overflow: hidden;
+}
+
+@keyframes tt-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.tt-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Header */
+.tt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.45rem 0.65rem 0.35rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.tt-species {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #e8e8f0;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.tt-type-badges {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.tt-header-type {
+  font-size: 0.52rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  color: #fff;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+/* Sections */
+.tt-section {
+  padding: 0.4rem 0.65rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tt-section:last-child {
+  border-bottom: none;
+}
+
+.tt-section-title {
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.3);
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
+/* Base stats */
+.tt-stat-row {
+  display: grid;
+  grid-template-columns: 2.2rem 1fr 2rem;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.2rem;
+}
+
+.tt-stat-row:last-child { margin-bottom: 0; }
+
+.tt-stat-label {
+  font-size: 0.55rem;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: right;
+  letter-spacing: 0.02em;
+}
+
+.tt-stat-track {
+  height: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.tt-stat-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
+.tt-stat-value {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Type matchup rows */
+.tt-matchup-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+
+.tt-matchup-row:last-child { margin-bottom: 0; }
+
+.tt-mult-label {
+  font-size: 0.55rem;
+  font-weight: 700;
+  width: 1.6rem;
+  text-align: right;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.tt-weak-quad   { color: #ff1744; }
+.tt-weak-double { color: #ff6d6d; }
+.tt-resist-half { color: #42a5f5; }
+.tt-resist-quarter { color: #26c6da; }
+.tt-immune      { color: rgba(255, 255, 255, 0.35); }
+
+.tt-matchup-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.tt-type-pill {
+  font-size: 0.48rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.28rem;
+  border-radius: 3px;
+  color: #fff;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* Ability / item detail row */
+.tt-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.tt-detail {
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-transform: capitalize;
+}
+
+.tt-detail-label {
+  font-size: 0.48rem;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.28);
+  font-weight: 600;
+  text-transform: uppercase;
+  min-width: 2.4rem;
+}
