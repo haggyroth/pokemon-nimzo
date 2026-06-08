@@ -215,3 +215,103 @@ def test_serialize_battle_structure() -> None:
     }
     assert expected_keys == set(result.keys())
     assert result["turn"] == 3
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — missing lines
+# ---------------------------------------------------------------------------
+
+# --- _serialize_own_pokemon None ---
+
+def test_serialize_own_pokemon_none_returns_none() -> None:
+    assert _serialize_own_pokemon(None) is None
+
+
+# --- _serialize_opponent_pokemon unknown item/ability ---
+
+def test_opponent_unknown_item_becomes_none() -> None:
+    """poke-env sentinel 'unknown' for item should be replaced with None."""
+    mon = _mock_opponent_pokemon()
+    mon.item = "unknown"
+    result = _serialize_opponent_pokemon(mon)
+    assert result["item"] is None
+
+
+def test_opponent_unknown_ability_becomes_none() -> None:
+    """poke-env sentinel 'unknown' for ability should be replaced with None."""
+    mon = _mock_opponent_pokemon()
+    mon.ability = "unknown"
+    result = _serialize_opponent_pokemon(mon)
+    assert result["ability"] is None
+
+
+# --- _serialize_move fallback for pseudo-moves (KeyError/AttributeError) ---
+
+def test_serialize_move_fallback_for_pseudo_move() -> None:
+    """Pseudo-moves (e.g. 'recharge') that lack full data get a safe fallback."""
+    from nidozo.battle.serializer import _serialize_move
+
+    move = MagicMock()
+    move.id = "recharge"
+    # type.name raises KeyError (like a real recharge move in poke-env)
+    type(move).type = PropertyMock(side_effect=KeyError("no type"))
+
+    result = _serialize_move(move)
+    assert result["id"] == "recharge"
+    assert result["type"] == "NORMAL"
+    assert result["category"] == "STATUS"
+    assert result["base_power"] == 0
+    assert result["priority"] == 0
+
+
+# --- _serialize_move_basic fallback ---
+
+def test_serialize_move_basic_fallback_for_pseudo_move() -> None:
+    """Opponent pseudo-moves also get the safe fallback."""
+    from nidozo.battle.serializer import _serialize_move_basic
+
+    move = MagicMock()
+    move.id = "recharge"
+    type(move).type = PropertyMock(side_effect=KeyError("no type"))
+
+    result = _serialize_move_basic(move)
+    assert result["id"] == "recharge"
+    assert result["type"] == "NORMAL"
+
+
+# --- _safe_priority with KeyError ---
+
+def test_safe_priority_returns_zero_on_keyerror() -> None:
+    """_safe_priority returns 0 when priority raises KeyError."""
+    from nidozo.battle.serializer import _safe_priority
+
+    move = MagicMock()
+    type(move).priority = PropertyMock(side_effect=KeyError("no priority"))
+
+    result = _safe_priority(move)
+    assert result == 0
+
+
+# --- _serialize_weather with empty weather dict ---
+
+def test_serialize_weather_empty_returns_none() -> None:
+    """_serialize_weather returns None when weather dict is empty."""
+    from nidozo.battle.serializer import _serialize_weather
+
+    battle = MagicMock()
+    battle.weather = {}
+    result = _serialize_weather(battle)
+    assert result is None
+
+
+def test_serialize_weather_non_empty_returns_name() -> None:
+    """Lines 175-176: _serialize_weather returns the weather key's .name when non-empty."""
+    from nidozo.battle.serializer import _serialize_weather
+
+    battle = MagicMock()
+    weather_key = MagicMock()
+    weather_key.name = "RAINDANCE"
+    battle.weather = {weather_key: 5}
+
+    result = _serialize_weather(battle)
+    assert result == "RAINDANCE"

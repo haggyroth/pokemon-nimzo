@@ -434,3 +434,116 @@ def test_json_invalid_falls_back_to_regex() -> None:
     result = parse_action('{broken json}\nACTION: move 1', battle, player)
     assert result is not None
     player.create_order.assert_called_once_with(moves[0])
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — missing lines in _parse_json_action and parse_action
+# ---------------------------------------------------------------------------
+
+def test_json_not_a_dict_falls_through() -> None:
+    """JSON array is not a dict → falls through to regex parser."""
+    moves = [_mock_move("tackle")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    result = parse_action('[1,2,3]\nACTION: move 1', battle, player)
+    assert result is not None
+
+
+def test_json_empty_action_type_falls_through() -> None:
+    """JSON missing action_type key → falls through to regex."""
+    moves = [_mock_move("tackle")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    result = parse_action('{"identifier":"tackle"}\nACTION: move 1', battle, player)
+    assert result is not None
+
+
+def test_json_empty_identifier_falls_through() -> None:
+    """JSON with empty identifier → falls through to regex."""
+    moves = [_mock_move("tackle")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    result = parse_action('{"action_type":"move","identifier":""}\nACTION: move 1', battle, player)
+    assert result is not None
+
+
+def test_json_unknown_action_type_returns_none() -> None:
+    """JSON with unknown action_type (not move/switch) → returns None from json parser."""
+    moves = [_mock_move("tackle")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    # No ACTION fallback text, so final result should be None
+    result = parse_action('{"action_type":"teleport","identifier":"somewhere"}', battle, player)
+    assert result is None
+
+
+def test_json_move_not_resolved_logs_debug() -> None:
+    """JSON move identifier not in available moves → falls through to text pass."""
+    moves = [_mock_move("thunderbolt")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    # 'unknownmove' won't resolve, no ACTION fallback → None
+    result = parse_action('{"action_type":"move","identifier":"unknownmove"}', battle, player)
+    assert result is None
+
+
+def test_json_switch_not_resolved_logs_debug() -> None:
+    """JSON switch identifier not in available switches → falls through."""
+    switches = [_mock_pokemon("pikachu")]
+    battle = _make_battle(switches=switches)
+    player = _make_player()
+
+    # 'nonexistentpokemon' won't fuzzy-match 'pikachu' (too different)
+    result = parse_action('{"action_type":"switch","identifier":"nonexistentpokemon"}', battle, player)
+    assert result is None
+
+
+def test_parse_action_empty_string_returns_none() -> None:
+    """Empty string response returns None immediately."""
+    battle = _make_battle()
+    player = _make_player()
+    assert parse_action("", battle, player) is None
+
+
+def test_parse_action_none_returns_none() -> None:
+    """None response returns None."""
+    battle = _make_battle()
+    player = _make_player()
+    assert parse_action(None, battle, player) is None
+
+
+# ---------------------------------------------------------------------------
+# New coverage — lines 176-177: JSON with missing action_type or identifier,
+# no regex fallback text so the debug-log return None path is exercised
+# ---------------------------------------------------------------------------
+
+def test_json_missing_action_type_no_fallback_returns_none() -> None:
+    """Lines 176-177: pure JSON with no action_type → debug log + return None.
+
+    Passing pure JSON (no regex ACTION: text) means the JSON parser runs,
+    hits 'not action_type', logs debug, returns None from _parse_json_action,
+    and then the regex pass also finds nothing → final result is None.
+    """
+    moves = [_mock_move("tackle")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    # Pure JSON with identifier but no action_type — no regex fallback
+    result = parse_action('{"identifier":"tackle"}', battle, player)
+    assert result is None
+
+
+def test_json_missing_identifier_no_fallback_returns_none() -> None:
+    """Lines 176-177: pure JSON with no identifier → debug log + return None."""
+    moves = [_mock_move("tackle")]
+    battle = _make_battle(moves=moves)
+    player = _make_player()
+
+    # Pure JSON with action_type but no identifier
+    result = parse_action('{"action_type":"move"}', battle, player)
+    assert result is None

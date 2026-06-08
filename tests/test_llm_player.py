@@ -427,3 +427,267 @@ def test_random_bot_is_subclass_of_random_player() -> None:
     from nidozo.battle.bots import RandomBot
 
     assert issubclass(RandomBot, RandomPlayer)
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — missing lines
+# ---------------------------------------------------------------------------
+
+def test_log_turn_swallows_store_exception(mock_backend) -> None:
+    """_log_turn silently swallows exceptions from store.log_turn()."""
+    mock_store = MagicMock()
+    mock_store.log_turn.side_effect = RuntimeError("DB locked")
+
+    player = _make_player(mock_backend)
+    player._store = mock_store
+    player._battle_id = 1
+
+    # Should not raise
+    player._log_turn(5, "/choose move thunderbolt", True, "response", "{}")
+
+
+# ---------------------------------------------------------------------------
+# draft._parse_pick_response — pure function tests
+# ---------------------------------------------------------------------------
+
+def test_parse_pick_response_valid_json() -> None:
+    """Happy path: valid JSON with correct pick and reasoning."""
+    from nidozo.battle.draft import _parse_pick_response
+
+    response = '{"pick": "Pikachu", "reasoning": "fast and electric"}'
+    result = _parse_pick_response(response, {"Pikachu", "Charmander"})
+    assert result == ("Pikachu", "fast and electric")
+
+
+def test_parse_pick_response_normalized_match() -> None:
+    """Pick normalizes to match a species despite casing/punctuation differences."""
+    from nidozo.battle.draft import _parse_pick_response
+
+    # 'mr. mime' normalized to 'mrmime' matches 'Mr. Mime' normalized to 'mrmime'
+    response = '{"pick": "mr. mime", "reasoning": "psychic wall"}'
+    result = _parse_pick_response(response, {"Mr. Mime", "Alakazam"})
+    assert result is not None
+    assert result[0] == "Mr. Mime"
+
+
+def test_parse_pick_response_markdown_fences_stripped() -> None:
+    """JSON wrapped in markdown code fences is parsed correctly."""
+    from nidozo.battle.draft import _parse_pick_response
+
+    response = "```json\n{\"pick\": \"Gengar\", \"reasoning\": \"ghost\"}\n```"
+    result = _parse_pick_response(response, {"Gengar", "Haunter"})
+    assert result == ("Gengar", "ghost")
+
+
+def test_parse_pick_response_json_extracted_from_prose() -> None:
+    """JSON embedded in prose is extracted via regex fallback."""
+    from nidozo.battle.draft import _parse_pick_response
+
+    response = 'Sure! Here is my pick: {"pick": "Snorlax", "reasoning": "big and bulky"} Thanks!'
+    result = _parse_pick_response(response, {"Snorlax", "Blissey"})
+    assert result == ("Snorlax", "big and bulky")
+
+
+def test_parse_pick_response_invalid_json_no_json_in_text() -> None:
+    """Non-JSON with no embedded object → returns None."""
+    from nidozo.battle.draft import _parse_pick_response
+
+    result = _parse_pick_response("I choose Pikachu!", {"Pikachu", "Charmander"})
+    assert result is None
+
+
+def test_parse_pick_response_pick_not_in_pool() -> None:
+    """Pick name is valid JSON but species is not in available set → None."""
+    from nidozo.battle.draft import _parse_pick_response
+
+    response = '{"pick": "Mewtwo", "reasoning": "legendary"}'
+    result = _parse_pick_response(response, {"Pikachu", "Charmander"})
+    assert result is None
+
+
+def test_parse_pick_response_empty_pick_field() -> None:
+    """Empty pick field → None."""
+    from nidozo.battle.draft import _parse_pick_response
+
+    response = '{"pick": "", "reasoning": "no idea"}'
+    result = _parse_pick_response(response, {"Pikachu"})
+    assert result is None
+
+
+def test_parse_pick_response_nested_json_both_fail() -> None:
+    """Malformed inner JSON inside prose → returns None."""
+    from nidozo.battle.draft import _parse_pick_response
+
+    # Has braces but not valid JSON
+    response = 'Here: {not valid json}'
+    result = _parse_pick_response(response, {"Pikachu"})
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# draft.run_draft — async integration tests with full mocking
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_run_draft_happy_path(tmp_path) -> None:
+    """run_draft completes successfully: 6 picks, saves team + draft session."""
+    from nidozo.battle.draft import run_draft
+    from nidozo.db.store import BattleStore
+
+    store = BattleStore(tmp_path / "draft.db")
+    model_id = store.get_or_create_model("test-model", "anthropic", "v1")
+
+    # Build a pool of 10 Pokémon so there's always something left to pick
+    pool_info = [
+        {"species_id": f"pokemon{i}", "species": f"Pokemon{i}", "types": ["normal"]}
+        for i in range(10)
+    ]
+
+    # Backend always returns a valid pick in order
+    pick_counter = {"n": 0}
+
+    async def _fake_complete(messages):
+        idx = pick_counter["n"]
+        pick_counter["n"] += 1
+        return f'{{"pick": "Pokemon{idx}", "reasoning": "reason{idx}"}}'
+
+    backend = AsyncMock()
+    backend.complete.side_effect = _fake_complete
+
+    with patch("nidozo.battle.draft.load_movesets", return_value={f"pokemon{i}": {} for i in range(10)}), \
+         patch("nidozo.battle.draft.get_pool", return_value=[f"pokemon{i}" for i in range(10)]), \
+         patch("nidozo.battle.draft.get_pool_info", return_value=pool_info), \
+         patch("nidozo.battle.draft.build_team_string", return_value="Pikachu\n"), \
+         patch("nidozo.battle.draft._build_draft_messages", return_value=[]), \
+         patch("pathlib.Path.read_text", return_value="system prompt"):
+        result = await run_draft(
+            backend=backend,
+            model_id=model_id,
+            tier="ou",
+            store=store,
+            bus=None,
+            player_role="p1",
+        )
+
+    assert len(result.picked) == 6
+    assert result.tier == "ou"
+    assert result.model_id == model_id
+
+
+@pytest.mark.asyncio
+async def test_run_draft_fallback_when_all_retries_fail(tmp_path) -> None:
+    """run_draft falls back to first pool entry when all retry attempts fail."""
+    from nidozo.battle.draft import run_draft
+    from nidozo.db.store import BattleStore
+
+    store = BattleStore(tmp_path / "draft_fallback.db")
+    model_id = store.get_or_create_model("test-model", "anthropic", "v1")
+
+    pool_info = [
+        {"species_id": f"pokemon{i}", "species": f"Pokemon{i}", "types": ["normal"]}
+        for i in range(10)
+    ]
+
+    # Backend always returns gibberish so parse fails → fallback
+    backend = AsyncMock()
+    backend.complete.return_value = "not valid json at all"
+
+    with patch("nidozo.battle.draft.load_movesets", return_value={f"pokemon{i}": {} for i in range(10)}), \
+         patch("nidozo.battle.draft.get_pool", return_value=[f"pokemon{i}" for i in range(10)]), \
+         patch("nidozo.battle.draft.get_pool_info", return_value=pool_info), \
+         patch("nidozo.battle.draft.build_team_string", return_value="Pikachu\n"), \
+         patch("nidozo.battle.draft._build_draft_messages", return_value=[]), \
+         patch("pathlib.Path.read_text", return_value="system prompt"):
+        result = await run_draft(
+            backend=backend,
+            model_id=model_id,
+            tier="ou",
+            store=store,
+        )
+
+    # All 6 picks should be the fallback (first remaining species each time)
+    assert len(result.picked) == 6
+
+
+@pytest.mark.asyncio
+async def test_run_draft_backend_exception_triggers_fallback(tmp_path) -> None:
+    """run_draft handles backend exceptions and falls back to first pool entry."""
+    from nidozo.battle.draft import run_draft
+    from nidozo.db.store import BattleStore
+
+    store = BattleStore(tmp_path / "draft_exc.db")
+    model_id = store.get_or_create_model("test-model", "anthropic", "v1")
+
+    pool_info = [
+        {"species_id": f"pokemon{i}", "species": f"Pokemon{i}", "types": ["normal"]}
+        for i in range(10)
+    ]
+
+    backend = AsyncMock()
+    backend.complete.side_effect = RuntimeError("network error")
+
+    with patch("nidozo.battle.draft.load_movesets", return_value={f"pokemon{i}": {} for i in range(10)}), \
+         patch("nidozo.battle.draft.get_pool", return_value=[f"pokemon{i}" for i in range(10)]), \
+         patch("nidozo.battle.draft.get_pool_info", return_value=pool_info), \
+         patch("nidozo.battle.draft.build_team_string", return_value="Pikachu\n"), \
+         patch("nidozo.battle.draft._build_draft_messages", return_value=[]), \
+         patch("pathlib.Path.read_text", return_value="system prompt"):
+        result = await run_draft(
+            backend=backend,
+            model_id=model_id,
+            tier="ou",
+            store=store,
+        )
+
+    assert len(result.picked) == 6
+
+
+@pytest.mark.asyncio
+async def test_run_draft_emits_bus_events(tmp_path) -> None:
+    """run_draft publishes draft_pick and draft_complete events to bus."""
+    from nidozo.battle.draft import run_draft
+    from nidozo.db.store import BattleStore
+
+    store = BattleStore(tmp_path / "draft_bus.db")
+    model_id = store.get_or_create_model("test-model", "anthropic", "v1")
+
+    pool_info = [
+        {"species_id": f"pokemon{i}", "species": f"Pokemon{i}", "types": ["normal"]}
+        for i in range(10)
+    ]
+
+    pick_counter = {"n": 0}
+
+    async def _fake_complete(messages):
+        idx = pick_counter["n"]
+        pick_counter["n"] += 1
+        return f'{{"pick": "Pokemon{idx}", "reasoning": "reason{idx}"}}'
+
+    backend = AsyncMock()
+    backend.complete.side_effect = _fake_complete
+
+    bus = AsyncMock()
+    bus.publish = AsyncMock()
+
+    with patch("nidozo.battle.draft.load_movesets", return_value={f"pokemon{i}": {} for i in range(10)}), \
+         patch("nidozo.battle.draft.get_pool", return_value=[f"pokemon{i}" for i in range(10)]), \
+         patch("nidozo.battle.draft.get_pool_info", return_value=pool_info), \
+         patch("nidozo.battle.draft.build_team_string", return_value="Pikachu\n"), \
+         patch("nidozo.battle.draft._build_draft_messages", return_value=[]), \
+         patch("pathlib.Path.read_text", return_value="system prompt"):
+        await run_draft(
+            backend=backend,
+            model_id=model_id,
+            tier="ou",
+            store=store,
+            bus=bus,
+            player_role="p2",
+        )
+
+    # 6 draft_pick events + 1 draft_complete event = 7 total
+    assert bus.publish.call_count == 7
+    calls = [c.args[0] for c in bus.publish.call_args_list]
+    pick_events = [c for c in calls if c["type"] == "draft_pick"]
+    complete_events = [c for c in calls if c["type"] == "draft_complete"]
+    assert len(pick_events) == 6
+    assert len(complete_events) == 1

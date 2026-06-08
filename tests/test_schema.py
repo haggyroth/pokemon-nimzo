@@ -281,3 +281,88 @@ def test_migrate_from_v3_preserves_existing_data() -> None:
 
     count = conn.execute("SELECT COUNT(*) FROM models").fetchone()[0]
     assert count == 1
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — missing lines
+# ---------------------------------------------------------------------------
+
+def test_migrate_idempotent_tables_already_exist() -> None:
+    """Running migrate() on an already-migrated DB is safe (CREATE TABLE IF NOT EXISTS)."""
+    conn = _fresh_conn()
+    migrate(conn)
+    # Second call should not raise
+    migrate(conn)
+    assert _version(conn) == SCHEMA_VERSION
+
+
+def test_migrate_idempotent_indexes_already_exist() -> None:
+    """CREATE INDEX IF NOT EXISTS makes index creation idempotent."""
+    conn = _fresh_conn()
+    migrate(conn)
+    # Manually create an index that would normally be in the migration
+    # Then migrate again — should not raise
+    migrate(conn)
+    indexes = {row[0] for row in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='index'"
+    ).fetchall()}
+    assert "idx_turns_battle" in indexes
+
+
+def test_migrate_from_v6_adds_bracket_columns() -> None:
+    """Migrating from v6 adds tournament_format and bracket_state columns."""
+    # Fresh install gives us full schema; downgrade to v6
+    conn = _fresh_conn()
+    migrate(conn)
+    # Simulate a v6 DB by rolling back the bracket columns
+    conn.execute("UPDATE schema_version SET version=6")
+    try:
+        conn.execute("ALTER TABLE tournaments DROP COLUMN tournament_format")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE tournaments DROP COLUMN bracket_state")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+
+    migrate(conn)
+
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(tournaments)").fetchall()}
+    assert "tournament_format" in cols
+    assert "bracket_state" in cols
+
+
+def test_migrate_v1_state_json_already_exists_no_error() -> None:
+    """Lines 166-167: OperationalError is silenced when state_json already exists.
+
+    Build a v1 DB but pre-add state_json to turns, leave version=1.
+    Calling migrate() must not raise even though ALTER TABLE would fail.
+    """
+    conn = _build_v1_db()
+    # Pre-add the column that v2 migration would add
+    conn.execute("ALTER TABLE turns ADD COLUMN state_json TEXT")
+    conn.commit()
+    # migrate() should detect version < 2, try ALTER TABLE, catch OperationalError, and continue
+    migrate(conn)
+    assert _version(conn) == SCHEMA_VERSION
+
+
+def test_migrate_v2_battle_columns_already_exist_no_error() -> None:
+    """Lines 194-195: OperationalError is silenced when tournament_id/status already exist.
+
+    Build a v1 DB, apply v2 manually (add state_json, set version=2),
+    pre-add tournament_id and status columns to battles, then call migrate().
+    """
+    conn = _build_v1_db()
+    # Apply v2 changes manually
+    conn.execute("ALTER TABLE turns ADD COLUMN state_json TEXT")
+    conn.execute("UPDATE schema_version SET version=2")
+    conn.commit()
+    # Pre-add the columns that v3 migration would add — triggers OperationalError path
+    conn.execute("ALTER TABLE battles ADD COLUMN tournament_id INTEGER")
+    conn.execute("ALTER TABLE battles ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'")
+    conn.commit()
+    # migrate() should detect version < 3, try ALTERs, catch OperationalErrors, and continue
+    migrate(conn)
+    assert _version(conn) == SCHEMA_VERSION

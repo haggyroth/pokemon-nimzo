@@ -417,3 +417,174 @@ def test_cancel_tournament_already_finished_returns_false(store) -> None:
 def test_cancel_tournament_nonexistent_returns_false(store) -> None:
     result = store.cancel_tournament(99999)
     assert result is False
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — missing lines
+# ---------------------------------------------------------------------------
+
+# --- update_bracket_state / get_bracket_state ---
+
+def test_update_and_get_bracket_state(store) -> None:
+    """update_bracket_state persists and get_bracket_state retrieves the bracket."""
+    tid, _ = _make_tournament(store)
+    bracket = {"format": "single_elim", "size": 4, "champion_seed": None}
+
+    store.update_bracket_state(tid, bracket)
+
+    result = store.get_bracket_state(tid)
+    assert result is not None
+    assert result["format"] == "single_elim"
+    assert result["size"] == 4
+
+
+def test_get_bracket_state_returns_none_when_absent(store) -> None:
+    """get_bracket_state returns None when bracket_state column is empty."""
+    tid, _ = _make_tournament(store)
+    # No update_bracket_state called → column is NULL
+    result = store.get_bracket_state(tid)
+    assert result is None
+
+
+def test_get_bracket_state_returns_none_for_nonexistent_tournament(store) -> None:
+    """get_bracket_state returns None when tournament doesn't exist."""
+    result = store.get_bracket_state(99999)
+    assert result is None
+
+
+# --- get_model_stats ---
+
+def test_get_model_stats_returns_correct_structure(store) -> None:
+    """get_model_stats returns a dict with expected keys for a valid model."""
+    mid = store.get_or_create_model("anthropic", "claude-sonnet-4-6")
+    result = store.get_model_stats(mid)
+
+    assert result is not None
+    assert "model" in result
+    assert "elo_history" in result
+    assert "battle_history" in result
+    assert "turn_stats" in result
+    assert "lessons" in result
+
+    assert result["model"]["id"] == mid
+    assert result["model"]["provider"] == "anthropic"
+    assert result["model"]["model_name"] == "claude-sonnet-4-6"
+
+
+def test_get_model_stats_returns_none_for_nonexistent_model(store) -> None:
+    """get_model_stats returns None when model_id doesn't exist."""
+    result = store.get_model_stats(99999)
+    assert result is None
+
+
+def test_get_model_stats_parse_success_rate_none_with_no_turns(store) -> None:
+    """With no turns logged, parse_success_rate is None."""
+    mid = store.get_or_create_model("random", "no-turns")
+    result = store.get_model_stats(mid)
+    assert result is not None
+    assert result["turn_stats"]["parse_success_rate"] is None
+    assert result["turn_stats"]["total_turns"] == 0
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — store.py missing lines
+# ---------------------------------------------------------------------------
+
+def test_get_battle_players_returns_dict(store) -> None:
+    """Lines 397-406: get_battle_players returns p1/p2 provider+model info."""
+    p1 = store.get_or_create_model("anthropic", "claude-test")
+    p2 = store.get_or_create_model("random", "random")
+    bid = store.create_battle("tag-gbp", "gen3randombattle", p1, p2)
+
+    result = store.get_battle_players(bid)
+    assert result is not None
+    assert result["p1_provider"] == "anthropic"
+    assert result["p1_model"] == "claude-test"
+    assert result["p2_provider"] == "random"
+    assert result["p2_model"] == "random"
+
+
+def test_get_battle_players_returns_none_for_nonexistent(store) -> None:
+    """Lines 397-406: get_battle_players returns None when battle not found."""
+    result = store.get_battle_players(99999)
+    assert result is None
+
+
+def test_update_battle_tag(store) -> None:
+    """Lines 410-413: update_battle_tag changes the battle_tag in the DB."""
+    p1 = store.get_or_create_model("random", "a")
+    p2 = store.get_or_create_model("random", "b")
+    bid = store.create_battle("old-tag", "gen3randombattle", p1, p2)
+
+    store.update_battle_tag(bid, "new-tag-123")
+
+    row = store._conn.execute(
+        "SELECT battle_tag FROM battles WHERE id=?", (bid,)
+    ).fetchone()
+    assert row["battle_tag"] == "new-tag-123"
+
+
+def test_get_battle_teams_returns_none_none_for_nonexistent(store) -> None:
+    """Line 740: get_battle_teams returns (None, None) for missing battle."""
+    result = store.get_battle_teams(99999)
+    assert result == (None, None)
+
+
+def test_get_battle_teams_none_when_team_id_missing(store) -> None:
+    """Line 749: _fetch_team returns None when team_id references nothing."""
+    p1 = store.get_or_create_model("random", "a")
+    p2 = store.get_or_create_model("random", "b")
+    bid = store.create_battle("tag-bbt", "gen3randombattle", p1, p2)
+    # Disable FK enforcement temporarily to allow a bogus team id reference
+    store._conn.execute("PRAGMA foreign_keys=OFF")
+    store._conn.execute("UPDATE battles SET p1_team_id=999 WHERE id=?", (bid,))
+    store._conn.commit()
+    store._conn.execute("PRAGMA foreign_keys=ON")
+
+    p1_team, p2_team = store.get_battle_teams(bid)
+    # p1_team_id=999 exists but no teams row → _fetch_team returns None
+    assert p1_team is None
+    # p2_team_id is NULL → also None
+    assert p2_team is None
+
+
+def test_get_battle_teams_bad_pokemon_json(store) -> None:
+    """Lines 753-754: json.loads failure silently passes; dict still returned."""
+    p1 = store.get_or_create_model("random", "a")
+    p2 = store.get_or_create_model("random", "b")
+    bid = store.create_battle("tag-bbtj", "gen3randombattle", p1, p2)
+
+    # Insert a teams row with invalid pokemon JSON
+    store._conn.execute(
+        "INSERT INTO teams (id, model_id, tier, format, pokemon, team_string) "
+        "VALUES (100, ?, 'ou', 'gen3ou', 'NOT_VALID_JSON', 'team-string')",
+        (p1,),
+    )
+    # Point battles.p1_team_id at this team (id=100) — disable FK to allow it
+    store._conn.execute("PRAGMA foreign_keys=OFF")
+    store._conn.execute("UPDATE battles SET p1_team_id=100 WHERE id=?", (bid,))
+    store._conn.commit()
+    store._conn.execute("PRAGMA foreign_keys=ON")
+
+    p1_team, _ = store.get_battle_teams(bid)
+    # Team row found but pokemon field wasn't parsed — it's left as-is
+    assert p1_team is not None
+    assert p1_team["pokemon"] == "NOT_VALID_JSON"
+
+
+def test_get_teams_for_model_bad_pokemon_json(store) -> None:
+    """Lines 772-773: json.loads failure in get_teams_for_model silently passes."""
+    mid = store.get_or_create_model("random", "x")
+
+    # Insert a teams row with invalid pokemon JSON
+    store._conn.execute(
+        "INSERT INTO teams (model_id, tier, format, pokemon, team_string) "
+        "VALUES (?, 'ou', 'gen3ou', 'BAD_JSON', 'team-string')",
+        (mid,),
+    )
+    store._conn.commit()
+
+    teams = store.get_teams_for_model(mid)
+    assert len(teams) == 1
+    # pokemon field kept as raw string since json.loads failed
+    assert teams[0]["pokemon"] == "BAD_JSON"

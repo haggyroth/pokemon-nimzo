@@ -797,3 +797,543 @@ def test_critique_draft_with_team_ids_in_analyze_battle():
     assert result["p1_draft_critique"] is not None
     assert result["p1_draft_critique"]["team"] == ["Pikachu"]
     assert result["p2_draft_critique"] is None  # no p2 team supplied
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — missing lines
+# ---------------------------------------------------------------------------
+
+# --- _load_species_data ---
+
+def test_load_species_data_missing_file():
+    """_load_species_data returns {} when the JSON file does not exist."""
+    from unittest.mock import patch
+
+    from nidozo.analysis.analyzer import _load_species_data
+
+    def _raise_os(*args, **kwargs):
+        raise OSError("no such file")
+
+    with patch("builtins.open", side_effect=_raise_os):
+        result = _load_species_data()
+    assert result == {}
+
+
+def test_load_species_data_bad_json(tmp_path):
+    """_load_species_data returns {} when the JSON file is malformed."""
+    import os
+    from unittest.mock import patch
+
+    from nidozo.analysis.analyzer import _load_species_data
+
+    # Write a bad JSON file and point the function at it via monkeypatching os.path
+    bad_file = tmp_path / "gen3_movesets.json"
+    bad_file.write_text("{not valid json")
+
+    original_join = os.path.join
+    def fake_join(*args):
+        # When constructing the data path, return our temp file
+        result = original_join(*args)
+        if result.endswith("gen3_movesets.json"):
+            return str(bad_file)
+        return result
+
+    with patch("nidozo.analysis.analyzer.os.path.join", side_effect=fake_join):
+        result = _load_species_data()
+    assert result == {}
+
+
+def test_load_species_data_happy_path(tmp_path):
+    """_load_species_data returns the dict when file is valid JSON."""
+    import os
+    from unittest.mock import patch
+
+    from nidozo.analysis.analyzer import _load_species_data
+
+    payload = {"pikachu": {"species": "Pikachu", "types": ["Electric"]}}
+    good_file = tmp_path / "gen3_movesets.json"
+    good_file.write_text(json.dumps(payload))
+
+    original_join = os.path.join
+    def fake_join(*args):
+        result = original_join(*args)
+        if result.endswith("gen3_movesets.json"):
+            return str(good_file)
+        return result
+
+    with patch("nidozo.analysis.analyzer.os.path.join", side_effect=fake_join):
+        result = _load_species_data()
+    assert result == payload
+
+
+# --- _composite_score ValueError path ---
+
+def test_composite_score_unparseable_damage_pct():
+    """Unparseable estimated_damage_pct silently falls back to dmg=0.0."""
+    score = _composite_score({
+        "type_multiplier": 1.0,
+        "estimated_damage_pct": "not-a-number",
+        "is_status": False,
+        "priority": 0,
+    })
+    # mult=1.0, dmg=0.0 → score = 0.0
+    assert score == pytest.approx(0.0)
+
+
+# --- _resolve_move_slot edge cases ---
+
+def test_resolve_move_slot_no_move_token():
+    """An action string with no move/switch token returns None."""
+    assert _resolve_move_slot("just some text", _TWO_MOVES) is None
+    assert _resolve_move_slot("", _TWO_MOVES) is None
+
+
+def test_resolve_move_slot_numeric_token():
+    """Numeric slot path: 'move 2' resolves to slot 2."""
+    assert _resolve_move_slot("move 2", _TWO_MOVES) == 2
+
+
+# --- annotate_turn — malformed state_json ---
+
+def test_annotate_turn_malformed_state_json():
+    """annotate_turn returns no_data when state_json is malformed JSON."""
+    turn = {
+        "turn_number": 5,
+        "player_role": "p1",
+        "action_chosen": "/choose move thunderbolt",
+        "parse_success": 1,
+        "state_json": "{broken json {{",
+    }
+    result = annotate_turn(turn)
+    assert result["decision_quality"] == "no_data"
+
+
+# --- annotate_turn — slot resolution edge cases ---
+
+def test_annotate_turn_no_move_token_returns_no_data():
+    """When action has no move/switch token and move_scores are present, return no_data."""
+    state = _make_state([
+        {"move_id": "thunderbolt", "type_multiplier": 2.0, "estimated_damage_pct": "~55%",
+         "is_status": False, "priority": 0},
+    ])
+    turn = {
+        "turn_number": 3,
+        "player_role": "p1",
+        "action_chosen": "some unrecognised text",
+        "parse_success": 1,
+        "state_json": state,
+    }
+    result = annotate_turn(turn)
+    # slot is None → returns base with no_data
+    assert result["decision_quality"] == "no_data"
+
+
+def test_annotate_turn_empty_move_scores_returns_no_data():
+    """When slot is None and move_scores is empty, returns no_data."""
+    state = json.dumps({"heuristics": {"move_scores": [], "switch_scores": []}})
+    turn = {
+        "turn_number": 1,
+        "player_role": "p1",
+        "action_chosen": "/choose move thunderbolt",
+        "parse_success": 1,
+        "state_json": state,
+    }
+    result = annotate_turn(turn)
+    assert result["decision_quality"] == "no_data"
+
+
+def test_annotate_turn_slot_out_of_bounds():
+    """A numeric slot that is out of bounds returns no_data."""
+    # One move in scores, but the action says 'move 5'
+    state = _make_state([
+        {"move_id": "thunderbolt", "type_multiplier": 2.0, "estimated_damage_pct": "~55%",
+         "is_status": False, "priority": 0},
+    ])
+    turn = {
+        "turn_number": 1,
+        "player_role": "p1",
+        "action_chosen": "move 5",   # slot 5, only 1 move available
+        "parse_success": 1,
+        "state_json": state,
+    }
+    result = annotate_turn(turn)
+    assert result["decision_quality"] == "no_data"
+
+
+# --- _detect_turning_point — empty timeline ---
+
+def test_detect_turning_point_empty_timeline():
+    """Empty timeline returns None (fewer than 2 valid data points)."""
+    assert _detect_turning_point([]) is None
+
+
+def test_detect_turning_point_all_none_probs():
+    """Timeline with all None win probs returns None."""
+    timeline = [
+        {"turn_number": 1, "p1_win_prob": None},
+        {"turn_number": 2, "p1_win_prob": None},
+    ]
+    assert _detect_turning_point(timeline) is None
+
+
+# --- _infer_rng_event paths ---
+
+def test_infer_rng_event_no_prev_turn():
+    """_infer_rng_event returns all None when no prev turn provided."""
+    from nidozo.analysis.analyzer import _infer_rng_event
+
+    mt = {
+        "turn_number": 1,
+        "p1": {"state": None, "action": "/choose move thunderbolt", "parse_success": True},
+    }
+    result = _infer_rng_event(mt, None)
+    assert result == {"p1": None, "p2": None}
+
+
+def test_infer_rng_event_possible_miss():
+    """Flags possible_miss when estimated damage > 5% but actual HP drop is 0.
+
+    _infer_rng_event reads:
+      - prev_hp from prev_def["opponent_active"]["hp_fraction"]  (prev merged turn, p2 side)
+      - curr_hp from curr_def["my_active"]["hp_fraction"]        (curr merged turn, p2 side)
+    """
+    from nidozo.analysis.analyzer import _infer_rng_event
+
+    p1_atk_state = {
+        "heuristics": {
+            "move_scores": [
+                {"move_id": "thunderbolt", "estimated_damage_pct": "~30%", "is_status": False},
+            ],
+        },
+    }
+    # p2's state in the PREVIOUS turn has opponent_active.hp_fraction (= p2's perspective of itself)
+    p2_prev_state = {"opponent_active": {"hp_fraction": 0.8}}
+    # p2's state in the CURRENT turn has my_active.hp_fraction (still 0.8 → no drop = miss)
+    p2_curr_state = {"my_active": {"hp_fraction": 0.8}}
+
+    mt = {
+        "turn_number": 2,
+        "p1": {"state": p1_atk_state, "action": "/choose move thunderbolt", "parse_success": True},
+        "p2": {"state": p2_curr_state, "action": None, "parse_success": True},
+    }
+    prev_mt = {
+        "turn_number": 1,
+        "p1": {"state": p1_atk_state, "action": None, "parse_success": True},
+        "p2": {"state": p2_prev_state, "action": None, "parse_success": True},
+    }
+    result = _infer_rng_event(mt, prev_mt)
+    # p1 attacked but p2's HP didn't drop → possible miss
+    assert result["p1"] == "possible_miss"
+
+
+# --- critique_draft — all unknown species → None ---
+
+def test_critique_draft_all_unknown_species_returns_none():
+    """critique_draft returns None when all species IDs are not in species_data."""
+    result = critique_draft(
+        ["unknownpokemon1", "unknownpokemon2"],
+        "p1",
+        [],
+        species_data={"pikachu": {"species": "Pikachu", "types": ["Electric"]}},
+    )
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — missing lines in analyzer.py
+# ---------------------------------------------------------------------------
+
+def test_parse_move_slot_value_error_returns_none():
+    """Lines 200-201: ValueError in int() conversion returns None."""
+    # 'move X' where X cannot be parsed as int
+    assert _parse_move_slot("move abc") is None
+
+
+def test_resolve_move_slot_name_not_in_scores():
+    """Line 218 (end of for loop): name not found returns None."""
+    scores = [{"move_id": "thunderbolt"}, {"move_id": "surf"}]
+    result = _resolve_move_slot("/choose move unknownmove", scores)
+    assert result is None
+
+
+def test_win_prob_both_teams_zero_hp_returns_half():
+    """Line 354: when total HP is 0.0 (all fainted), returns 0.5."""
+    p1 = {"my_team": [{"species": "Pikachu", "hp_fraction": 0.0}]}
+    p2 = {"my_team": [{"species": "Charmander", "hp_fraction": 0.0}]}
+    result = _win_prob(p1, p2)
+    assert result == pytest.approx(0.5)
+
+
+def test_detect_turning_point_empty_returns_none():
+    """Lines 371-372: _detect_turning_point on empty timeline returns None."""
+    assert _detect_turning_point([]) is None
+
+
+def test_detect_turning_point_single_point_returns_none():
+    """Lines 371-372: only one valid point → still returns None."""
+    timeline = [{"turn_number": 1, "p1_win_prob": 0.5}]
+    assert _detect_turning_point(timeline) is None
+
+
+def test_critique_draft_species_data_none_loads_from_file():
+    """Line 516: when species_data is None, _load_species_data() is called.
+
+    We mock _load_species_data to return an empty dict, which causes
+    critique_draft to return None (no team_info) — verifying that the
+    code path is exercised.
+    """
+    from unittest.mock import patch
+
+    with patch("nidozo.analysis.analyzer._load_species_data", return_value={}):
+        result = critique_draft(["pikachu"], "p1", [], species_data=None)
+    # Empty species_data → no team_info → returns None
+    assert result is None
+
+
+def test_score_gap_slot_below_one_returns_none() -> None:
+    """Line 218 (guard condition): slot < 1 → return None."""
+    moves = [
+        {"type_multiplier": 2.0, "estimated_damage_pct": "~50%", "is_status": False},
+    ]
+    assert _score_gap(moves, 0) is None
+
+
+def test_score_gap_slot_beyond_length_returns_none() -> None:
+    """Line 218 (guard condition): slot > len(move_scores) → return None."""
+    moves = [
+        {"type_multiplier": 2.0, "estimated_damage_pct": "~50%", "is_status": False},
+    ]
+    assert _score_gap(moves, 99) is None
+
+
+def test_merge_turns_bad_state_json_handled() -> None:
+    """Lines 371-372: malformed state_json in _merge_turns is caught silently.
+
+    When state_json cannot be parsed, json.JSONDecodeError is caught and
+    state is set to None.
+    """
+    raw = [
+        {"turn_number": 1, "player_role": "p1", "state_json": "{broken", "action_chosen": "move 1", "parse_success": 1},
+    ]
+    merged = _merge_turns(raw)
+    assert len(merged) == 1
+    # state should be None because json.loads failed
+    assert merged[0]["p1"]["state"] is None
+
+
+# ---------------------------------------------------------------------------
+# _infer_rng_event — targeted coverage for remaining branches
+# ---------------------------------------------------------------------------
+
+def _rng_mt(atk_state, def_state, action="/choose move thunderbolt"):
+    """Helper to build a merged turn for _infer_rng_event tests."""
+    return {
+        "p1": {"state": atk_state, "action": action, "parse_success": True},
+        "p2": {"state": def_state, "action": None, "parse_success": True},
+    }
+
+
+def test_infer_rng_slot_out_of_bounds() -> None:
+    """Line 450: slot is resolved but out of bounds for move_scores list."""
+    from nidozo.analysis.analyzer import _infer_rng_event
+
+    # move_scores has 1 entry, but action resolves to slot 2 (numeric)
+    atk_state = {
+        "heuristics": {
+            "move_scores": [
+                {"move_id": "thunderbolt", "estimated_damage_pct": "~30%"},
+            ],
+        },
+    }
+    def_state_prev = {"opponent_active": {"hp_fraction": 0.8}}
+    def_state_curr = {"my_active": {"hp_fraction": 0.6}}
+
+    mt = {
+        "p1": {"state": atk_state, "action": "move 2", "parse_success": True},
+        "p2": {"state": def_state_curr, "action": None, "parse_success": True},
+    }
+    prev_mt = {
+        "p1": {"state": atk_state, "action": None, "parse_success": True},
+        "p2": {"state": def_state_prev, "action": None, "parse_success": True},
+    }
+    result = _infer_rng_event(mt, prev_mt)
+    # slot=2 > len(move_scores)=1 → continue → no rng flag
+    assert result["p1"] is None
+
+
+def test_infer_rng_bad_damage_pct_string() -> None:
+    """Lines 456-457: ValueError on parsing damage_pct → continue."""
+    from nidozo.analysis.analyzer import _infer_rng_event
+
+    atk_state = {
+        "heuristics": {
+            "move_scores": [
+                {"move_id": "thunderbolt", "estimated_damage_pct": "invalid%pct"},
+            ],
+        },
+    }
+    def_state_prev = {"opponent_active": {"hp_fraction": 0.8}}
+    def_state_curr = {"my_active": {"hp_fraction": 0.6}}
+
+    mt = {
+        "p1": {"state": atk_state, "action": "move 1", "parse_success": True},
+        "p2": {"state": def_state_curr, "action": None, "parse_success": True},
+    }
+    prev_mt = {
+        "p1": {"state": atk_state, "action": None, "parse_success": True},
+        "p2": {"state": def_state_prev, "action": None, "parse_success": True},
+    }
+    result = _infer_rng_event(mt, prev_mt)
+    assert result["p1"] is None
+
+
+def test_infer_rng_status_move_skipped() -> None:
+    """Line 460: est_dmg <= 0 (status move) → continue."""
+    from nidozo.analysis.analyzer import _infer_rng_event
+
+    atk_state = {
+        "heuristics": {
+            "move_scores": [
+                {"move_id": "thunderwave", "estimated_damage_pct": "0%"},
+            ],
+        },
+    }
+    def_state_prev = {"opponent_active": {"hp_fraction": 0.8}}
+    def_state_curr = {"my_active": {"hp_fraction": 0.8}}  # no drop
+
+    mt = {
+        "p1": {"state": atk_state, "action": "move 1", "parse_success": True},
+        "p2": {"state": def_state_curr, "action": None, "parse_success": True},
+    }
+    prev_mt = {
+        "p1": {"state": atk_state, "action": None, "parse_success": True},
+        "p2": {"state": def_state_prev, "action": None, "parse_success": True},
+    }
+    result = _infer_rng_event(mt, prev_mt)
+    # est_dmg = 0 → skipped
+    assert result["p1"] is None
+
+
+def test_infer_rng_no_prev_hp_data() -> None:
+    """Lines 468-472: prev_hp is None and alt lookup also fails → continue.
+
+    prev_def and curr_def are non-empty dicts but lack opponent_active/my_active
+    hp_fraction keys, so prev_hp and curr_hp are None.  curr_atk also lacks
+    opponent_active so prev_hp_alt is None → hits line 470 continue.
+    """
+    from nidozo.analysis.analyzer import _infer_rng_event
+
+    atk_state = {
+        "heuristics": {
+            "move_scores": [
+                {"move_id": "thunderbolt", "estimated_damage_pct": "~30%"},
+            ],
+        },
+        # No opponent_active key at all
+        "my_active": {"species": "Pikachu"},  # keep dict truthy
+    }
+    # Non-empty dicts (truthy) that lack the relevant hp keys
+    def_state_no_hp = {"my_team": [{"species": "Charmander"}]}
+
+    mt = {
+        "p1": {"state": atk_state, "action": "move 1", "parse_success": True},
+        "p2": {"state": def_state_no_hp, "action": None, "parse_success": True},
+    }
+    prev_mt = {
+        "p1": {"state": atk_state, "action": None, "parse_success": True},
+        "p2": {"state": def_state_no_hp, "action": None, "parse_success": True},
+    }
+    result = _infer_rng_event(mt, prev_mt)
+    assert result["p1"] is None
+
+
+def test_infer_rng_healing_skipped() -> None:
+    """Line 477: actual_drop < 0 (healing) → continue."""
+    from nidozo.analysis.analyzer import _infer_rng_event
+
+    atk_state = {
+        "heuristics": {
+            "move_scores": [
+                {"move_id": "thunderbolt", "estimated_damage_pct": "~30%"},
+            ],
+        },
+    }
+    # HP went UP (healing) — prev_hp < curr_hp → actual_drop < 0
+    def_state_prev = {"opponent_active": {"hp_fraction": 0.5}}
+    def_state_curr = {"my_active": {"hp_fraction": 0.8}}  # higher than before = healing
+
+    mt = {
+        "p1": {"state": atk_state, "action": "move 1", "parse_success": True},
+        "p2": {"state": def_state_curr, "action": None, "parse_success": True},
+    }
+    prev_mt = {
+        "p1": {"state": atk_state, "action": None, "parse_success": True},
+        "p2": {"state": def_state_prev, "action": None, "parse_success": True},
+    }
+    result = _infer_rng_event(mt, prev_mt)
+    assert result["p1"] is None
+
+
+def test_infer_rng_possible_crit() -> None:
+    """Line 482: actual_drop > est_dmg * CRIT_THRESHOLD → possible_crit."""
+    from nidozo.analysis.analyzer import _infer_rng_event
+
+    atk_state = {
+        "heuristics": {
+            "move_scores": [
+                {"move_id": "thunderbolt", "estimated_damage_pct": "~10%"},
+            ],
+        },
+    }
+    # HP dropped by 30% when only 10% was expected → crit (ratio=3 > threshold)
+    def_state_prev = {"opponent_active": {"hp_fraction": 0.9}}
+    def_state_curr = {"my_active": {"hp_fraction": 0.6}}  # 30% drop
+
+    mt = {
+        "p1": {"state": atk_state, "action": "move 1", "parse_success": True},
+        "p2": {"state": def_state_curr, "action": None, "parse_success": True},
+    }
+    prev_mt = {
+        "p1": {"state": atk_state, "action": None, "parse_success": True},
+        "p2": {"state": def_state_prev, "action": None, "parse_success": True},
+    }
+    result = _infer_rng_event(mt, prev_mt)
+    # actual_drop=0.3, est_dmg=0.10, ratio=3 > CRIT_MULTIPLIER_THRESHOLD
+    assert result["p1"] == "possible_crit"
+
+
+def test_infer_rng_alt_hp_found_but_still_continues() -> None:
+    """Line 472: prev_hp/curr_hp are None but curr_atk has opponent_active.hp_fraction.
+
+    This hits the else branch of ``if prev_hp_alt is None`` — line 472 continue.
+    prev_def and curr_def have no usable HP keys, so prev_hp and curr_hp are None.
+    curr_atk DOES have opponent_active.hp_fraction (not None), so prev_hp_alt is
+    not None → falls through to line 472 (the unconditional continue after the
+    dead-end comment).
+    """
+    from nidozo.analysis.analyzer import _infer_rng_event
+
+    atk_state = {
+        "heuristics": {
+            "move_scores": [
+                {"move_id": "thunderbolt", "estimated_damage_pct": "~30%"},
+            ],
+        },
+        # curr_atk HAS opponent_active so prev_hp_alt is not None
+        "opponent_active": {"hp_fraction": 0.7},
+        "my_active": {"species": "Pikachu"},
+    }
+    # Non-empty but missing the specific keys _infer_rng_event looks for
+    def_state_no_hp = {"my_team": [{"species": "Charmander"}]}
+
+    mt = {
+        "p1": {"state": atk_state, "action": "move 1", "parse_success": True},
+        "p2": {"state": def_state_no_hp, "action": None, "parse_success": True},
+    }
+    prev_mt = {
+        "p1": {"state": atk_state, "action": None, "parse_success": True},
+        "p2": {"state": def_state_no_hp, "action": None, "parse_success": True},
+    }
+    result = _infer_rng_event(mt, prev_mt)
+    # No rng flag — we fell through to line 472 continue
+    assert result["p1"] is None

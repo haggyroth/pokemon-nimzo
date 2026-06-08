@@ -273,3 +273,27 @@ class TestStoreTeams:
         p1_team, p2_team = store.get_battle_teams(bid)
         assert p1_team is None
         assert p2_team is None
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — team_builder missing line
+# ---------------------------------------------------------------------------
+
+class TestBuildPokemonBlockNoItem:
+    def test_no_item_omits_at_sign(self) -> None:
+        """When item is empty/falsy, the header has only the species name (no '@')."""
+        from nidozo.battle.team_builder import build_pokemon_block
+
+        moveset = {
+            "species": "Magikarp",
+            "item": "",   # empty → falsy → no @ in header
+            "ability": "Swift Swim",
+            "nature": "Jolly",
+            "level": 100,
+            "evs": {},
+            "moves": ["Splash", "Tackle", "Flail", "Bounce"],
+        }
+        block = build_pokemon_block("magikarp", moveset)
+        lines = block.splitlines()
+        assert lines[0] == "Magikarp"
+        assert "@" not in lines[0]

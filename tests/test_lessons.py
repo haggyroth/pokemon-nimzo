@@ -525,3 +525,74 @@ def test_format_analysis_context_includes_rng() -> None:
     assert "RNG" in ctx
     assert "Turn 5" in ctx
     assert "Crit" in ctx
+
+
+# ---------------------------------------------------------------------------
+# New coverage tests — missing lines
+# ---------------------------------------------------------------------------
+
+def test_format_turns_none_action_shows_none() -> None:
+    """_format_turns renders (none) when action_chosen is None."""
+    from nidozo.llm.lesson_generator import _format_turns
+
+    turns = [
+        {"turn_number": 1, "player_role": "p1", "action_chosen": None, "parse_success": 1},
+    ]
+    result = _format_turns(turns, "p1")
+    assert "(none)" in result
+
+
+def test_format_turns_parse_fail_shows_warning() -> None:
+    """_format_turns shows parse-failed warning when parse_success is 0."""
+    from nidozo.llm.lesson_generator import _format_turns
+
+    turns = [
+        {"turn_number": 2, "player_role": "p1", "action_chosen": "tackle", "parse_success": 0},
+    ]
+    result = _format_turns(turns, "p1")
+    assert "parse failed" in result
+
+
+def test_format_analysis_context_with_no_avg_rank() -> None:
+    """_format_analysis_context handles missing avg_heuristic_rank gracefully."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {
+            "total_turns": 3,
+            "optimal": 1,
+            "good": 1,
+            "suboptimal": 1,
+            "fallback": 1,
+            "blunders": 0,
+            "avg_heuristic_rank": None,  # explicitly None
+        },
+        "key_moments": [],
+        "turning_point": None,
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    # Should not error and should include decision quality section
+    assert "Decision quality" in ctx
+    # avg_rank line should be absent when None
+    assert "Average heuristic rank" not in ctx
+
+
+def test_format_analysis_context_with_fallback_turns() -> None:
+    """_format_analysis_context includes fallback count when >0."""
+    from nidozo.llm.lesson_generator import _format_analysis_context
+
+    analysis = {
+        "p1_summary": {
+            "total_turns": 3,
+            "optimal": 1,
+            "good": 1,
+            "suboptimal": 0,
+            "fallback": 2,
+            "blunders": 0,
+            "avg_heuristic_rank": 1.5,
+        },
+        "key_moments": [],
+        "turning_point": None,
+    }
+    ctx = _format_analysis_context(analysis, "p1")
+    assert "fallback" in ctx.lower() or "parse failures" in ctx.lower()
