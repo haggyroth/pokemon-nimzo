@@ -383,7 +383,8 @@ def test_schema_v5_migration_from_v4() -> None:
     assert "lessons" in tables
     assert "idx_lessons_model" in indexes
     version = conn.execute("SELECT version FROM schema_version").fetchone()["version"]
-    assert version == 8  # migrate() always brings to current SCHEMA_VERSION
+    from nidozo.db.schema import SCHEMA_VERSION
+    assert version == SCHEMA_VERSION  # migrate() always brings to current SCHEMA_VERSION
 
 
 # ---------------------------------------------------------------------------
