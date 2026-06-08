@@ -299,12 +299,12 @@ def test_log_turn_no_op_without_store(mock_backend) -> None:
 
 
 # ---------------------------------------------------------------------------
-# StreamingLLMPlayer — publishes turn event to the EventBus
+# StreamingLLMPlayer — publishes state_update then turn event to the EventBus
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_streaming_llm_player_publishes_turn_event(mock_battle, fake_order) -> None:
-    """StreamingLLMPlayer.choose_move publishes a 'turn' event via the bus."""
+async def test_streaming_llm_player_publishes_state_update_then_turn(mock_battle, fake_order) -> None:
+    """StreamingLLMPlayer emits state_update immediately, then turn after action is decided."""
     from nidozo.api.events import EventBus
     from nidozo.battle.streaming_player import StreamingLLMPlayer
 
@@ -331,21 +331,34 @@ async def test_streaming_llm_player_publishes_turn_event(mock_battle, fake_order
         result = await player.choose_move(mock_battle)
 
     assert result is fake_order
-    # Drain and collect events (thinking + turn)
     events = []
     while not queue.empty():
         events.append(queue.get_nowait())
 
-    turn_events = [e for e in events if e["type"] == "turn"]
-    assert len(turn_events) == 1
-    assert turn_events[0]["player_role"] == "p1"
-    assert turn_events[0]["turn"] == mock_battle.turn
-    assert turn_events[0]["action"] == fake_order.message
+    types = [e["type"] for e in events]
+    # state_update must appear before turn
+    assert "state_update" in types
+    assert "turn" in types
+    assert types.index("state_update") < types.index("turn")
+
+    # state_update: no action field, has state
+    su = next(e for e in events if e["type"] == "state_update")
+    assert su["player_role"] == "p1"
+    assert su["turn"] == mock_battle.turn
+    assert "action" not in su
+    assert "state" in su
+
+    # turn: has action and state
+    turn = next(e for e in events if e["type"] == "turn")
+    assert turn["player_role"] == "p1"
+    assert turn["turn"] == mock_battle.turn
+    assert turn["action"] == fake_order.message
+    assert "state" in turn
 
 
 @pytest.mark.asyncio
-async def test_streaming_llm_player_thinking_event_before_turn_event(mock_battle, fake_order) -> None:
-    """StreamingLLMPlayer emits 'thinking' event before 'turn' event."""
+async def test_streaming_llm_player_event_order(mock_battle, fake_order) -> None:
+    """Full event order: state_update → thinking → turn (not interleaved)."""
     from nidozo.api.events import EventBus
     from nidozo.battle.streaming_player import StreamingLLMPlayer
 
@@ -375,18 +388,21 @@ async def test_streaming_llm_player_thinking_event_before_turn_event(mock_battle
         events.append(queue.get_nowait())
 
     types = [e["type"] for e in events]
+    # state_update fires before thinking fires before turn
+    assert "state_update" in types
     assert "thinking" in types
     assert "turn" in types
+    assert types.index("state_update") < types.index("thinking")
     assert types.index("thinking") < types.index("turn")
 
 
 # ---------------------------------------------------------------------------
-# StreamingRandomBot — publishes turn event from a random bot
+# StreamingRandomBot — publishes state_update + turn from a random bot
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_streaming_random_bot_publishes_turn_event(mock_battle) -> None:
-    """StreamingRandomBot.choose_move calls choose_random_move and publishes a turn."""
+async def test_streaming_random_bot_publishes_state_update_and_turn(mock_battle) -> None:
+    """StreamingRandomBot.choose_move emits state_update then turn."""
     from nidozo.api.events import EventBus
     from nidozo.battle.streaming_player import StreamingRandomBot
 
@@ -410,10 +426,18 @@ async def test_streaming_random_bot_publishes_turn_event(mock_battle) -> None:
     while not queue.empty():
         events.append(queue.get_nowait())
 
-    assert len(events) == 1
-    assert events[0]["type"] == "turn"
-    assert events[0]["player_role"] == "p2"
-    assert events[0]["action"] == "/choose move surf"
+    types = [e["type"] for e in events]
+    assert "state_update" in types
+    assert "turn" in types
+    assert types.index("state_update") < types.index("turn")
+
+    su = next(e for e in events if e["type"] == "state_update")
+    assert su["player_role"] == "p2"
+    assert "action" not in su
+
+    turn = next(e for e in events if e["type"] == "turn")
+    assert turn["player_role"] == "p2"
+    assert turn["action"] == random_order.message
 
 
 # ---------------------------------------------------------------------------

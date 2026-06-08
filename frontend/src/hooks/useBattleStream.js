@@ -104,6 +104,15 @@ export function useBattleStream() {
           return
         }
 
+        // state_update: Showdown just resolved a turn — refresh HP bars and active
+        // Pokémon immediately, before the LLM has started deliberating.
+        // Don't add to the events log and don't clear the thinking indicator.
+        if (event.type === 'state_update') {
+          if (event.player_role === 'p1') setP1State(event)
+          if (event.player_role === 'p2') setP2State(event)
+          return
+        }
+
         // Tournament lifecycle events — update progress, don't pollute battle log
         if (event.type === 'tournament_start') {
           setTournament({
