@@ -49,3 +49,19 @@ class StartTournamentResponse(BaseModel):
     battle_ids: list[int]
     total_battles: int
     message: str
+
+
+class StartSeasonRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    players: list[PlayerSpec] = Field(..., min_length=2, max_length=12)
+    rounds: int = Field(1, ge=1, le=10)
+    prompt_version: str = "v4"
+    tier: str = "random"
+    draft: bool = False
+
+
+class StartSeasonResponse(BaseModel):
+    season_id: int
+    battle_ids: list[int]
+    total_battles: int
+    message: str

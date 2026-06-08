@@ -14,6 +14,7 @@ export function useBattleStream() {
   const [thinking, setThinking]           = useState(null)   // 'p1' | 'p2' | null
   const [coachThinking, setCoachThinking] = useState(null)   // 'p1' | 'p2' | null — coach phase
   const [tournament, setTournament]     = useState(null)   // tournament progress state
+  const [season, setSeason]             = useState(null)   // season progress state
   const [draft, setDraft]               = useState(null)   // draft phase state
   const wsRef         = useRef(null)
   const shouldConnect = useRef(false)
@@ -169,6 +170,60 @@ export function useBattleStream() {
           return
         }
 
+        // Season lifecycle events
+        if (event.type === 'season_start') {
+          setSeason({
+            id: event.season_id,
+            name: event.season_name,
+            players: event.players,
+            total: event.total_battles,
+            rounds: event.rounds,
+            tier: event.tier ?? 'random',
+            done: 0,
+            status: 'running',
+            standings: null,
+          })
+          return
+        }
+
+        if (event.type === 'season_progress') {
+          setSeason(prev => prev ? {
+            ...prev,
+            battleNum: event.battle_num,
+            currentBattleId: event.battle_id,
+            p1: event.p1,
+            p2: event.p2,
+          } : null)
+          return
+        }
+
+        if (event.type === 'season_standings') {
+          setSeason(prev => prev ? {
+            ...prev,
+            standings: event.standings,
+          } : null)
+          return
+        }
+
+        if (event.type === 'season_end') {
+          setSeason(prev => prev ? {
+            ...prev,
+            status: 'completed',
+            done: prev.total,
+            standings: event.standings,
+          } : null)
+          return
+        }
+
+        if (event.type === 'season_cancelled') {
+          setSeason(prev => prev ? {
+            ...prev,
+            status: 'cancelled',
+            done: event.battles_completed,
+          } : null)
+          return
+        }
+
         setEvents(prev => {
           const next = [...prev, event]
           return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next
@@ -237,6 +292,7 @@ export function useBattleStream() {
   }, [])
 
   const clearTournament = useCallback(() => setTournament(null), [])
+  const clearSeason     = useCallback(() => setSeason(null), [])
 
   useEffect(() => {
     connect()
@@ -245,6 +301,6 @@ export function useBattleStream() {
 
   return {
     events, isConnected, p1State, p2State, battleInfo, battleResult,
-    thinking, coachThinking, tournament, draft, reset, clearTournament,
+    thinking, coachThinking, tournament, season, draft, reset, clearTournament, clearSeason,
   }
 }

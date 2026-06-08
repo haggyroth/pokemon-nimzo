@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from nidozo.api.helpers import _build_backend, _build_streaming_player, _model_name
-from nidozo.api.models import StartBattleRequest, StartTournamentRequest
+from nidozo.api.models import StartBattleRequest, StartSeasonRequest, StartTournamentRequest
 
 logger = logging.getLogger(__name__)
 
@@ -725,3 +725,223 @@ async def run_bracket_tournament(
                 "bracket": bracket_state,
                 "champion": champion_info,
             })
+
+
+async def run_season(
+    req: StartSeasonRequest,
+    season_id: int,
+    battle_ids: list[int],
+    player_specs: list[dict[str, Any]],
+    store: Any,
+    bus: Any,
+    active_tasks: dict[int, asyncio.Task[None]],
+) -> None:
+    """Run all battles in a season sequentially as a background task."""
+    from poke_env import LocalhostServerConfiguration
+
+    from nidozo.battle.tiers import TIER_TO_FORMAT
+
+    do_draft = req.tier != "random" and req.draft
+    showdown_format = (
+        "gen3randombattle" if req.tier == "random"
+        else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+    )
+    effective_prompt = "v3" if do_draft else req.prompt_version
+    cfg = LocalhostServerConfiguration
+
+    total = len(battle_ids)
+    store.set_season_running(season_id)
+    await bus.publish({
+        "type": "season_start",
+        "season_id": season_id,
+        "season_name": req.name,
+        "players": player_specs,
+        "total_battles": total,
+        "rounds": req.rounds,
+        "tier": req.tier,
+    })
+
+    coach_lookup: dict[tuple[str, str], tuple[str | None, str | None]] = {
+        (ps["provider"], ps["model_name"]): (
+            ps.get("coach_provider"), ps.get("coach_model")
+        )
+        for ps in player_specs
+    }
+
+    for battle_num, battle_id in enumerate(battle_ids, start=1):
+        battle_row = store.get_battle(battle_id)
+        if not battle_row or battle_row["status"] == "cancelled":
+            continue
+
+        task = asyncio.current_task()
+        if task:
+            active_tasks[battle_id] = task
+
+        battle_info = store.get_battle_players(battle_id)
+        if battle_info is None:
+            logger.error(
+                "Season %d: no player info for battle %d — skipping", season_id, battle_id
+            )
+            continue
+
+        p1_label = f"{battle_info['p1_provider']}/{battle_info['p1_model']}"
+        p2_label = f"{battle_info['p2_provider']}/{battle_info['p2_model']}"
+
+        await bus.publish({
+            "type": "season_progress",
+            "season_id": season_id,
+            "battle_num": battle_num,
+            "total_battles": total,
+            "battle_id": battle_id,
+            "p1": p1_label,
+            "p2": p2_label,
+        })
+
+        try:
+            model_ids = store.get_player_model_ids(battle_id)
+            s_p1_id, s_p2_id = model_ids if model_ids else (None, None)
+            s_p1_prov, s_p2_prov = battle_info["p1_provider"], battle_info["p2_provider"]
+            s_p1_lessons = (
+                [r["content"] for r in store.get_lessons(s_p1_id)]
+                if s_p1_id and s_p1_prov != "random" else None
+            )
+            s_p2_lessons = (
+                [r["content"] for r in store.get_lessons(s_p2_id)]
+                if s_p2_id and s_p2_prov != "random" else None
+            )
+
+            s_p1_team: str | None = None
+            s_p2_team: str | None = None
+            s_p1_team_id: int | None = None
+            s_p2_team_id: int | None = None
+
+            if do_draft and s_p1_id is not None and s_p1_prov != "random":
+                await bus.publish({
+                    "type": "draft_start",
+                    "player_role": "p1",
+                    "tier": req.tier,
+                    "battle_id": battle_id,
+                    "season_id": season_id,
+                })
+                p1_backend = _build_backend(s_p1_prov, battle_info["p1_model"])
+                p1_draft_r = await run_draft_phase(
+                    p1_backend, s_p1_id, req.tier, store, bus, "p1"
+                )
+                s_p1_team = p1_draft_r["team_string"]
+                s_p1_team_id = p1_draft_r["team_id"]
+
+            if do_draft and s_p2_id is not None and s_p2_prov != "random":
+                await bus.publish({
+                    "type": "draft_start",
+                    "player_role": "p2",
+                    "tier": req.tier,
+                    "battle_id": battle_id,
+                    "season_id": season_id,
+                })
+                p2_backend = _build_backend(s_p2_prov, battle_info["p2_model"])
+                p2_draft_r = await run_draft_phase(
+                    p2_backend, s_p2_id, req.tier, store, bus, "p2"
+                )
+                s_p2_team = p2_draft_r["team_string"]
+                s_p2_team_id = p2_draft_r["team_id"]
+
+            if do_draft:
+                store.set_battle_teams(battle_id, s_p1_team_id, s_p2_team_id, req.tier)
+
+            s_p1_coach_prov, s_p1_coach_model = coach_lookup.get(
+                (s_p1_prov, battle_info["p1_model"]), (None, None)
+            )
+            s_p2_coach_prov, s_p2_coach_model = coach_lookup.get(
+                (s_p2_prov, battle_info["p2_model"]), (None, None)
+            )
+
+            p1 = _build_streaming_player(
+                s_p1_prov, battle_info["p1_model"], "p1",
+                effective_prompt, store, battle_id, bus, cfg, showdown_format,
+                lessons=s_p1_lessons,
+                team=s_p1_team,
+                coach_provider=s_p1_coach_prov,
+                coach_model=s_p1_coach_model,
+            )
+            p2 = _build_streaming_player(
+                s_p2_prov, battle_info["p2_model"], "p2",
+                effective_prompt, store, battle_id, bus, cfg, showdown_format,
+                lessons=s_p2_lessons,
+                team=s_p2_team,
+                coach_provider=s_p2_coach_prov,
+                coach_model=s_p2_coach_model,
+            )
+
+            store.set_battle_status(battle_id, "running")
+            await bus.publish({
+                "type": "battle_start",
+                "battle_id": battle_id,
+                "season_id": season_id,
+                "p1": p1_label,
+                "p2": p2_label,
+                "format": showdown_format,
+                "tier": req.tier,
+                "drafted": do_draft,
+            })
+
+            await p1.battle_against(p2, n_battles=1)
+
+            winner = 1 if p1.n_won_battles > 0 else (2 if p2.n_won_battles > 0 else None)
+            real_tag = next(iter(p1.battles), f"battle-{battle_id}")
+            battle_obj = p1.battles.get(real_tag)
+            total_turns = battle_obj.turn if battle_obj else 0
+
+            store.update_battle_tag(battle_id, real_tag)
+            store.finish_battle(battle_id, winner, total_turns)
+
+            await bus.publish({
+                "type": "battle_end",
+                "battle_id": battle_id,
+                "season_id": season_id,
+                "winner": winner,
+                "total_turns": total_turns,
+            })
+
+            standings = store.get_season_standings(season_id)
+            await bus.publish({
+                "type": "season_standings",
+                "season_id": season_id,
+                "standings": standings,
+                "battle_num": battle_num,
+                "total_battles": total,
+            })
+
+            turns = store.get_turns_basic(battle_id)
+            asyncio.create_task(generate_and_store_lessons(
+                store, battle_id, winner, total_turns, turns,
+                p1_provider=s_p1_prov, p1_model=battle_info["p1_model"],
+                p1_id=s_p1_id, p1_opponent=p2_label,
+                p2_provider=s_p2_prov, p2_model=battle_info["p2_model"],
+                p2_id=s_p2_id, p2_opponent=p1_label,
+            ))
+
+        except asyncio.CancelledError:
+            logger.info("Season %d cancelled at battle %d", season_id, battle_id)
+            store.cancel_battle(battle_id)
+            store.finish_season(season_id, status="cancelled")
+            await bus.publish({
+                "type": "season_cancelled",
+                "season_id": season_id,
+                "battles_completed": battle_num - 1,
+            })
+            raise
+        except Exception as exc:
+            logger.error("Season %d battle %d failed: %s", season_id, battle_id, exc)
+            store.set_battle_status(battle_id, "failed")
+            await bus.publish({"type": "error", "battle_id": battle_id, "message": str(exc)})
+        finally:
+            active_tasks.pop(battle_id, None)
+
+    store.finish_season(season_id, status="completed")
+    final_standings = store.get_season_standings(season_id)
+    await bus.publish({
+        "type": "season_end",
+        "season_id": season_id,
+        "season_name": req.name,
+        "standings": final_standings,
+    })

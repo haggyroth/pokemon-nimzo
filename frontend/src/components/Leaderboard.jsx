@@ -400,7 +400,7 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
 }
 
 // ---------------------------------------------------------------------------
-// Tournament form
+// Tournament form  /  Season form  — shared helpers
 // ---------------------------------------------------------------------------
 
 const EMPTY_PLAYER = { provider: 'lmstudio', model: '', coach_provider: 'none', coach_model: '' }
@@ -615,6 +615,200 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
 }
 
 // ---------------------------------------------------------------------------
+// Season form
+// ---------------------------------------------------------------------------
+
+function SeasonForm({ onSeasonStarted, lmModels }) {
+  const [loading, setLoading] = useState(false)
+  const [name, setName]       = useState('')
+  const [rounds, setRounds]   = useState(2)
+  const [tier, setTier]       = useState('random')
+  const [draft, setDraft]     = useState(false)
+  const [players, setPlayers] = useState([
+    { ...EMPTY_PLAYER },
+    { ...EMPTY_PLAYER },
+  ])
+
+  useEffect(() => {
+    if (lmModels.length === 0) return
+    void Promise.resolve().then(() =>
+      setPlayers(prev => prev.map((p, i) => ({
+        ...p,
+        model: p.model || lmModels[i] || lmModels[0] || '',
+      })))
+    )
+  }, [lmModels])
+
+  function setPlayer(i, field, value) {
+    setPlayers(prev => prev.map((p, idx) => {
+      if (idx !== i) return p
+      const extra = field === 'provider' ? { model: '' }
+        : field === 'coach_provider' ? { coach_model: '' }
+        : {}
+      return { ...p, [field]: value, ...extra }
+    }))
+  }
+
+  function addPlayer() {
+    if (players.length >= 8) return
+    setPlayers(prev => [...prev, { ...EMPTY_PLAYER, model: lmModels[prev.length] || '' }])
+  }
+
+  function removePlayer(i) {
+    if (players.length <= 2) return
+    setPlayers(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  const n = players.length
+  const totalBattles = n >= 2 ? (n * (n - 1)) * rounds : 0
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!name.trim()) return
+    setLoading(true)
+    try {
+      const payload = {
+        name: name.trim(),
+        players: players.map(p => ({
+          provider: p.provider,
+          model: p.provider === 'random' ? null : (p.model || null),
+          ...(p.coach_provider && p.coach_provider !== 'none' ? {
+            coach_provider: p.coach_provider,
+            ...(p.coach_model ? { coach_model: p.coach_model } : {}),
+          } : {}),
+        })),
+        rounds: Number(rounds),
+        tier,
+        draft,
+      }
+      const res = await fetch('/api/seasons/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (res.ok) onSeasonStarted?.(data)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form className="start-form" onSubmit={handleSubmit}>
+      <div className="form-group">
+        <label className="form-label">Season name</label>
+        <input
+          className="form-input"
+          placeholder="e.g. Season 1 — Gen 3 OU"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          maxLength={100}
+          required
+        />
+      </div>
+
+      <div className="tournament-players-header">
+        <label className="form-label">PLAYERS</label>
+        {players.length < 8 && (
+          <button type="button" className="btn-add-player" onClick={addPlayer}>+ ADD</button>
+        )}
+      </div>
+
+      {players.map((p, i) => (
+        <div key={i} className="tournament-player-row">
+          <div className="tournament-player-label">
+            P{i + 1}
+            {players.length > 2 && (
+              <button type="button" className="btn-remove-player" onClick={() => removePlayer(i)}>✕</button>
+            )}
+          </div>
+          <div className="tournament-player-inputs">
+            <select
+              className="form-select provider-select"
+              value={p.provider}
+              onChange={e => setPlayer(i, 'provider', e.target.value)}
+            >
+              {PROVIDERS.map(pv => <option key={pv} value={pv}>{pv}</option>)}
+            </select>
+            <input
+              className="form-input model-input"
+              placeholder={p.provider === 'random' ? '—' : 'model id'}
+              value={p.model}
+              disabled={p.provider === 'random'}
+              onChange={e => setPlayer(i, 'model', e.target.value)}
+            />
+          </div>
+          {p.provider === 'lmstudio' && lmModels.length > 0 && (
+            <div className="model-presets" style={{ paddingLeft: '1.8rem' }}>
+              {lmModels.slice(0, 4).map(id => (
+                <button
+                  key={id} type="button"
+                  className={`preset-chip ${p.model === id ? 'active' : ''}`}
+                  onClick={() => setPlayer(i, 'model', id)}
+                  title={id}
+                >
+                  {id.split('/').pop()}
+                </button>
+              ))}
+            </div>
+          )}
+          <CoachSelector
+            label={`P${i + 1}`}
+            provider={p.coach_provider}
+            model={p.coach_model}
+            onProviderChange={v => setPlayer(i, 'coach_provider', v)}
+            onModelChange={v => setPlayer(i, 'coach_model', v)}
+            lmModels={lmModels}
+          />
+        </div>
+      ))}
+
+      <div className="form-group">
+        <label className="form-label">Tier</label>
+        <select
+          className="form-select"
+          value={tier}
+          onChange={e => { setTier(e.target.value); if (e.target.value === 'random') setDraft(false) }}
+        >
+          {TIERS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+      </div>
+      {tier !== 'random' && (
+        <div className="form-group form-group--inline">
+          <label className="form-label">Draft teams (LLM picks)</label>
+          <input
+            type="checkbox"
+            className="form-checkbox"
+            checked={draft}
+            onChange={e => setDraft(e.target.checked)}
+          />
+        </div>
+      )}
+      <div className="form-group">
+        <label className="form-label">Rounds per matchup</label>
+        <input
+          className="form-input" type="number" min="1" max="10"
+          value={rounds}
+          onChange={e => setRounds(e.target.value)}
+        />
+      </div>
+
+      {totalBattles > 0 && (
+        <div className="tournament-battle-count">
+          ~{totalBattles} battle{totalBattles !== 1 ? 's' : ''} total
+        </div>
+      )}
+
+      <button className="btn-start" type="submit" disabled={loading || players.length < 2 || !name.trim()}>
+        {loading ? '🏆 STARTING…' : '🏆 START SEASON'}
+      </button>
+    </form>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main Leaderboard component
 // ---------------------------------------------------------------------------
 
@@ -629,14 +823,15 @@ const LB_TIERS = [
   { id: 'freeforall', label: 'FFA' },
 ]
 
-export default function Leaderboard({ onBattleStarted, onTournamentStarted, onReplaySelected, onModelSelected, onTournamentSelected }) {
+export default function Leaderboard({ onBattleStarted, onTournamentStarted, onSeasonStarted, onReplaySelected, onModelSelected, onTournamentSelected, onSeasonSelected }) {
   const [rows, setRows]               = useState([])
   const [battles, setBattles]         = useState([])
   const [tournaments, setTournaments] = useState([])
+  const [seasons, setSeasons]         = useState([])
   const [analyzing, setAnalyzing]     = useState(null)
   const [lmModels, setLmModels]       = useState([])
   const [lmLoading, setLmLoading]     = useState(true)
-  const [formTab, setFormTab]         = useState('battle')   // 'battle' | 'tournament'
+  const [formTab, setFormTab]         = useState('battle')   // 'battle' | 'tournament' | 'season'
   const [lbTier, setLbTier]          = useState('all')       // leaderboard tier filter
 
   useEffect(() => {
@@ -655,14 +850,16 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
   const fetchData = useCallback(async () => {
     try {
       const lbUrl = lbTier === 'all' ? '/api/leaderboard' : `/api/leaderboard?tier=${lbTier}`
-      const [lb, bt, ts] = await Promise.all([
+      const [lb, bt, ts, ss] = await Promise.all([
         fetch(lbUrl).then(r => r.json()),
         fetch('/api/battles').then(r => r.json()),
         fetch('/api/tournaments?limit=8').then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch('/api/seasons?limit=8').then(r => r.ok ? r.json() : []).catch(() => []),
       ])
       setRows(lb)
       setBattles(bt)
       setTournaments(ts)
+      setSeasons(ss)
     } catch {
       // network errors are silently swallowed; UI retains stale data
     }
@@ -849,6 +1046,51 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
             </div>
           </div>
         )}
+
+        {/* Season history */}
+        {seasons.length > 0 && (
+          <div className="panel">
+            <div className="panel-title">SEASONS</div>
+            <div className="tournament-history-list">
+              {seasons.map(s => {
+                const statusCls = s.status === 'completed' ? 'th-done'
+                                : s.status === 'cancelled' ? 'th-cancelled'
+                                : 'th-running'
+                const pct = s.total_battles > 0
+                  ? Math.round((s.battles_done / s.total_battles) * 100)
+                  : 0
+                return (
+                  <div key={s.id} className="tournament-history-row season-history-row">
+                    <div className="th-left">
+                      <span className={`th-status ${statusCls}`}>
+                        {s.status === 'running' ? '●' : s.status === 'completed' ? '✓' : '✕'}
+                      </span>
+                      <div className="th-info">
+                        <span className="season-history-name">{s.name}</span>
+                        {s.tier && s.tier !== 'random' && <TierBadge tier={s.tier} />}
+                        <span className="th-progress">
+                          {s.battles_done}/{s.total_battles} battles
+                          {s.status === 'running' && ` (${pct}%)`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="th-right">
+                      <span className="th-date">
+                        {s.created_at ? new Date(s.created_at).toLocaleDateString() : ''}
+                      </span>
+                      <button
+                        className="btn-stats"
+                        onClick={() => onSeasonSelected?.(s.id)}
+                      >
+                        STANDINGS →
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right: tabbed battle / tournament form */}
@@ -866,19 +1108,32 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onRe
           >
             ⚔ TOURNAMENT
           </button>
+          <button
+            className={`form-tab ${formTab === 'season' ? 'active' : ''}`}
+            onClick={() => setFormTab('season')}
+          >
+            🏆 SEASON
+          </button>
         </div>
 
-        {formTab === 'battle' ? (
+        {formTab === 'battle' && (
           <BattleForm
             onBattleStarted={onBattleStarted}
             lmModels={lmModels}
             lmLoading={lmLoading}
           />
-        ) : (
+        )}
+        {formTab === 'tournament' && (
           <TournamentForm
             onTournamentStarted={onTournamentStarted}
             lmModels={lmModels}
             lmLoading={lmLoading}
+          />
+        )}
+        {formTab === 'season' && (
+          <SeasonForm
+            onSeasonStarted={onSeasonStarted}
+            lmModels={lmModels}
           />
         )}
       </div>

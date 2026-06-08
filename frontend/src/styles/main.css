@@ -4313,3 +4313,131 @@ body::after {
   color: var(--text-dim);
   margin-left: auto;
 }
+
+/* ========================================================================== */
+/* Season view                                                                 */
+/* ========================================================================== */
+
+.season-header-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.season-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.season-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+}
+
+.season-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.season-status {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.season-status-running  { color: #4ade80; background: rgba(74,222,128,0.1); }
+.season-status-done     { color: var(--accent-amber); background: rgba(255,185,0,0.1); }
+.season-status-cancelled{ color: #f87171; background: rgba(248,113,113,0.1); }
+
+.season-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  align-items: flex-start;
+}
+
+/* Progress bar */
+.season-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.season-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.season-progress-fill {
+  height: 100%;
+  background: var(--accent-amber);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.season-progress-label {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* Standings table note */
+.season-elo-note {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  margin-bottom: 0.75rem;
+  font-style: italic;
+}
+
+/* Standings table re-uses leaderboard-table — no extra styles needed */
+
+/* Battle list */
+.season-battle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.season-battle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.45rem 0.6rem;
+  background: var(--bg-card);
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  gap: 1rem;
+}
+
+.season-battle-pending {
+  opacity: 0.5;
+}
+
+.season-pending-tag {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+}
+
+/* Season history in home panel */
+.season-history-row {
+  border-left: 2px solid var(--accent-amber);
+}
+
+.season-history-name {
+  font-weight: 600;
+  color: var(--text-bright);
+  font-size: 0.8rem;
+}

@@ -263,12 +263,14 @@ class BattleStore:
         p1_model_id: int,
         p2_model_id: int,
         tournament_id: int | None = None,
+        season_id: int | None = None,
     ) -> int:
         """Insert a battle row and return its id."""
         cur = self._conn.execute(
-            """INSERT INTO battles (battle_tag, format, p1_model_id, p2_model_id, tournament_id, status)
-               VALUES (?,?,?,?,?,'pending')""",
-            (battle_tag, format, p1_model_id, p2_model_id, tournament_id),
+            """INSERT INTO battles
+               (battle_tag, format, p1_model_id, p2_model_id, tournament_id, season_id, status)
+               VALUES (?,?,?,?,?,?,'pending')""",
+            (battle_tag, format, p1_model_id, p2_model_id, tournament_id, season_id),
         )
         self._conn.commit()
         row_id = cur.lastrowid
@@ -834,6 +836,199 @@ class BattleStore:
                 pass
             result.append(d)
         return result
+
+    # ------------------------------------------------------------------
+    # Seasons
+    # ------------------------------------------------------------------
+
+    def create_season(
+        self,
+        name: str,
+        tier: str,
+        fmt: str,
+        participants: list[dict[str, Any]],
+        rounds: int,
+        prompt_version: str,
+        total_battles: int,
+    ) -> int:
+        """Insert a season row and return its id."""
+        cur = self._conn.execute(
+            """INSERT INTO seasons
+               (name, tier, format, participants, rounds, prompt_version, total_battles, status)
+               VALUES (?,?,?,?,?,?,?,'pending')""",
+            (name, tier, fmt, json.dumps(participants), rounds, prompt_version, total_battles),
+        )
+        self._conn.commit()
+        row_id = cur.lastrowid
+        assert row_id is not None
+        return row_id
+
+    def get_season(self, season_id: int) -> dict[str, Any] | None:
+        """Return a single season row by id, or None if not found."""
+        row = self._conn.execute(
+            "SELECT * FROM seasons WHERE id=?", (season_id,)
+        ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        try:
+            d["participants"] = json.loads(d["participants"])
+        except (json.JSONDecodeError, KeyError):
+            pass
+        return d
+
+    def list_seasons(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Return the most recent seasons, newest first."""
+        rows = self._conn.execute(
+            """SELECT s.id, s.name, s.tier, s.format, s.rounds, s.prompt_version,
+                      s.total_battles, s.status, s.created_at, s.started_at, s.finished_at,
+                      COUNT(b.id) AS battles_done
+               FROM seasons s
+               LEFT JOIN battles b ON b.season_id = s.id AND b.finished_at IS NOT NULL
+               GROUP BY s.id
+               ORDER BY s.created_at DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        result: list[dict[str, Any]] = []
+        for r in rows:
+            d = dict(r)
+            result.append(d)
+        return result
+
+    def finish_season(self, season_id: int, status: str = "completed") -> None:
+        """Mark a season as finished with the given status."""
+        self._conn.execute(
+            """UPDATE seasons SET status=?,
+               finished_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+               WHERE id=?""",
+            (status, season_id),
+        )
+        self._conn.commit()
+
+    def set_season_running(self, season_id: int) -> None:
+        """Mark a season as running and record started_at."""
+        self._conn.execute(
+            """UPDATE seasons SET status='running',
+               started_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+               WHERE id=?""",
+            (season_id,),
+        )
+        self._conn.commit()
+
+    def cancel_season(self, season_id: int) -> bool:
+        """Mark a season as cancelled. Returns False if already finished or not found."""
+        row = self._conn.execute(
+            "SELECT status FROM seasons WHERE id=?", (season_id,)
+        ).fetchone()
+        if not row or row["status"] in ("completed", "cancelled"):
+            return False
+        self._conn.execute(
+            """UPDATE seasons SET status='cancelled',
+               finished_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+               WHERE id=?""",
+            (season_id,),
+        )
+        self._conn.commit()
+        return True
+
+    def get_season_standings(self, season_id: int) -> list[dict[str, Any]]:
+        """Return per-season standings with W/L/T and ELO replayed from 1000.
+
+        ELO is computed fresh from DEFAULT_RATING for each participant using
+        only battles that belong to this season, in chronological order.
+        """
+        from nidozo.db.elo import DEFAULT_RATING, updated_ratings
+
+        season = self.get_season(season_id)
+        if season is None:
+            return []
+
+        participants: list[dict[str, Any]] = (
+            season["participants"] if isinstance(season["participants"], list) else []
+        )
+
+        ratings: dict[str, float] = {}
+        wins: dict[str, int] = {}
+        losses: dict[str, int] = {}
+        ties: dict[str, int] = {}
+
+        for p in participants:
+            key = f"{p['provider']}/{p['model_name']}"
+            ratings[key] = DEFAULT_RATING
+            wins[key] = 0
+            losses[key] = 0
+            ties[key] = 0
+
+        rows = self._conn.execute(
+            """SELECT b.winner,
+                      p1.provider||'/'||p1.model_name AS p1_key,
+                      p2.provider||'/'||p2.model_name AS p2_key
+               FROM battles b
+               JOIN models p1 ON p1.id = b.p1_model_id
+               JOIN models p2 ON p2.id = b.p2_model_id
+               WHERE b.season_id = ? AND b.finished_at IS NOT NULL
+               ORDER BY b.finished_at""",
+            (season_id,),
+        ).fetchall()
+
+        for row in rows:
+            p1_key: str = row["p1_key"]
+            p2_key: str = row["p2_key"]
+            winner: int | None = row["winner"]
+
+            r1 = ratings.get(p1_key, DEFAULT_RATING)
+            r2 = ratings.get(p2_key, DEFAULT_RATING)
+            r1_new, r2_new = updated_ratings(r1, r2, winner)
+            ratings[p1_key] = r1_new
+            ratings[p2_key] = r2_new
+
+            if winner == 1:
+                wins[p1_key] = wins.get(p1_key, 0) + 1
+                losses[p2_key] = losses.get(p2_key, 0) + 1
+            elif winner == 2:
+                losses[p1_key] = losses.get(p1_key, 0) + 1
+                wins[p2_key] = wins.get(p2_key, 0) + 1
+            else:
+                ties[p1_key] = ties.get(p1_key, 0) + 1
+                ties[p2_key] = ties.get(p2_key, 0) + 1
+
+        standings: list[dict[str, Any]] = []
+        for p in participants:
+            key = f"{p['provider']}/{p['model_name']}"
+            w = wins.get(key, 0)
+            lo = losses.get(key, 0)
+            t = ties.get(key, 0)
+            standings.append({
+                "provider":   p["provider"],
+                "model_name": p["model_name"],
+                "elo":        round(ratings.get(key, DEFAULT_RATING), 1),
+                "wins":       w,
+                "losses":     lo,
+                "ties":       t,
+                "games":      w + lo + t,
+            })
+
+        standings.sort(key=lambda x: x["elo"], reverse=True)
+        for i, s in enumerate(standings):
+            s["rank"] = i + 1
+        return standings
+
+    def get_season_battles(self, season_id: int) -> list[dict[str, Any]]:
+        """Return all battles belonging to a season."""
+        rows = self._conn.execute(
+            """SELECT b.id, b.battle_tag, b.winner, b.total_turns,
+                      b.status, b.started_at, b.finished_at,
+                      p1.provider||'/'||p1.model_name AS p1,
+                      p2.provider||'/'||p2.model_name AS p2
+               FROM battles b
+               JOIN models p1 ON p1.id = b.p1_model_id
+               JOIN models p2 ON p2.id = b.p2_model_id
+               WHERE b.season_id = ?
+               ORDER BY b.started_at""",
+            (season_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def close(self) -> None:
         self._conn.close()
