@@ -5,6 +5,7 @@ import BattleField from './components/BattleField'
 import BattleReplay from './components/BattleReplay'
 import ModelStats from './components/ModelStats'
 import TournamentView from './components/TournamentView'
+import SeasonView from './components/SeasonView'
 import DraftPhase from './components/DraftPhase'
 import { useBattleStream } from './hooks/useBattleStream'
 
@@ -14,11 +15,12 @@ function App() {
   const [replayBattleId, setReplayBattleId]   = useState(null)
   const [statsModelId, setStatsModelId]       = useState(null)
   const [tournamentId, setTournamentId]       = useState(null)
+  const [seasonId, setSeasonId]               = useState(null)
   // Track where replay was launched from so Close returns there
   const [replayOrigin, setReplayOrigin]       = useState('home')
   const {
     events, isConnected, p1State, p2State, battleInfo, battleResult,
-    thinking, coachThinking, tournament, draft, reset, clearTournament,
+    thinking, coachThinking, tournament, season, draft, reset, clearTournament, clearSeason,
   } = useBattleStream()
 
   const result = dismissed ? null : battleResult
@@ -52,6 +54,28 @@ function App() {
     setView('home')
   }
 
+  function handleSeasonStarted(data) {
+    reset()
+    clearSeason()
+    setDismissed(false)
+    if (data?.season_id) {
+      setSeasonId(data.season_id)
+      setView('season')
+    } else {
+      setView('battle')
+    }
+  }
+
+  function handleSeasonSelected(id) {
+    setSeasonId(id)
+    setView('season')
+  }
+
+  function handleSeasonClose() {
+    setSeasonId(null)
+    setView('home')
+  }
+
   function handleWatchLive() {
     setView('battle')
   }
@@ -69,6 +93,8 @@ function App() {
       setView('stats')
     } else if (replayOrigin === 'tournament' && tournamentId != null) {
       setView('tournament')
+    } else if (replayOrigin === 'season' && seasonId != null) {
+      setView('season')
     } else {
       setView('home')
     }
@@ -93,8 +119,8 @@ function App() {
         </div>
         <nav className="app-nav">
           <button
-            className={`nav-btn ${view === 'home' || view === 'stats' || view === 'tournament' ? 'active' : ''}`}
-            onClick={() => { setStatsModelId(null); setTournamentId(null); setView('home') }}
+            className={`nav-btn ${view === 'home' || view === 'stats' || view === 'tournament' || view === 'season' ? 'active' : ''}`}
+            onClick={() => { setStatsModelId(null); setTournamentId(null); setSeasonId(null); setView('home') }}
           >HOME</button>
           <button
             className={`nav-btn ${view === 'battle' ? 'active' : ''}`}
@@ -125,9 +151,11 @@ function App() {
           <Leaderboard
             onBattleStarted={handleBattleStarted}
             onTournamentStarted={handleTournamentStarted}
+            onSeasonStarted={handleSeasonStarted}
             onReplaySelected={handleReplaySelected}
             onModelSelected={handleModelSelected}
             onTournamentSelected={handleTournamentSelected}
+            onSeasonSelected={handleSeasonSelected}
           />
         )}
         {view === 'stats' && statsModelId != null && (
@@ -175,6 +203,15 @@ function App() {
               />
             )}
           </>
+        )}
+        {view === 'season' && seasonId != null && (
+          <SeasonView
+            seasonId={seasonId}
+            season={season?.id === seasonId ? season : null}
+            onClose={handleSeasonClose}
+            onWatchLive={handleWatchLive}
+            onReplaySelected={handleReplaySelected}
+          />
         )}
         {view === 'replay' && replayBattleId != null && (
           <BattleReplay

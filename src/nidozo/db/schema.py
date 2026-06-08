@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # Table definitions only — safe to run against any DB version via IF NOT EXISTS.
 # Indexes are kept separate because they may reference columns (e.g. tournament_id)
@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS battles (
     p1_team_id      INTEGER REFERENCES teams(id),         -- NULL for random battles
     p2_team_id      INTEGER REFERENCES teams(id),         -- NULL for random battles
     tier            TEXT,                                  -- NULL for random battles
+    season_id       INTEGER REFERENCES seasons(id),       -- NULL for non-season battles
     winner          INTEGER,           -- 1=p1, 2=p2, NULL=tie
     total_turns     INTEGER,
     status          TEXT    NOT NULL DEFAULT 'pending',   -- pending|running|completed|cancelled|failed
@@ -111,6 +112,22 @@ CREATE TABLE IF NOT EXISTS teams (
     created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
+-- Named competition seasons — each season is a fixed round-robin among registered participants
+CREATE TABLE IF NOT EXISTS seasons (
+    id              INTEGER PRIMARY KEY,
+    name            TEXT    NOT NULL,
+    tier            TEXT    NOT NULL DEFAULT 'random',
+    format          TEXT    NOT NULL DEFAULT 'gen3randombattle',
+    participants    TEXT    NOT NULL,  -- JSON [{provider, model_name}]
+    rounds          INTEGER NOT NULL DEFAULT 1,
+    prompt_version  TEXT    NOT NULL DEFAULT 'v4',
+    total_battles   INTEGER NOT NULL DEFAULT 0,
+    status          TEXT    NOT NULL DEFAULT 'pending',  -- pending|running|completed|cancelled
+    created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    started_at      TEXT,
+    finished_at     TEXT
+);
+
 -- Draft session log: one row per pick sequence (for analysis)
 CREATE TABLE IF NOT EXISTS draft_sessions (
     id              INTEGER PRIMARY KEY,
@@ -134,6 +151,7 @@ CREATE INDEX IF NOT EXISTS idx_battles_p1         ON battles(p1_model_id);
 CREATE INDEX IF NOT EXISTS idx_battles_p2         ON battles(p2_model_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_elohist_battle ON elo_history(battle_id, model_id);
 CREATE INDEX IF NOT EXISTS idx_lessons_model      ON lessons(model_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_battles_season     ON battles(season_id);
 """
 
 
@@ -303,4 +321,34 @@ def migrate(conn: sqlite3.Connection) -> None:
             " ON elo_history(battle_id, model_id)"
         )
         conn.execute("UPDATE schema_version SET version=9")
+        conn.commit()
+
+    if version < 10:
+        # Add named seasons and tag battles with a season_id.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS seasons (
+                id              INTEGER PRIMARY KEY,
+                name            TEXT    NOT NULL,
+                tier            TEXT    NOT NULL DEFAULT 'random',
+                format          TEXT    NOT NULL DEFAULT 'gen3randombattle',
+                participants    TEXT    NOT NULL,
+                rounds          INTEGER NOT NULL DEFAULT 1,
+                prompt_version  TEXT    NOT NULL DEFAULT 'v4',
+                total_battles   INTEGER NOT NULL DEFAULT 0,
+                status          TEXT    NOT NULL DEFAULT 'pending',
+                created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                started_at      TEXT,
+                finished_at     TEXT
+            )
+        """)
+        try:
+            conn.execute(
+                "ALTER TABLE battles ADD COLUMN season_id INTEGER REFERENCES seasons(id)"
+            )
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_battles_season ON battles(season_id)"
+        )
+        conn.execute("UPDATE schema_version SET version=10")
         conn.commit()

@@ -18,10 +18,12 @@ from nidozo.api.helpers import _model_name
 from nidozo.api.models import (
     StartBattleRequest,
     StartBattleResponse,
+    StartSeasonRequest,
+    StartSeasonResponse,
     StartTournamentRequest,
     StartTournamentResponse,
 )
-from nidozo.api.orchestration import run_battles, run_bracket_tournament, run_tournament
+from nidozo.api.orchestration import run_battles, run_bracket_tournament, run_season, run_tournament
 from nidozo.db.store import BattleStore
 
 logger = logging.getLogger(__name__)
@@ -438,5 +440,118 @@ def create_router(
                 f"{req.rounds} round(s), {total} battles."
             ),
         )
+
+    # -------------------------------------------------------------------
+    # Seasons
+    # -------------------------------------------------------------------
+
+    @router.post("/api/seasons/start", response_model=StartSeasonResponse)
+    async def start_season(
+        req: StartSeasonRequest,
+        background_tasks: BackgroundTasks,
+    ) -> StartSeasonResponse:
+        import itertools
+
+        from nidozo.battle.tiers import TIER_TO_FORMAT, is_valid_tier
+
+        if len(req.players) < 2:
+            raise HTTPException(status_code=400, detail="Need at least 2 players")
+        if not is_valid_tier(req.tier) and req.tier != "random":
+            raise HTTPException(status_code=400, detail=f"Unknown tier: {req.tier!r}")
+
+        showdown_format = (
+            "gen3randombattle" if req.tier == "random"
+            else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+        )
+        effective_prompt = "v3" if (req.tier != "random" and req.draft) else req.prompt_version
+
+        player_specs: list[dict[str, Any]] = [
+            {
+                "provider":       p.provider,
+                "model_name":     _model_name(p.provider, p.model),
+                "coach_provider": p.coach_provider,
+                "coach_model":    p.coach_model,
+            }
+            for p in req.players
+        ]
+
+        pairs = list(itertools.combinations(range(len(req.players)), 2))
+        total = len(pairs) * req.rounds * 2
+
+        season_id = store.create_season(
+            name=req.name,
+            tier=req.tier,
+            fmt=showdown_format,
+            participants=player_specs,
+            rounds=req.rounds,
+            prompt_version=effective_prompt,
+            total_battles=total,
+        )
+
+        battle_ids: list[int] = []
+        battle_num = 0
+        for (i, j) in pairs:
+            for _ in range(req.rounds):
+                for (a_idx, b_idx) in [(i, j), (j, i)]:
+                    a = player_specs[a_idx]
+                    b = player_specs[b_idx]
+                    a_id = store.get_or_create_model(a["provider"], a["model_name"], effective_prompt)
+                    b_id = store.get_or_create_model(b["provider"], b["model_name"], effective_prompt)
+                    bid = store.create_battle(
+                        f"season-{season_id}-{battle_num}",
+                        showdown_format,
+                        a_id, b_id,
+                        season_id=season_id,
+                    )
+                    battle_ids.append(bid)
+                    battle_num += 1
+
+        background_tasks.add_task(
+            run_season, req, season_id, battle_ids, player_specs, store, bus, active_tasks
+        )
+
+        return StartSeasonResponse(
+            season_id=season_id,
+            battle_ids=battle_ids,
+            total_battles=total,
+            message=(
+                f"Season '{req.name}' started: {len(req.players)} players, "
+                f"{req.rounds} round(s), {total} battles."
+            ),
+        )
+
+    @router.get("/api/seasons")
+    def list_seasons(limit: int = 20) -> list[dict[str, Any]]:
+        return store.list_seasons(limit=limit)
+
+    @router.get("/api/seasons/{season_id}")
+    def get_season(season_id: int) -> dict[str, Any]:
+        s = store.get_season(season_id)
+        if s is None:
+            raise HTTPException(status_code=404, detail="Season not found")
+        return s
+
+    @router.get("/api/seasons/{season_id}/standings")
+    def get_season_standings(season_id: int) -> list[dict[str, Any]]:
+        if store.get_season(season_id) is None:
+            raise HTTPException(status_code=404, detail="Season not found")
+        return store.get_season_standings(season_id)
+
+    @router.get("/api/seasons/{season_id}/battles")
+    def get_season_battles(season_id: int) -> list[dict[str, Any]]:
+        if store.get_season(season_id) is None:
+            raise HTTPException(status_code=404, detail="Season not found")
+        return store.get_season_battles(season_id)
+
+    @router.post("/api/seasons/{season_id}/cancel")
+    def cancel_season(season_id: int) -> dict[str, Any]:
+        if store.get_season(season_id) is None:
+            raise HTTPException(status_code=404, detail="Season not found")
+        cancelled = store.cancel_season(season_id)
+        if not cancelled:
+            raise HTTPException(
+                status_code=409, detail="Season is already finished or cannot be cancelled"
+            )
+        return {"ok": True, "season_id": season_id}
 
     return router
