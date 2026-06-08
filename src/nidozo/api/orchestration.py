@@ -527,6 +527,7 @@ async def run_bracket_tournament(
 
     battle_num = 0
     cancelled = False
+    match_failed = False
 
     try:
         while True:
@@ -542,11 +543,15 @@ async def run_bracket_tournament(
                 p2_info  = resolve_seed(bracket_state, p2_seed)
 
                 if p1_info is None or p2_info is None:
+                    # Bracket invariant violated — a pending match has unresolvable
+                    # seeds. Continuing would spin forever; abort the tournament.
                     logger.error(
-                        "Bracket %d: match %s missing player info — skipping",
-                        tournament_id, match_id,
+                        "Bracket %d: match %s seed lookup failed (p1=%s p2=%s) — "
+                        "aborting tournament",
+                        tournament_id, match_id, p1_seed, p2_seed,
                     )
-                    continue
+                    match_failed = True
+                    break
 
                 p1_prov  = p1_info["provider"]
                 p1_model = p1_info["model_name"]
@@ -667,12 +672,25 @@ async def run_bracket_tournament(
                     logger.error(
                         "Bracket %d match %s failed: %s", tournament_id, match_id, exc
                     )
+                    # Update in-memory bracket state so the match isn't left as
+                    # "running" — that would make get_pending_matches return nothing,
+                    # and the while loop would break and call finish_tournament with
+                    # champion_seed=None (silently completing a broken tournament).
+                    match["status"] = "failed"
                     store.set_battle_status(battle_id, "failed")
+                    store.update_bracket_state(tournament_id, bracket_state)
                     await bus.publish({
                         "type": "error", "battle_id": battle_id, "message": str(exc),
                     })
+                    match_failed = True
                 finally:
                     active_tasks.pop(battle_id, None)
+
+                if match_failed:
+                    break  # exit inner for-loop immediately
+
+            if match_failed:
+                break  # exit while True
 
             # Check if champion is known
             if bracket_state.get("champion_seed") is not None:
@@ -690,14 +708,23 @@ async def run_bracket_tournament(
         raise
 
     if not cancelled:
-        store.finish_tournament(tournament_id, status="completed")
-        champion_seed = bracket_state.get("champion_seed")
-        champion_info = resolve_seed(bracket_state, champion_seed) if champion_seed else None
-        leaderboard = store.leaderboard()
-        await bus.publish({
-            "type": "tournament_end",
-            "tournament_id": tournament_id,
-            "leaderboard": leaderboard,
-            "bracket": bracket_state,
-            "champion": champion_info,
-        })
+        if match_failed:
+            store.finish_tournament(tournament_id, status="failed")
+            await bus.publish({
+                "type": "tournament_failed",
+                "tournament_id": tournament_id,
+                "battles_completed": battle_num,
+                "bracket": bracket_state,
+            })
+        else:
+            store.finish_tournament(tournament_id, status="completed")
+            champion_seed = bracket_state.get("champion_seed")
+            champion_info = resolve_seed(bracket_state, champion_seed) if champion_seed else None
+            leaderboard = store.leaderboard()
+            await bus.publish({
+                "type": "tournament_end",
+                "tournament_id": tournament_id,
+                "leaderboard": leaderboard,
+                "bracket": bracket_state,
+                "champion": champion_info,
+            })
