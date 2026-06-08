@@ -886,7 +886,7 @@ class BattleStore:
                FROM seasons s
                LEFT JOIN battles b ON b.season_id = s.id AND b.finished_at IS NOT NULL
                GROUP BY s.id
-               ORDER BY s.created_at DESC
+               ORDER BY s.id DESC
                LIMIT ?""",
             (limit,),
         ).fetchall()
