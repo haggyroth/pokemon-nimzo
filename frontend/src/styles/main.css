@@ -4819,3 +4819,443 @@ body::after {
   text-transform: uppercase;
   min-width: 2.4rem;
 }
+
+/* ============================================================
+   GLOBAL STATS PAGE
+   ============================================================ */
+
+/* Summary KPIs */
+.gs-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+@media (max-width: 700px) {
+  .gs-kpi-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+.gs-kpi {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  text-align: center;
+}
+
+.gs-kpi-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  line-height: 1;
+  font-family: var(--font-mono);
+}
+
+.gs-kpi-label {
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+  text-transform: uppercase;
+}
+
+.gs-summary-panel {
+  padding: 1rem 1.25rem;
+}
+
+/* Tier breakdown */
+.gs-tier-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.gs-tier-row {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr 2rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gs-tier-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: right;
+}
+
+.gs-tier-track {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.gs-tier-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.gs-tier-count {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* Top Pokémon grid */
+.gs-pokemon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.6rem;
+}
+
+.gs-pokemon-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  position: relative;
+}
+
+.gs-pokemon-rank {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.4rem;
+  font-size: 0.5rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.gs-pokemon-sprite {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.gs-pokemon-name {
+  font-size: 0.6rem;
+  color: var(--text-primary);
+  text-align: center;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.gs-pokemon-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.gs-pokemon-bar {
+  height: 100%;
+  background: var(--accent-cyan);
+  border-radius: 2px;
+}
+
+.gs-pokemon-cnt {
+  font-size: 0.5rem;
+  color: var(--text-muted);
+}
+
+/* Top moves */
+.gs-move-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.gs-move-row {
+  display: grid;
+  grid-template-columns: 1.8rem 8rem 1fr 2.2rem;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.gs-move-rank {
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.gs-move-name {
+  font-size: 0.62rem;
+  color: var(--text-primary);
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gs-move-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.gs-move-bar {
+  height: 100%;
+  background: var(--accent-green);
+  border-radius: 3px;
+}
+
+.gs-move-cnt {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* Recent battles */
+.gs-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.gs-recent-row {
+  display: grid;
+  grid-template-columns: 3rem 1fr 2.5rem 4.5rem auto;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.gs-recent-row:last-child { border-bottom: none; }
+
+.gs-recent-tier {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.gs-recent-matchup {
+  font-size: 0.62rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--text-dim);
+  min-width: 0;
+}
+
+.gs-recent-matchup span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gs-winner {
+  color: var(--accent-green) !important;
+  font-weight: 600;
+}
+
+.gs-vs {
+  color: var(--text-muted) !important;
+  font-size: 0.5rem;
+  flex-shrink: 0;
+}
+
+.gs-recent-turns {
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.gs-recent-date {
+  font-size: 0.55rem;
+  color: var(--text-muted);
+}
+
+.gs-empty {
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  font-style: italic;
+  padding: 0.5rem 0;
+}
+
+/* ============================================================
+   MODEL STATS — USAGE PANELS
+   ============================================================ */
+
+/* Pokémon usage list */
+.usage-pokemon-list, .usage-move-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.usage-pokemon-row {
+  display: grid;
+  grid-template-columns: 1.6rem 28px 7rem 1fr 2.2rem;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.usage-move-row {
+  display: grid;
+  grid-template-columns: 1.6rem 8rem 1fr 2.2rem;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.usage-rank {
+  font-size: 0.52rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.usage-sprite {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.usage-species {
+  font-size: 0.62rem;
+  color: var(--text-primary);
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.usage-move-name {
+  font-size: 0.62rem;
+  color: var(--text-primary);
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.usage-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.usage-bar {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.usage-bar--pokemon { background: var(--accent-cyan); }
+.usage-bar--move    { background: #ab47bc; }
+
+.usage-cnt {
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* Action distribution */
+.action-dist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.action-dist-bar {
+  height: 20px;
+  display: flex;
+  border-radius: 4px;
+  overflow: hidden;
+  gap: 2px;
+}
+
+.action-dist-segment {
+  height: 100%;
+  min-width: 2px;
+  transition: width 0.3s ease;
+}
+
+.action-dist-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.action-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.action-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.action-legend-label {
+  font-size: 0.62rem;
+  color: var(--text-primary);
+  min-width: 4.5rem;
+}
+
+.action-legend-pct {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  min-width: 3rem;
+}
+
+.action-legend-cnt {
+  font-size: 0.58rem;
+  color: var(--text-muted);
+}
+
+/* Win rate by tier */
+.tier-winrate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.tier-wr-row {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr 2.5rem 5.5rem;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.tier-wr-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: right;
+}
+
+.tier-wr-track {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.tier-wr-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.tier-wr-pct {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.tier-wr-record {
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  text-align: right;
+}
