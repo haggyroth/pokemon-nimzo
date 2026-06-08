@@ -147,7 +147,7 @@
 
 **Test Coverage**
 - *Tier 1 complete at 88%* — pure unit tests for analysis, heuristics, bracket, store, schema, API routes (565 tests)
-- **Tier 2** — async mock-heavy tests for `api/events.py`, `api/ws.py`, `api/helpers.py`, and `api/app.py` startup; requires `AsyncMock` + `anyio` fixtures; estimated ~110 lines, would bring coverage to ~93%
+- ~~**Tier 2**~~ ✅ *shipped — async mock-heavy tests for `api/events.py`, `api/ws.py`, `api/helpers.py`, `api/app.py`; 649 tests at 89% coverage*
 - **Tier 3** — integration tests for `battle/orchestration.py` and `llm/draft.py` that require a live local Showdown server; intended to run in a separate CI job with a `[integration]` marker; estimated ~333 lines, would push total past 95%
 
 **Infrastructure**
