@@ -366,3 +366,59 @@ def test_migrate_v2_battle_columns_already_exist_no_error() -> None:
     # migrate() should detect version < 3, try ALTERs, catch OperationalErrors, and continue
     migrate(conn)
     assert _version(conn) == SCHEMA_VERSION
+
+
+def test_migrate_v9_creates_unique_elo_history_index() -> None:
+    """v9 migration replaces the non-unique idx_elohist_battle with a UNIQUE index."""
+    conn = _fresh_conn()
+    migrate(conn)
+    # PRAGMA index_list returns (seq, name, unique, origin, partial)
+    indexes = {
+        (row[1], bool(row[2]))  # (name, is_unique)
+        for row in conn.execute("PRAGMA index_list(elo_history)").fetchall()
+    }
+    assert ("idx_elohist_battle", True) in indexes, (
+        "idx_elohist_battle should be a UNIQUE index after v9 migration"
+    )
+
+
+def test_migrate_v9_idempotent() -> None:
+    """Running migrate() twice does not fail even though DROP INDEX fires on v9."""
+    conn = _fresh_conn()
+    migrate(conn)
+    conn.execute("UPDATE schema_version SET version=8")
+    conn.commit()
+    migrate(conn)  # re-runs v9 block — DROP INDEX IF EXISTS + CREATE UNIQUE INDEX
+    assert _version(conn) == SCHEMA_VERSION
+
+
+def test_finish_battle_idempotent_elo(tmp_path: "Path") -> None:
+    """Calling finish_battle twice for the same battle must not apply ELO twice."""
+    from nidozo.db.store import BattleStore
+
+    store = BattleStore(db_path=tmp_path / "test.db")
+    conn = store._conn
+
+    p1 = store.get_or_create_model("random", "bot1", "v1")
+    p2 = store.get_or_create_model("random", "bot2", "v1")
+    bid = store.create_battle("tag-idem", "gen3randombattle", p1, p2)
+
+    store.finish_battle(bid, winner=1, total_turns=10)
+    r1_after_first = conn.execute(
+        "SELECT rating FROM elo_ratings WHERE model_id=?", (p1,)
+    ).fetchone()["rating"]
+
+    # Second call — should be a no-op
+    store.finish_battle(bid, winner=1, total_turns=10)
+    r1_after_second = conn.execute(
+        "SELECT rating FROM elo_ratings WHERE model_id=?", (p1,)
+    ).fetchone()["rating"]
+
+    assert r1_after_first == r1_after_second, (
+        "ELO changed on second finish_battle call — double-apply regression"
+    )
+
+    history_rows = conn.execute(
+        "SELECT COUNT(*) FROM elo_history WHERE battle_id=? AND model_id=?", (bid, p1)
+    ).fetchone()[0]
+    assert history_rows == 1, "elo_history should have exactly one row per (battle, model)"

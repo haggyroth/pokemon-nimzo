@@ -304,15 +304,22 @@ class BattleStore:
         winner: int | None,
         total_turns: int,
     ) -> None:
-        """Mark battle as finished, record winner, and update ELO atomically."""
+        """Mark battle as finished (status='completed'), record winner, and update ELO atomically.
+
+        Idempotent: if the battle already has a finished_at timestamp the UPDATE
+        matches zero rows and ELO is not re-applied, so calling this twice is safe.
+        """
         with self._conn:
-            self._conn.execute(
+            cur = self._conn.execute(
                 """UPDATE battles
-                   SET winner=?, total_turns=?,
+                   SET winner=?, total_turns=?, status='completed',
                        finished_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
-                   WHERE id=?""",
+                   WHERE id=? AND finished_at IS NULL""",
                 (winner, total_turns, battle_id),
             )
+            if cur.rowcount == 0:
+                # Already finished — skip ELO to prevent double-apply.
+                return
             self._update_elo(battle_id, winner)
 
     def _update_elo(self, battle_id: int, winner: int | None) -> None:
@@ -341,7 +348,8 @@ class BattleStore:
                 (after, model_id),
             )
             self._conn.execute(
-                """INSERT INTO elo_history (battle_id, model_id, rating_before, rating_after, delta)
+                """INSERT OR IGNORE INTO elo_history
+                   (battle_id, model_id, rating_before, rating_after, delta)
                    VALUES (?,?,?,?,?)""",
                 (battle_id, model_id, before, after, after - before),
             )

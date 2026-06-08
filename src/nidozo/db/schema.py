@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 # Table definitions only — safe to run against any DB version via IF NOT EXISTS.
 # Indexes are kept separate because they may reference columns (e.g. tournament_id)
@@ -73,7 +73,8 @@ CREATE TABLE IF NOT EXISTS elo_history (
     model_id      INTEGER NOT NULL REFERENCES models(id),
     rating_before REAL    NOT NULL,
     rating_after  REAL    NOT NULL,
-    delta         REAL    NOT NULL
+    delta         REAL    NOT NULL,
+    UNIQUE(battle_id, model_id)  -- prevents double ELO application on retry
 );
 
 -- Per-turn log: action chosen, parse outcome, raw LLM response, and full battle state
@@ -131,7 +132,7 @@ CREATE INDEX IF NOT EXISTS idx_battles_finished   ON battles(finished_at);
 CREATE INDEX IF NOT EXISTS idx_battles_tournament ON battles(tournament_id);
 CREATE INDEX IF NOT EXISTS idx_battles_p1         ON battles(p1_model_id);
 CREATE INDEX IF NOT EXISTS idx_battles_p2         ON battles(p2_model_id);
-CREATE INDEX IF NOT EXISTS idx_elohist_battle     ON elo_history(battle_id, model_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_elohist_battle ON elo_history(battle_id, model_id);
 CREATE INDEX IF NOT EXISTS idx_lessons_model      ON lessons(model_id, created_at);
 """
 
@@ -205,7 +206,7 @@ def migrate(conn: sqlite3.Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_battles_tournament ON battles(tournament_id);
             CREATE INDEX IF NOT EXISTS idx_battles_p1         ON battles(p1_model_id);
             CREATE INDEX IF NOT EXISTS idx_battles_p2         ON battles(p2_model_id);
-            CREATE INDEX IF NOT EXISTS idx_elohist_battle     ON elo_history(battle_id, model_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_elohist_battle ON elo_history(battle_id, model_id);
         """)
         conn.execute("UPDATE schema_version SET version=4")
         conn.commit()
@@ -289,4 +290,17 @@ def migrate(conn: sqlite3.Connection) -> None:
         except sqlite3.OperationalError:
             pass  # column already exists
         conn.execute("UPDATE schema_version SET version=8")
+        conn.commit()
+
+    if version < 9:
+        # Make elo_history(battle_id, model_id) unique to prevent double ELO
+        # application if finish_battle is ever called twice for the same battle.
+        # SQLite can't add a UNIQUE constraint to an existing table; upgrade the
+        # index instead (drop non-unique, create unique).
+        conn.execute("DROP INDEX IF EXISTS idx_elohist_battle")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_elohist_battle"
+            " ON elo_history(battle_id, model_id)"
+        )
+        conn.execute("UPDATE schema_version SET version=9")
         conn.commit()
