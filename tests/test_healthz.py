@@ -98,7 +98,8 @@ async def test_healthz_version_field_present(client) -> None:
     with patch("nidozo.api.routes.socket.create_connection", return_value=mock_sock):
         resp = await client.get("/healthz")
 
-    assert resp.json()["version"] == "0.11.0"
+    from nidozo import __version__
+    assert resp.json()["version"] == __version__
 
 
 # ---------------------------------------------------------------------------

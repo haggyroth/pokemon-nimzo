@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from nidozo import __version__
 from nidozo.api.events import EventBus
 from nidozo.api.routes import create_router
 from nidozo.api.ws import create_ws_router
@@ -45,7 +46,7 @@ def create_app(db_path: Path = _DB_PATH) -> FastAPI:
         store.close()
         logger.info("Nidozo shut down cleanly")
 
-    app = FastAPI(title="Nidozo", version="0.11.0", lifespan=lifespan)
+    app = FastAPI(title="Nidozo", version=__version__, lifespan=lifespan)
     app.state.store = store
     app.add_middleware(
         CORSMiddleware,

@@ -24,14 +24,13 @@ class CoachAgent:
     it alongside the heuristic scores.
 
     Args:
-        backend: Any object satisfying the ModelBackend protocol.
-        max_tokens: Soft cap for the coach response.  Defaults to 300 — enough
-                    for 3–6 analytical sentences without bloating the player context.
+        backend: Any object satisfying the ModelBackend protocol.  To control
+                 token budget, configure the backend itself (e.g. pass max_tokens
+                 to the backend constructor) rather than this class.
     """
 
-    def __init__(self, backend: ModelBackend, max_tokens: int = 300) -> None:
+    def __init__(self, backend: ModelBackend) -> None:
         self._backend = backend
-        self._max_tokens = max_tokens
 
         self._system_text = (_COACH_PROMPT_DIR / "system.txt").read_text()
         self._jinja_env = Environment(

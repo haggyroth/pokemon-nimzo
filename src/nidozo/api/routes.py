@@ -13,6 +13,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
 
+from nidozo import __version__
 from nidozo.api.helpers import _model_name
 from nidozo.api.models import (
     StartBattleRequest,
@@ -66,7 +67,7 @@ def create_router(
             checks["showdown"] = "unreachable"
 
         overall = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
-        payload = {"status": overall, "version": "0.11.0", **checks}
+        payload = {"status": overall, "version": __version__, **checks}
 
         if overall != "ok":
             return JSONResponse(status_code=503, content=payload)
