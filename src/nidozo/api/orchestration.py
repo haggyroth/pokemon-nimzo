@@ -121,7 +121,6 @@ async def run_battles(
 
             store.update_battle_tag(battle_id, real_tag)
             store.finish_battle(battle_id, winner, total_turns)
-            store.set_battle_status(battle_id, "completed")
 
             await bus.publish({
                 "type": "battle_end",
@@ -318,7 +317,6 @@ async def run_tournament(
 
             store.update_battle_tag(battle_id, real_tag)
             store.finish_battle(battle_id, winner, total_turns)
-            store.set_battle_status(battle_id, "completed")
 
             await bus.publish({
                 "type": "battle_end",
@@ -634,7 +632,6 @@ async def run_bracket_tournament(
 
                     store.update_battle_tag(battle_id, real_tag)
                     store.finish_battle(battle_id, winner_slot, total_turns)
-                    store.set_battle_status(battle_id, "completed")
 
                     await bus.publish({
                         "type": "battle_end",
