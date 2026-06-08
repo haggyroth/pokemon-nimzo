@@ -148,6 +148,20 @@ function useTeams(battleId, enabled) {
   return teams
 }
 
+function PlayerLabel({ label, side }) {
+  if (!label) return null
+  // "anthropic/claude-sonnet-4-6" → provider="anthropic", name="claude-sonnet-4-6"
+  const slash = label.indexOf('/')
+  const provider = slash >= 0 ? label.slice(0, slash) : ''
+  const name     = slash >= 0 ? label.slice(slash + 1) : label
+  return (
+    <div className={`player-label player-label--${side}`}>
+      {provider && <span className="player-label-provider">{provider}</span>}
+      <span className="player-label-name">{name}</span>
+    </div>
+  )
+}
+
 export default function BattleField({
   p1State, p2State, battleInfo, battleResult, events, thinking, coachThinking,
   onDismiss, tournament, onTournamentScoreboard,
@@ -221,21 +235,27 @@ export default function BattleField({
 
       {/* Arena */}
       <div className="arena">
-        <PokemonCard
-          mon={p1Mon}
-          side="p1"
-          isOpponent={false}
-          isThinking={thinking === 'p1' || coachThinking === 'p1'}
-          bench={p1Bench}
-        />
+        <div className="arena-player-col">
+          <PlayerLabel label={battleInfo?.p1} side="p1" />
+          <PokemonCard
+            mon={p1Mon}
+            side="p1"
+            isOpponent={false}
+            isThinking={thinking === 'p1' || coachThinking === 'p1'}
+            bench={p1Bench}
+          />
+        </div>
         <div className="vs-divider">VS</div>
-        <PokemonCard
-          mon={p2Mon ?? oppOfP1}
-          side="p2"
-          isOpponent={!p2Mon}
-          isThinking={thinking === 'p2' || coachThinking === 'p2'}
-          bench={p2Bench}
-        />
+        <div className="arena-player-col">
+          <PlayerLabel label={battleInfo?.p2} side="p2" />
+          <PokemonCard
+            mon={p2Mon ?? oppOfP1}
+            side="p2"
+            isOpponent={!p2Mon}
+            isThinking={thinking === 'p2' || coachThinking === 'p2'}
+            bench={p2Bench}
+          />
+        </div>
       </div>
 
       {/* Bottom panels */}

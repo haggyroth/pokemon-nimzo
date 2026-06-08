@@ -104,6 +104,22 @@
 
 ## Upcoming
 
+### v0.13 — Prompt v4, Head-to-Head Matrix, Seasons
+- See CHANGELOG for details.
+
+### v0.14 — Seasons
+- See CHANGELOG for details.
+
+### v0.15 — Prompt v5
+- KO-risk signal, decision framework, actual stats and last move in context, switch quality labels
+
+### v0.16 — Richer Post-Game Analysis
+- LLM-generated battle narrative ("Battle Story")
+- Switch quality classification (good/bad/neutral/forced)
+- Enriched turning-point description with move names + win-prob swing
+- Variance report in frontend; switch breakdown in quality bars
+- Schema v11: `battles.narrative`
+
 ---
 
 ### Near Term — LLM Intelligence & Viewing Experience
@@ -124,7 +140,26 @@
 ### Phase 5 — Platform Expansion
 *Goal: broaden the competitive scope and polish.*
 
-**Doubles**
+**🎮 Pokémon Showdown Built-in Battle Scene** *(major milestone)*
+- Embed or replicate the Showdown client's own animated battle scene — the full experience with animated sprites, move animations, hit effects, and sound
+- Explore `@smogon/client` / `pokemon-showdown-client` integration; the client normally communicates directly with the Showdown server protocol
+- Likely approach: proxy the Showdown protocol through our WebSocket so the client renders the live battle while our LLMs drive it behind the scenes
+- This would be a significant architectural effort but would dramatically elevate the viewing experience
+
+**Pokémon Coverage Expansion**
+- Add all Gen 1 and Gen 2 Pokémon to the draft pool (currently Gen 3 focused)
+- Ensure Showdown format compatibility across all three generations
+- Update the heuristic engine for Gen 1/2-specific mechanics (no special split in Gen 1, Gen 2 item set differences)
+
+**Pokémon Mouseover Summaries**
+- Hovering a Pokémon on the battle scene or bench shows a tooltip with base stats, type chart matchups, ability (if revealed), and held item
+- Applies to both own and opponent Pokémon (opponent shows only revealed info)
+
+**3v3 / 6v6 Team Size Config**
+- Expose team size as a configurable battle option in the UI alongside tier and format
+- Action parser and serializer updates for different team sizes
+
+**Doubles Battles**
 - 2v2 format with target selection (adds which-Pokémon-to-hit decision)
 - Prompt and action parser extended for `target` field
 - Heuristic engine updated for spread moves and partner synergy
@@ -137,6 +172,12 @@
 - Battle event annotation: item activations (Leftovers, Lum Berry), ability procs (Intimidate, Synchronize), status cures shown inline in the battle log and replay
 - Speed tie and priority bracket resolution visible in the battle log
 - Weather and terrain strategies tracked in analysis
+
+**Rich Stats Dashboard**
+- Per-model stats expanded to include: most-used Pokémon, most-used moves, switch frequency, type preference, KO rate
+- Head-to-head deep-dive: win rates by team composition, by format, by tier
+- Global Pokémon usage stats across all recorded battles
+- Move and species trend charts
 
 ---
 
