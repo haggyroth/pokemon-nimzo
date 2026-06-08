@@ -161,6 +161,25 @@ async def test_start_battle_with_lmstudio_model(client: AsyncClient, no_battle_r
 
 
 @pytest.mark.asyncio
+async def test_start_battle_repeated_same_providers_no_tag_collision(
+    client: AsyncClient, no_battle_runner
+) -> None:
+    """Two separate starts with identical providers must not collide on battle_tag.
+
+    Regression: the placeholder tag used to be pending-{p1}-{p2}-{i}, so a second
+    start with the same providers hit the battles.battle_tag UNIQUE constraint and
+    returned 500.
+    """
+    payload = {"p1_provider": "random", "p2_provider": "random", "n_battles": 1}
+    resp1 = await client.post("/api/battles/start", json=payload)
+    resp2 = await client.post("/api/battles/start", json=payload)
+    assert resp1.status_code == 200
+    assert resp2.status_code == 200
+    # Distinct battle rows were created.
+    assert resp1.json()["battle_ids"][0] != resp2.json()["battle_ids"][0]
+
+
+@pytest.mark.asyncio
 async def test_start_battle_creates_db_rows(client: AsyncClient, no_battle_runner) -> None:
     """Starting a battle creates a pending battle row in the DB."""
     resp = await client.post(

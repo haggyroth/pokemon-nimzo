@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import socket
+import uuid
 from typing import Any
 
 import httpx
@@ -323,8 +324,16 @@ def create_router(
             p2_model_name = _model_name(req.p2_provider, req.p2_model or req.model)
             p1_id = store.get_or_create_model(req.p1_provider, p1_model_name, effective_prompt)
             p2_id = store.get_or_create_model(req.p2_provider, p2_model_name, effective_prompt)
+            # Placeholder tag is transient — overwritten with the real Showdown
+            # tag once the battle connects (see update_battle_tag). It only has
+            # to satisfy the battles.battle_tag UNIQUE constraint at insert time.
+            # The index alone collides across separate start calls with the same
+            # providers, so include a uuid to guarantee global uniqueness.
+            placeholder_tag = (
+                f"pending-{req.p1_provider}-{req.p2_provider}-{i}-{uuid.uuid4().hex[:12]}"
+            )
             bid = store.create_battle(
-                f"pending-{req.p1_provider}-{req.p2_provider}-{i}",
+                placeholder_tag,
                 showdown_format,
                 p1_id,
                 p2_id,
