@@ -453,6 +453,39 @@ def _propagate_byes_double(
                     else:
                         lb_m["p2_seed"] = loser_seed
                         lb_m["p2_is_bye"] = True
+    # Now resolve any LB matches that already have one real seed vs one bye seed.
+    _resolve_lb_byes_double(match_index)
+
+
+def _resolve_lb_byes_double(match_index: dict[str, dict[str, Any]]) -> None:
+    """Walkover any LB match where one slot is a bye and the other has a real seed.
+
+    Iterates until stable — one resolved match may seed a downstream LB slot that
+    also turns out to be a walkover (e.g. two consecutive WB byes feeding the same
+    LB column in a non-power-of-two bracket).
+    """
+    changed = True
+    while changed:
+        changed = False
+        for m in list(match_index.values()):
+            if m["bracket"] != "losers" or m["status"] != "pending":
+                continue
+            p1_bye = m.get("p1_is_bye", False)
+            p2_bye = m.get("p2_is_bye", False)
+            if p1_bye and m.get("p2_seed") is not None:
+                # Real player in slot 2 — walkover win
+                m["winner_seed"] = m["p2_seed"]
+                m["loser_seed"] = m["p1_seed"]
+                m["status"] = "bye"
+                _advance_winner_single(match_index, m)
+                changed = True
+            elif p2_bye and m.get("p1_seed") is not None:
+                # Real player in slot 1 — walkover win
+                m["winner_seed"] = m["p1_seed"]
+                m["loser_seed"] = m["p2_seed"]
+                m["status"] = "bye"
+                _advance_winner_single(match_index, m)
+                changed = True
 
 
 def record_result_double(
@@ -496,6 +529,8 @@ def record_result_double(
                 lb_m["p1_seed"] = loser_seed
             else:
                 lb_m["p2_seed"] = loser_seed
+        # A freshly-dropped loser may land next to a bye slot — resolve immediately.
+        _resolve_lb_byes_double(mi)
 
     # Handle GF: if LB player (p2) wins GF, trigger bracket reset (GFR)
     if match_id == "GF":
