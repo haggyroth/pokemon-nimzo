@@ -243,7 +243,20 @@ def _battle_context(
     battle: AbstractBattle,
     weather: str | None,
 ) -> dict[str, Any]:
-    ctx: dict[str, Any] = {}
+    # Pre-populate all optional keys with None so Jinja2 templates can safely
+    # use `{% if ctx.key %}` without raising UndefinedError under StrictUndefined.
+    ctx: dict[str, Any] = {
+        "speed": None,
+        "active_matchup": None,
+        "phase": None,
+        "own_remaining": None,
+        "opp_remaining": None,
+        "weather": None,
+        "weather_note": None,
+        "own_status_impact": None,
+        "opp_status": None,
+        "opp_status_impact": None,
+    }
 
     # Speed comparison
     if own is not None and opp is not None:
