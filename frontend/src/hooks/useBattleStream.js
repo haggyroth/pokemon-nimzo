@@ -282,13 +282,17 @@ export function useBattleStream() {
           // that will never receive a second event).
           const stale = Object.keys(buf).map(Number).filter(n => n < event.turn).sort((a, b) => a - b)
           if (stale.length) {
+            // Evict from the ref BEFORE the state updater so the updater stays pure.
+            // (React StrictMode calls updaters twice; deleting inside would crash the
+            // second invocation with "Cannot read properties of undefined".)
+            const evicted = []
+            for (const n of stale) {
+              if (buf[n].p1) evicted.push(buf[n].p1)
+              if (buf[n].p2) evicted.push(buf[n].p2)
+              delete buf[n]
+            }
             setEvents(prev => {
-              let next = [...prev]
-              for (const n of stale) {
-                if (buf[n].p1) next.push(buf[n].p1)
-                if (buf[n].p2) next.push(buf[n].p2)
-                delete buf[n]
-              }
+              const next = [...prev, ...evicted]
               return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next
             })
           }

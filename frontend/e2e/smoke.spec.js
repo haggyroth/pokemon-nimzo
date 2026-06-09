@@ -10,6 +10,12 @@
  * Run:
  *   cd frontend && npx playwright test
  *   (or: npm run test:e2e)
+ *
+ * Design: after confirming 5 turns have progressed the test cancels the
+ * battle rather than waiting for natural completion.  Gen3 random battles
+ * can stall for 30+ minutes with certain matchups; cancelling after turn 5
+ * keeps the suite under ~3 minutes regardless of team assignments while
+ * still exercising the full pipeline (WS events, UI rendering, replay).
  */
 
 import { test, expect } from '@playwright/test'
@@ -18,8 +24,7 @@ import { test, expect } from '@playwright/test'
 // Constants
 // ---------------------------------------------------------------------------
 
-const TURN_TIMEOUT    = 120_000   // 2 min to see first 2 turns
-const BATTLE_TIMEOUT  = 300_000   // 5 min for winner banner
+const TURN_TIMEOUT   = 180_000   // 3 min to see 5 turns (model inference can be slow)
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,6 +45,8 @@ async function waitForModelsLoaded(page) {
 // ---------------------------------------------------------------------------
 
 test('full battle smoke test', async ({ page }) => {
+  page.on('pageerror', err => console.error('  [pageerror]', err.message))
+
   // ── 1. Load home page ──────────────────────────────────────────────────
 
   await page.goto('/')
@@ -53,12 +60,10 @@ test('full battle smoke test', async ({ page }) => {
   }
 
   // ── 3. Wait for LM Studio models to auto-populate both selectors ────────
-  //    The BattleForm effect auto-fills p1_model / p2_model with the first
-  //    two loaded models; we just wait for the dropdowns to be non-empty.
+  //    BattleForm auto-fills p1/p2 with the first two loaded LM Studio models.
 
   await waitForModelsLoaded(page)
 
-  // Log the chosen models for debugging
   const p1Model = await page.locator('.model-selector .model-select').nth(0).inputValue()
   const p2Model = await page.locator('.model-selector .model-select').nth(1).inputValue()
   console.log(`  P1: ${p1Model}`)
@@ -66,38 +71,63 @@ test('full battle smoke test', async ({ page }) => {
 
   // ── 4. Start the battle ─────────────────────────────────────────────────
 
-  await page.locator('.btn-start').first().click()
+  let startResponse = null
+  page.once('response', async res => {
+    if (res.url().includes('/api/battles/start')) {
+      startResponse = { status: res.status(), body: await res.text().catch(() => '(unreadable)') }
+    }
+  })
 
-  // The app transitions to the battle view — wait for the battlefield root
+  await page.locator('.btn-start').first().click()
+  await page.waitForTimeout(3_000)
+
+  if (startResponse) {
+    console.log(`  POST /api/battles/start → ${startResponse.status}: ${startResponse.body.slice(0, 200)}`)
+  } else {
+    console.log('  POST /api/battles/start — no response captured')
+  }
+
+  // App transitions to battle view
   await expect(page.locator('.battlefield-wrapper')).toBeVisible({ timeout: 15_000 })
 
-  // ── 5. Wait for at least 2 turn log entries (battle is progressing) ─────
+  // ── 5. Wait for 5 turn log entries (pipeline is confirmed working) ───────
 
-  await expect(page.locator('.log-entry.turn-event').nth(1))
+  await expect(page.locator('.log-entry.turn-event').nth(4))
     .toBeVisible({ timeout: TURN_TIMEOUT })
 
-  // Check we have turn numbers rendered
   const firstTurnNum = page.locator('.log-turn-num').first()
   await expect(firstTurnNum).toBeVisible()
   const turnText = await firstTurnNum.textContent()
   expect(turnText).toMatch(/T\d+/)
+  console.log(`  Reached turn: ${turnText}`)
 
-  // ── 6. Wait for the battle to finish ────────────────────────────────────
+  // ── 6. Cancel the battle ─────────────────────────────────────────────────
+  //    Using cancel instead of waiting for natural completion avoids stall
+  //    matchups (e.g. Skarmory Toxic-stall) running for 30+ minutes.
 
-  await expect(page.locator('.winner-banner')).toBeVisible({ timeout: BATTLE_TIMEOUT })
+  const cancelBtn = page.locator('.btn-cancel-battle')
+  await expect(cancelBtn).toBeVisible({ timeout: 5_000 })
+  await cancelBtn.click()
 
-  // ── 7. Assert winner banner content ─────────────────────────────────────
+  // ── 7. Wait for the result banner ────────────────────────────────────────
 
-  await expect(page.locator('.winner-label')).toContainText('BATTLE COMPLETE')
+  await expect(page.locator('.winner-banner')).toBeVisible({ timeout: 30_000 })
 
-  // ── 8. Open replay ──────────────────────────────────────────────────────
+  // ── 8. Assert banner content (cancelled shows "BATTLE CANCELLED") ────────
+
+  const labelText = await page.locator('.winner-label').textContent()
+  expect(['BATTLE COMPLETE', 'BATTLE CANCELLED']).toContain(labelText?.trim())
+  console.log(`  Battle ended: ${labelText?.trim()}`)
+
+  // ── 9. Open replay ──────────────────────────────────────────────────────
 
   const replayBtn = page.locator('.btn-replay').first()
   await expect(replayBtn).toBeVisible()
   await replayBtn.click()
 
-  // ── 9. Replay shows turn entries ─────────────────────────────────────────
+  // ── 10. Replay shows turn decisions ──────────────────────────────────────
+  //    BattleReplay renders "TURN N — DECISIONS" sections (.tap-title).
 
-  await expect(page.locator('.log-entry.turn-event').first())
+  await expect(page.locator('.tap-title').first())
     .toBeVisible({ timeout: 10_000 })
 })
