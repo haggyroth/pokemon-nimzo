@@ -320,6 +320,28 @@ class BattleStore:
         assert row_id is not None
         return row_id
 
+    def abort_stale_records(self) -> dict[str, int]:
+        """Mark in-flight records as failed/cancelled on server startup.
+
+        Called once during the lifespan startup so that battles, tournaments,
+        and seasons that were left in a non-terminal state by a previous crash
+        or SIGKILL do not linger as permanently 'running'.
+
+        Returns a dict with the count of rows affected per table so the caller
+        can log a meaningful startup message.
+        """
+        battles = self._conn.execute(
+            "UPDATE battles SET status='failed' WHERE status IN ('pending','running')"
+        ).rowcount
+        tournaments = self._conn.execute(
+            "UPDATE tournaments SET status='cancelled' WHERE status='running'"
+        ).rowcount
+        seasons = self._conn.execute(
+            "UPDATE seasons SET status='cancelled' WHERE status='running'"
+        ).rowcount
+        self._conn.commit()
+        return {"battles": battles, "tournaments": tournaments, "seasons": seasons}
+
     def set_battle_status(self, battle_id: int, status: str) -> None:
         """Update the status field of a battle (pending/running/completed/cancelled/failed)."""
         self._conn.execute(

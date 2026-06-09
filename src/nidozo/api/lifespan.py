@@ -29,6 +29,12 @@ def create_lifespan(
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("Nidozo starting up", extra={"db": str(db_path)})
+        stale = store.abort_stale_records()
+        if any(stale.values()):
+            logger.warning(
+                "Cleaned up stale records from previous run",
+                extra=stale,
+            )
         yield
         if active_tasks:
             logger.info(

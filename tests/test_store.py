@@ -1176,3 +1176,67 @@ def test_get_global_stats_tolerates_malformed_llm_response(store) -> None:
     gs = store.get_global_stats()
     moves = {r["move"]: r["cnt"] for r in gs["top_moves"]}
     assert moves.get("flamethrower") == 1
+
+
+# ------------------------------------------------------------------
+# Startup stale-record cleanup
+# ------------------------------------------------------------------
+
+_stale_seq = 0
+
+def _make_battle(store: BattleStore, status: str) -> int:
+    global _stale_seq
+    _stale_seq += 1
+    m1 = store.get_or_create_model("random", "r1")
+    m2 = store.get_or_create_model("random", "r2")
+    bid = store.create_battle(f"battle-gen3-{_stale_seq}", "gen3randombattle", m1, m2)
+    store.set_battle_status(bid, status)
+    return bid
+
+
+def test_abort_stale_records_marks_running_battles_failed(store) -> None:
+    bid = _make_battle(store, "running")
+    store.abort_stale_records()
+    row = store._conn.execute("SELECT status FROM battles WHERE id=?", (bid,)).fetchone()
+    assert row["status"] == "failed"
+
+
+def test_abort_stale_records_marks_pending_battles_failed(store) -> None:
+    bid = _make_battle(store, "pending")
+    store.abort_stale_records()
+    row = store._conn.execute("SELECT status FROM battles WHERE id=?", (bid,)).fetchone()
+    assert row["status"] == "failed"
+
+
+def test_abort_stale_records_does_not_touch_completed_battles(store) -> None:
+    bid = _make_battle(store, "completed")
+    store.abort_stale_records()
+    row = store._conn.execute("SELECT status FROM battles WHERE id=?", (bid,)).fetchone()
+    assert row["status"] == "completed"
+
+
+def test_abort_stale_records_returns_counts(store) -> None:
+    _make_battle(store, "running")
+    _make_battle(store, "pending")
+    _make_battle(store, "completed")
+    result = store.abort_stale_records()
+    assert result["battles"] == 2
+    assert result["tournaments"] == 0
+    assert result["seasons"] == 0
+
+
+def test_abort_stale_records_marks_running_tournament_cancelled(store) -> None:
+    m1 = store.get_or_create_model("random", "r1")
+    m2 = store.get_or_create_model("random", "r2")
+    tid = store.create_tournament([m1, m2], rounds=1, prompt_version="v5", total_battles=1, tier="random")
+    # Manually set to running (normally done by orchestration)
+    store._conn.execute("UPDATE tournaments SET status='running' WHERE id=?", (tid,))
+    store._conn.commit()
+    store.abort_stale_records()
+    row = store._conn.execute("SELECT status FROM tournaments WHERE id=?", (tid,)).fetchone()
+    assert row["status"] == "cancelled"
+
+
+def test_abort_stale_records_noop_on_clean_db(store) -> None:
+    result = store.abort_stale_records()
+    assert result == {"battles": 0, "tournaments": 0, "seasons": 0}
