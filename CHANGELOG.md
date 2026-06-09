@@ -9,6 +9,165 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.23.0] — 2026-06-08
+
+### Fixed
+- **SQLite threading** — `BattleStore` now uses per-thread connections via
+  `threading.local()` instead of a single shared `sqlite3.Connection`.
+  Concurrent FastAPI route handlers were corrupting cursor state, causing
+  `InterfaceError: bad parameter or other API misuse` and `IndexError:
+  tuple index out of range` on `/api/battles` and `/api/leaderboard` page
+  loads. SQLite WAL mode (already set by the migration) handles concurrent
+  readers at the file level. A `_closed` flag preserves the invariant that
+  a closed store raises `ProgrammingError` from any thread.
+- **Non-draft non-random team rejection** — Starting a freeforall (or any
+  non-random tier) battle with `draft=false` sent `|/utm null` to Showdown,
+  which rejected it with "This format requires you to use your own team."
+  All three battle runners (single, tournament, season) now auto-generate
+  random preset teams from the tier pool via `_random_preset_team()` when
+  skipping the draft in a non-random format.
+- **P1 draft screen not appearing** — `EventBus` now maintains a bounded
+  replay buffer (deque, max 100) of structural events since the most recent
+  `battle_start`. Subscribers that connect after the battle started receive
+  an immediate replay of draft events — fixing the race where P1's
+  `draft_start` / `draft_pick` events were published before the WebSocket
+  was established. Per-turn events (`turn`, `state_update`, `thinking`) are
+  excluded from the buffer to prevent log duplicates on reconnect.
+- **Baton Pass banned in gen3ubers** — Six movesets (`jolteon`, `umbreon`,
+  `espeon`, `ninjask`, `mawile`, `smeargle`) had Baton Pass, which is
+  illegal in the gen3ubers format used for freeforall battles. Replaced with
+  legal Gen 3 alternatives.
+- **Battle hang on team rejection** — `_send_challenges` now times out after
+  60 s if Showdown rejects the team (previously blocked forever on
+  `_battle_semaphore.acquire()`). A `TimeoutError` publishes an error event
+  to the bus and raises `RuntimeError` so the battle is marked `failed`
+  instead of hanging indefinitely.
+
+---
+
+## [0.22.0] — 2026-06-08
+
+### Added
+- **Zero-lag state updates (OP-01)** — Hooked `_handle_battle_message` in
+  `_StreamingMixin` to emit a render-only `state_update` the instant
+  Showdown resolves a turn frame, before the next `|request|` arrives.
+  Battlefield HP bars and active Pokémon now update the moment a turn
+  resolves rather than waiting for the next decision prompt.
+  `serialize_battle(light=True)` added for the cheap render-only snapshot
+  (omits heuristics / threat map / legal actions). Frontend merges
+  `state_update` into existing state to preserve the last advisory.
+
+---
+
+## [0.21.0] — 2026-06-08
+
+### Added
+- **UI polish (8 quick wins)** — Type badges and PP display in the
+  heuristic advisory drawer; client-side leaderboard search/filter; copy
+  model ID button per leaderboard row; win-streak column (🔥N, pulses
+  orange at 3+); battle log keyword filter with match count; press R to
+  watch replay from winner banner; REPLAY button on winner banner;
+  Pokéball favicon.
+
+---
+
+## [0.20.0] — 2026-06-08
+
+### Added
+- **Rich stats dashboard** — New STATS nav page with global KPIs, battles
+  by tier, top Pokémon, top moves, and recent battles feed. Per-model stats
+  expanded with Pokémon/move usage lists, action distribution stacked bar,
+  and win-rate-by-tier panel. Backend uses `json_extract()` to mine
+  `turns.state_json` and `turns.llm_response` at the SQL layer.
+
+---
+
+## [0.19.0] — 2026-06-08
+
+### Added
+- **Pokémon mouseover tooltip** — Hovering any active or bench Pokémon
+  shows a tooltip with base stats (color-coded bars), Gen 3 type matchup
+  table grouped by multiplier (4× / 2× / ½ / ¼ / 0×), and revealed
+  ability/item. Base stats added to opponent serialization (Pokédex-public
+  knowledge, not a hidden-info violation).
+
+---
+
+## [0.18.0] — 2026-06-08
+
+### Fixed
+- **Battle scene lag** — `state_update` now emitted at the start of
+  `choose_move` (request parsed, stats fresh) so the battlefield refreshes
+  before the LLM think-time rather than after. Eliminates the stale-HP
+  window between turns.
+
+---
+
+## [0.17.0] — 2026-06-08
+
+### Added
+- **Model name labels on battle scene** — Provider + model name displayed
+  above each Pokémon card (P1 cyan, P2 amber).
+- **Own-mon move display** — Active Pokémon card shows all 4 moves with
+  type-color dot, BP, and PP (red when low).
+- **Model dropdowns** — Provider selector replaced with `<select>` dropdowns;
+  LM Studio live models and static presets for Anthropic/OpenAI populate the
+  list; "custom…" option falls back to text input. Claude Sonnet 4, Haiku
+  3.5, Opus 4, and o4-mini added as presets.
+
+### Fixed
+- **`<think>` block stripping** — Action parser now strips `<think>...</think>`
+  blocks from reasoning-model responses (e.g. Qwen 3) before parsing the
+  JSON action.
+
+---
+
+## [0.16.0] — 2026-06-08
+
+### Added
+- **LLM battle narrative** — `narrator.py` generates a 4–6 sentence
+  plain-text battle story after each completed battle; stored in
+  `battles.narrative` (schema v11); exposed via `/api/battles/{id}/analysis`;
+  shown as "Battle Story" at the top of the Battle Replay analysis panel.
+- **Switch quality labels** — `annotate_turn` now classifies each switch as
+  `good_switch` / `bad_switch` / `neutral_switch` / `forced_switch` using
+  heuristic switch scores; switch breakdown (counts per type) surfaced in
+  per-player analysis summary and quality bars.
+- **Richer turning-point description** — Turning-point text now includes the
+  move names and win-probability swing rather than just the turn number.
+
+---
+
+## [0.15.0] — 2026-06-08
+
+### Added
+- **Prompt v5** — Decision framework and KO-risk signal. New additions over
+  v4: actual computed stats (Spe / Atk / SpA / Def / SpD) for own active
+  Pokémon; last move used surfaced for both own and opponent active; KO-risk
+  note injected when the opponent can OHKO or the player can OHKO the
+  opponent this turn; explicit decision-framework section in the system
+  prompt guiding reasoning order (KO opportunity → survival → type
+  advantage → speed). Default prompt version bumped to `v5`.
+
+---
+
+## [0.14.0] — 2026-06-08
+
+### Added
+- **Seasons** — Named competition seasons with a fixed participant list,
+  round-robin scheduling across all rounds, and per-season isolated ELO
+  ratings. Live standings page with progress bar and per-season battle
+  history. Start/cancel from the UI. `seasons` and `season_battles` tables
+  (schema v10).
+- **Head-to-head matchup matrix** — New tab on the leaderboard showing
+  win/loss/tie counts for every model pair; tier-filterable.
+- **`app.py` split** — FastAPI application factory refactored into separate
+  `lifespan.py` and `middleware.py` modules; `app.py` reduced to wiring.
+- **Tier-2 test coverage** — 53 async unit tests for the API layer
+  (`api/events.py`, `api/ws.py`, `api/helpers.py`, `api/app.py`).
+
+---
+
 ## [0.13.0] — 2026-06-08
 
 ### Added

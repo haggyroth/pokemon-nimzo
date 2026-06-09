@@ -100,97 +100,100 @@
 - **Richer lesson prompting**: draft critique, variance report, and win-probability data now fully surfaced in the lesson prompt; lesson grounded in specific blunders and turning-point turns rather than generic reflection
 - **Tier 1 test coverage**: 564 tests at 88% coverage; targeted unit tests for analyzer, heuristics, bracket, store, schema, serializer, action parser, and API routes
 
+### v0.13 — Prompt v4, Head-to-Head Matrix & Stability
+- **Prompt v4**: battle event history (last 3 turns of HP deltas), opponent moveset revelation count, pre-computed threat map per threatened Pokémon
+- **Head-to-head matchup matrix**: win/loss/tie counts for every model pair; tier-filterable
+- **Double-elimination bye fix**: fixed-point resolver handles chained bye slots
+- **Tournament failure handling**: unhandled exceptions abort bracket, mark failed, emit `tournament_failed` event
+- **ELO idempotency**: `finish_battle` fully idempotent with `AND finished_at IS NULL` guard; `UNIQUE(battle_id, model_id)` index enforced at DB level (schema v9)
+- **`app.py` split**: refactored into `lifespan.py` and `middleware.py`; tier-2 async test coverage (53 tests) for the API layer
+
+### v0.14 — Seasons
+- **Named competition seasons**: fixed participant list, round-robin scheduling across N rounds, per-season isolated ELO ratings
+- **Season UI**: live standings page with progress bar, per-season battle history, start/cancel from the browser
+- **Schema v10**: `seasons` and `season_battles` tables
+
+### v0.15 — Prompt v5
+- **Decision framework & KO-risk signal**: actual computed stats (Spe/Atk/SpA/Def/SpD) for own active Pokémon; last move used for both sides; KO-risk note injected when either side can OHKO; explicit decision-ordering framework in system prompt
+- Default prompt version bumped to `v5`
+
+### v0.16 — Richer Post-Game Analysis
+- **LLM battle narrative**: `narrator.py` generates a 4–6 sentence battle story; stored in `battles.narrative` (schema v11); "Battle Story" section in Battle Replay
+- **Switch quality classification**: `good_switch` / `bad_switch` / `neutral_switch` / `forced_switch` labels using heuristic switch scores; per-player switch breakdown in analysis summary
+- **Enriched turning-point description**: includes move names and win-probability swing
+
+### v0.17 — UI Intelligence & Parser Hardening
+- **Model name labels**: provider + model name above each Pokémon card (P1 cyan, P2 amber)
+- **Own-mon move display**: active card shows all 4 moves with type-color dot, BP, and PP (red when low)
+- **Model dropdowns**: `<select>` with LM Studio live models + static Anthropic/OpenAI presets; Claude Sonnet 4, Haiku 3.5, Opus 4, o4-mini added
+- **`<think>` block stripping**: parser strips `<think>...</think>` from reasoning-model responses before JSON parse
+
+### v0.18 — Battle Scene Responsiveness
+- **Turn-start state_update**: emitted at the top of `choose_move` (request parsed, stats fresh) so the battlefield refreshes immediately before LLM think-time; eliminates stale-HP window between turns
+
+### v0.19 — Pokémon Mouseover Tooltips
+- **Tooltip panel**: hovering any active or bench Pokémon shows base stat bars (color-coded), Gen 3 type matchup table grouped by multiplier, and revealed ability/item
+- Base stats added to opponent serializer (Pokédex-public knowledge, no hidden-info violation)
+
+### v0.20 — Rich Stats Dashboard
+- **Global stats page**: summary KPIs, battles by tier, top Pokémon, top moves, recent battles feed
+- **Per-model stats expanded**: Pokémon/move usage lists, action distribution stacked bar, win-rate-by-tier panel
+- Backend uses `json_extract()` to mine `turns.state_json` at the SQL layer
+
+### v0.21 — UI Polish
+- Type badges + PP in heuristic advisory drawer
+- Client-side leaderboard search/filter; copy model ID button
+- Win-streak column (🔥N, pulses orange at ≥3)
+- Battle log keyword filter; press R / REPLAY button from winner banner
+- Pokéball favicon
+
+### v0.22 — Zero-Lag State Updates (OP-01)
+- **`_StreamingMixin._handle_battle_message` hook**: emits a render-only `state_update` the instant Showdown resolves a turn frame, before the next `|request|` arrives; battlefield HP bars update immediately on turn resolution rather than waiting for the next decision
+- `serialize_battle(light=True)` for cheap render-only snapshots (omits heuristics/threat-map/legal-actions); frontend merges `state_update` to preserve last advisory
+
+### v0.23 — Bug Fix Batch
+- **SQLite threading**: per-thread connections via `threading.local()` fix concurrent `InterfaceError` / `IndexError` on page load
+- **Non-draft non-random team rejection**: auto-generate random preset teams when `draft=false` in a non-random tier instead of sending `|/utm null`
+- **P1 draft screen missing**: EventBus replay buffer ensures late-joining WebSocket subscribers receive all structural events since `battle_start`
+- **Baton Pass ban**: removed from 6 gen3ubers-incompatible movesets
+- **Challenge hang**: 60 s timeout on `_battle_semaphore.acquire()` converts infinite hangs to clean `failed` status
+
 ---
 
 ## Upcoming
 
-### v0.13 — Prompt v4, Head-to-Head Matrix, Seasons
-- See CHANGELOG for details.
+### Platform Expansion
 
-### v0.14 — Seasons
-- See CHANGELOG for details.
+**🎮 Pokémon Showdown Built-in Battle Scene** *(major milestone — tracked in #84)*
+- Embed the Showdown client's own animated battle scene with animated sprites, move effects, and sound
+- Likely approach: proxy the Showdown protocol through our WebSocket so the client renders the live battle while our LLMs drive it
+- See GitHub issue OP-02 for architecture notes
 
-### v0.15 — Prompt v5
-- KO-risk signal, decision framework, actual stats and last move in context, switch quality labels
-
-### v0.16 — Richer Post-Game Analysis
-- LLM-generated battle narrative ("Battle Story")
-- Switch quality classification (good/bad/neutral/forced)
-- Enriched turning-point description with move names + win-prob swing
-- Variance report in frontend; switch breakdown in quality bars
-- Schema v11: `battles.narrative`
-
----
-
-### Near Term — LLM Intelligence & Viewing Experience
-
-~~**Prompt v4 — Structured opponent knowledge + battle history**~~ ✅ *shipped in v0.13.0*
-
-~~**Head-to-head matchup matrix**~~ ✅ *shipped in v0.13.0*
-
-~~**Live win-probability bar**~~ ✅ *shipped in v0.9.0*
-
-~~**Season concept**~~ ✅ *shipped in v0.14.0*
-- Named seasons with a fixed participant list, round-robin scheduling, and isolated per-season ELO
-- Live standings page, progress bar, and battle history per season
-- Season history panel in the leaderboard; start/cancel from the UI
-
----
-
-### Phase 5 — Platform Expansion
-*Goal: broaden the competitive scope and polish.*
-
-**🎮 Pokémon Showdown Built-in Battle Scene** *(major milestone)*
-- Embed or replicate the Showdown client's own animated battle scene — the full experience with animated sprites, move animations, hit effects, and sound
-- Explore `@smogon/client` / `pokemon-showdown-client` integration; the client normally communicates directly with the Showdown server protocol
-- Likely approach: proxy the Showdown protocol through our WebSocket so the client renders the live battle while our LLMs drive it behind the scenes
-- This would be a significant architectural effort but would dramatically elevate the viewing experience
-
-**Pokémon Coverage Expansion**
-- Add all Gen 1 and Gen 2 Pokémon to the draft pool (currently Gen 3 focused)
-- Ensure Showdown format compatibility across all three generations
-- Update the heuristic engine for Gen 1/2-specific mechanics (no special split in Gen 1, Gen 2 item set differences)
-
-**Pokémon Mouseover Summaries**
-- Hovering a Pokémon on the battle scene or bench shows a tooltip with base stats, type chart matchups, ability (if revealed), and held item
-- Applies to both own and opponent Pokémon (opponent shows only revealed info)
+**Gen 1 & Gen 2 Coverage Expansion** *(tracked in #85)*
+- Add all Gen 1 and Gen 2 Pokémon to the draft pool
+- Update heuristics for Gen 1/2-specific mechanics (no special split in Gen 1)
+- Serializer and format compatibility audit — see GitHub issue OP-03
 
 **3v3 / 6v6 Team Size Config**
-- Expose team size as a configurable battle option in the UI alongside tier and format
+- Expose team size as a configurable battle option alongside tier and format
 - Action parser and serializer updates for different team sizes
 
 **Doubles Battles**
-- 2v2 format with target selection (adds which-Pokémon-to-hit decision)
+- 2v2 format with target selection
 - Prompt and action parser extended for `target` field
 - Heuristic engine updated for spread moves and partner synergy
 
-**Expanded Generation Support**
-- Gen 4+ mechanics: held items, abilities, physical/special split
-- Incremental: one generation at a time, validated against Showdown rules
-
 **Deeper Competitive Features**
-- Battle event annotation: item activations (Leftovers, Lum Berry), ability procs (Intimidate, Synchronize), status cures shown inline in the battle log and replay
+- Battle event annotation: item activations, ability procs, status cures inline in battle log and replay
 - Speed tie and priority bracket resolution visible in the battle log
-- Weather and terrain strategies tracked in analysis
-
-**Rich Stats Dashboard**
-- Per-model stats expanded to include: most-used Pokémon, most-used moves, switch frequency, type preference, KO rate
-- Head-to-head deep-dive: win rates by team composition, by format, by tier
-- Global Pokémon usage stats across all recorded battles
-- Move and species trend charts
 
 ---
 
 ### Technical Debt & Housekeeping
 
-**Refactoring**
-- Split `app.py` into routing / orchestration / WebSocket layers — still growing
-
 **Test Coverage**
-- *Tier 1 complete at 88%* — pure unit tests for analysis, heuristics, bracket, store, schema, API routes (565 tests)
-- ~~**Tier 2**~~ ✅ *shipped — async mock-heavy tests for `api/events.py`, `api/ws.py`, `api/helpers.py`, `api/app.py`; 649 tests at 89% coverage*
-- **Tier 3** — integration tests for `battle/orchestration.py` and `llm/draft.py` that require a live local Showdown server; intended to run in a separate CI job with a `[integration]` marker; estimated ~333 lines, would push total past 95%
+- **Tier 3** — integration tests for `battle/orchestration.py` and `llm/draft.py` that require a live local Showdown server; separate CI job with `[integration]` marker
 
 **Infrastructure**
-- Add E2E smoke tests (Playwright) covering start → watch → replay → analyze
-- Add Dependabot for Python and npm dependency updates
+- E2E smoke tests (Playwright) covering start → watch → replay → analyze
+- Dependabot for Python and npm dependency updates
