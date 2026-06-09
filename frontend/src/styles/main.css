@@ -5592,6 +5592,28 @@ body::after {
   overflow: hidden;
 }
 
+/*
+ * Showdown renderer CSS — the Pokémon Showdown client stylesheet is NOT loaded
+ * from the CDN (too large, too many conflicts).  These rules replicate the
+ * minimum needed for the bench icon strip that sits below each trainer.
+ *
+ * .picon   — individual Pokémon icon (sprite-sheet background-image, set by JS)
+ * .teamicons — row container for up to 6 icons per player
+ */
+.sbs-frame .picon {
+  display: inline-block;
+  width: 40px;
+  height: 30px;
+  background-repeat: no-repeat;
+  cursor: default;
+  vertical-align: middle;
+}
+.sbs-frame .teamicons {
+  display: block;
+  text-align: center;
+  line-height: 30px;
+}
+
 .sbs-log {
   border-top: 1px solid var(--border);
   min-height: 100px;
