@@ -93,11 +93,20 @@ def _resolve_move(
         logger.warning("ACTION: move slot %d out of range (have %d)", slot, len(moves))
         return None
 
-    # Try move name match (normalized — strips any surrounding punctuation)
+    # Try move name match (normalized — exact first, then fuzzy)
     norm = _normalize(identifier)
-    for move in moves:
-        if _normalize(move.id) == norm:
-            return player.create_order(move)
+    norm_to_move = {_normalize(m.id): m for m in moves}
+
+    if norm in norm_to_move:
+        return player.create_order(norm_to_move[norm])
+
+    # Fuzzy fallback: tolerate typos like "thunderolt" → "thunderbolt", "icebeam" → "ice beam"
+    # cutoff=0.82 accepts 1-char errors on 5-char names and up, rejects wild guesses
+    close = get_close_matches(norm, norm_to_move.keys(), n=1, cutoff=0.82)
+    if close:
+        matched_id = norm_to_move[close[0]].id
+        logger.debug("ACTION: fuzzy-matched move %r → %r", identifier, matched_id)
+        return player.create_order(norm_to_move[close[0]])
 
     logger.debug("ACTION: move name %r not found in available moves", identifier)
     return None

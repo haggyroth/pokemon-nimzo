@@ -457,7 +457,7 @@ class BattleStore:
         """Return per-turn summary rows (no state_json) ordered by turn number."""
         cur = self._conn.execute(
             """SELECT turn_number, player_role, prompt_version,
-                      action_chosen, parse_success
+                      action_chosen, parse_success, fallback_reason
                FROM turns WHERE battle_id=? ORDER BY turn_number""",
             (battle_id,),
         )
@@ -494,7 +494,8 @@ class BattleStore:
         """Return all turns for a battle including state_json and coach_advice, ordered by turn then player."""
         cur = self._conn.execute(
             """SELECT turn_number, player_role, prompt_version,
-                      action_chosen, parse_success, llm_response, state_json, coach_advice
+                      action_chosen, parse_success, fallback_reason,
+                      llm_response, state_json, coach_advice
                FROM turns WHERE battle_id=?
                ORDER BY turn_number, player_role""",
             (battle_id,),

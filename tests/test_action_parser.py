@@ -747,3 +747,54 @@ class TestJsonControlCharSanitization:
 
         result = parse_action('{"totally": "wrong\nstructure"}', battle, player)
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Fuzzy move matching
+# ---------------------------------------------------------------------------
+
+class TestFuzzyMoveMatching:
+    """_resolve_move should fuzzy-match move names with minor typos."""
+
+    def test_fuzzy_matches_one_char_typo(self) -> None:
+        """'thunderolt' → 'thunderbolt' (1-char deletion)."""
+        moves = [_mock_move("thunderbolt"), _mock_move("surf")]
+        battle = _make_battle(moves=moves)
+        player = _make_player()
+
+        result = parse_action('{"action_type":"move","identifier":"thunderolt","reasoning":"x"}', battle, player)
+
+        assert result is not None
+        player.create_order.assert_called_once_with(moves[0])
+
+    def test_fuzzy_matches_spaced_name(self) -> None:
+        """'ice beam' → 'icebeam' (space inserted, normalizes away)."""
+        moves = [_mock_move("icebeam"), _mock_move("blizzard")]
+        battle = _make_battle(moves=moves)
+        player = _make_player()
+
+        result = parse_action('{"action_type":"move","identifier":"ice beam","reasoning":"x"}', battle, player)
+
+        assert result is not None
+        player.create_order.assert_called_once_with(moves[0])
+
+    def test_fuzzy_no_match_on_wild_guess(self) -> None:
+        """A completely wrong name should not fuzzy-match anything (returns None)."""
+        moves = [_mock_move("thunderbolt"), _mock_move("surf")]
+        battle = _make_battle(moves=moves)
+        player = _make_player()
+
+        result = parse_action('{"action_type":"move","identifier":"earthquake","reasoning":"x"}', battle, player)
+
+        assert result is None
+
+    def test_exact_match_still_works(self) -> None:
+        """Exact move names still resolve without touching the fuzzy path."""
+        moves = [_mock_move("flamethrower"), _mock_move("fireblast")]
+        battle = _make_battle(moves=moves)
+        player = _make_player()
+
+        result = parse_action('{"action_type":"move","identifier":"fireblast","reasoning":"x"}', battle, player)
+
+        assert result is not None
+        player.create_order.assert_called_once_with(moves[1])
