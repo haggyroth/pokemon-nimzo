@@ -72,8 +72,10 @@ async def test_healthz_degraded_when_db_down(client, app) -> None:
     mock_sock.__enter__ = MagicMock(return_value=mock_sock)
     mock_sock.__exit__ = MagicMock(return_value=False)
 
-    # Break the store's connection by closing it
-    app.state.store._conn.close()
+    # Mark the store as closed so every thread sees the failure.
+    # With thread-local connections, closing _conn on the test thread only
+    # affects that thread; setting _closed=True gates all threads uniformly.
+    app.state.store._closed = True
 
     with patch("nidozo.api.routes.socket.create_connection", return_value=mock_sock):
         resp = await client.get("/healthz")
