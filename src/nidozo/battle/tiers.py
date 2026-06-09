@@ -56,7 +56,6 @@ UBERS: Final[frozenset[str]] = frozenset({
     "zekrom",
     "reshiram",
     "palkia",
-    "dialga",
     "giratina",
     "arceus",
 })
@@ -155,7 +154,6 @@ UU: Final[frozenset[str]] = frozenset({
     "thundurus",
     "thundurustherian",
     "aegislash",
-    "talonflame",
     "mantine",
     "suicune",
     "entei",
