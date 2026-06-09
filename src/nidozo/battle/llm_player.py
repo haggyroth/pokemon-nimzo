@@ -116,7 +116,8 @@ class LLMPlayer(Player):
             except Exception as exc:
                 logger.error("LLM backend error on turn %d (attempt %d): %s", battle.turn, attempt + 1, exc)
                 if attempt == 1:
-                    self._log_turn(battle.turn, None, False, None, state_json, coach_advice)
+                    self._log_turn(battle.turn, None, False, None, state_json, coach_advice,
+                                   fallback_reason="parse_failure")
                     return self.choose_random_move(battle)
                 continue
 
@@ -133,7 +134,8 @@ class LLMPlayer(Player):
                 "LLM returned empty response on turn %d after retry — falling back to random.",
                 battle.turn,
             )
-            self._log_turn(battle.turn, None, False, "", state_json, coach_advice)
+            self._log_turn(battle.turn, None, False, "", state_json, coach_advice,
+                           fallback_reason="parse_failure")
             return self.choose_random_move(battle)
 
         order = parse_action(response, battle, self)
@@ -144,7 +146,8 @@ class LLMPlayer(Player):
                 battle.turn,
                 response,
             )
-            self._log_turn(battle.turn, None, False, response, state_json, coach_advice)
+            self._log_turn(battle.turn, None, False, response, state_json, coach_advice,
+                           fallback_reason="parse_failure")
             return self.choose_random_move(battle)
 
         action_label = getattr(order, "message", str(order))
@@ -278,6 +281,7 @@ class LLMPlayer(Player):
         response: str | None,
         state_json: str | None = None,
         coach_advice: str | None = None,
+        fallback_reason: str | None = None,
     ) -> None:
         if self._store is None or self._battle_id is None:
             return
@@ -292,6 +296,7 @@ class LLMPlayer(Player):
                 llm_response=response,
                 state_json=state_json,
                 coach_advice=coach_advice,
+                fallback_reason=fallback_reason,
             )
         except Exception as exc:
             logger.warning("Failed to log turn: %s", exc)
