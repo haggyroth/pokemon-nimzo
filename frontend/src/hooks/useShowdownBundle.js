@@ -24,14 +24,19 @@ import { useEffect, useState, useRef } from 'react'
 
 const CDN = 'https://play.pokemonshowdown.com'
 
-// window.Config must exist before battledata.js initialises Dex so that
-// Dex.resourcePrefix resolves to the CDN rather than a relative path.
+// Showdown's battledata.js sets Dex.resourcePrefix = '//' + Config.routes.client,
+// so routes.client must be the bare host (no protocol prefix) — e.g.
+// 'play.pokemonshowdown.com/' not 'https://play.pokemonshowdown.com/'.
+// Supplying the full https:// URL causes the double-prefix bug:
+//   '//' + 'https://play.pokemonshowdown.com/' → '//https://play.pokemonshowdown.com/'
+// which resolves to the broken URL http://https//play.pokemonshowdown.com/…
+const CDN_HOST = CDN.replace(/^https?:\/\//, '')  // 'play.pokemonshowdown.com'
 const CONFIG_STUB = `
 window.Config = window.Config || {};
 window.Config.routes = window.Config.routes || {};
-window.Config.routes.client = '${CDN}/';
-window.Config.routes.client2 = '${CDN}/';
-window.Config.routes.dex = 'https://www.smogon.com/dex/';
+window.Config.routes.client = '${CDN_HOST}/';
+window.Config.routes.client2 = '${CDN_HOST}/';
+window.Config.routes.dex = 'www.smogon.com/dex/';
 `
 
 // Script URLs in strict dependency order.
