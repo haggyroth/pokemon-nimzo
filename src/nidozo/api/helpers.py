@@ -9,7 +9,7 @@ from nidozo.llm.backend import ModelBackend
 
 # Prompt versions that require structured JSON output (grammar-sampling / response_format).
 # Update this set whenever a new JSON-output prompt version is added.
-_JSON_OUTPUT_PROMPT_VERSIONS: frozenset[str] = frozenset({"v2", "v3", "v4"})
+_JSON_OUTPUT_PROMPT_VERSIONS: frozenset[str] = frozenset({"v2", "v3", "v4", "v5"})
 
 
 def _model_name(provider: str, model: str | None) -> str:
@@ -36,13 +36,17 @@ def _build_backend(provider: str, model: str | None, json_mode: bool = False) ->
             model=model or "gpt-4o",
             api_key=os.environ.get("OPENAI_API_KEY"),
             json_mode=json_mode,
+            # OpenAI cloud: use full json_schema for strict shape enforcement.
+            use_json_object=False,
         )
-    # lmstudio
+    # lmstudio — use simple json_object grammar sampling.
+    # Local models often reject strict json_schema, but reliably honour json_object.
     return OpenAIBackend(
         model=model or os.environ.get("LM_STUDIO_MODEL", "local-model"),
         api_key="lm-studio",
         base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
         json_mode=json_mode,
+        use_json_object=True,
     )
 
 
