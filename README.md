@@ -4,15 +4,17 @@
 
 An arena where two LLMs compete in Pokémon battles. The battle engine is [Pokémon Showdown](https://github.com/smogon/pokemon-showdown), accessed via [poke-env](https://github.com/hsahovic/poke-env). Models reason over legal actions each turn, pick their move, and an ELO system tracks skill over time.
 
+Battles use **Gen 9 National Dex** as the canonical ruleset — any Pokémon from any generation can fight using any move it can legally learn today. Showdown validates teams automatically, so there's no per-generation moveset maintenance.
+
 Sibling project to [Nimzo](https://github.com/haggyroth/nimzo) (the LLM chess arena).
 
 ---
 
 ## Features
 
-- **Gen 3 battles** — Random and drafted team formats; fully rules-correct via a local Showdown server
-- **8 tier formats** — Random / OU / UU / NU / LC / Ubers / Freeforall; tier badges throughout the UI
-- **Drafted teams** — LLM snake-drafts a 6-mon team from 153 Pokémon with Smogon ADV competitive sets; DraftPhase UI with animated pick reveal
+- **Gen 9 NatDex battles** — Cross-gen: any Pokémon from any generation with any legal move; Showdown is the authority on legality. Random and drafted team formats; fully rules-correct via a local Showdown server
+- **7 tier formats** — Random / OU / UU / LC / Ubers / Freeforall; all backed by `gen9nationaldex*` Showdown formats; tier badges throughout the UI
+- **Drafted teams** — LLM snake-drafts a 6-mon team from 513 Pokémon with Gen 9 NatDex competitive sets (sourced from Showdown's factory data + synthesised randbat sets); DraftPhase UI with animated pick reveal
 - **Pluggable LLM backends** — Anthropic, OpenAI, or any local model via LM Studio
 - **JSON structured outputs** (v2 prompt) — models respond with `{"reasoning":"…","action_type":"move","identifier":"thunderbolt"}`; grammar-sampled on OpenAI/LM Studio backends for near-certain parse reliability
 - **Heuristic advisory** — type effectiveness, estimated damage (accuracy-adjusted), speed-tier awareness, weather modifiers, switch quality scoring, low-PP warnings, battle-context block — all surfaced as advisory context (non-binding)
@@ -23,7 +25,7 @@ Sibling project to [Nimzo](https://github.com/haggyroth/nimzo) (the LLM chess ar
 - **Tournament runner** — UI or CLI round-robin; live progress, standings overlay, battle cancel; full history page
 - **Battle Replay** — step through any completed battle turn by turn; HP timeline; scrub/keyboard nav; auto-play
 - **Post-game analysis** — decision quality (optimal/good/suboptimal/fallback), blunder detection, win-probability timeline, turning-point detection, RNG inference; key moments list (clickable, seeks replay); variance report (crit/miss tally with per-player benefit counts); draft critique (STAB coverage, shared weaknesses, execution quality)
-- **Live visualizer** — React frontend with Gen 3 sprites, type-themed card backgrounds, animated HP bars, hit/faint animations, thinking indicators, bench display, and a real-time battle log
+- **Live visualizer** — React frontend with type-themed card backgrounds, animated HP bars, hit/faint animations, thinking indicators, bench display, and a real-time battle log
 - **Showdown renderer** — toggle to the built-in Pokémon Showdown battle scene (sprites, animations, log) for any live battle; preference is persisted across sessions
 
 ---
@@ -97,7 +99,7 @@ uv run python scripts/serve.py
 cd frontend && npm run dev
 ```
 
-Open `http://localhost:5173`, select models, and click **▶ START BATTLE**. Switch to **LIVE** to watch turn by turn — the UI shows Gen 3 sprites, type-themed card backgrounds, animated HP bars, a thinking indicator while the model reasons, and the full bench. Use **⚔ TOURNAMENT** to run a round-robin across multiple models. Completed battles show **▶ REPLAY** and **▼ ANALYZE** buttons in the Recent Battles panel.
+Open `http://localhost:5173`, select models, and click **▶ START BATTLE**. Switch to **LIVE** to watch turn by turn — the UI shows type-themed card backgrounds, animated HP bars, a thinking indicator while the model reasons, and the full bench. Use **⚔ TOURNAMENT** to run a round-robin across multiple models. Completed battles show **▶ REPLAY** and **▼ ANALYZE** buttons in the Recent Battles panel.
 
 #### Showdown renderer (optional)
 
@@ -153,14 +155,15 @@ nidozo/
 │           ├── v2/     JSON structured output (default)
 │           └── v3/     Draft-aware system prompt
 ├── data/
-│   └── gen3_movesets.json   153 Pokémon with Smogon ADV competitive sets
+│   └── natdex_movesets.json  513 species with Gen 9 NatDex competitive sets
 ├── frontend/           Vite + React live battlefield visualizer
 ├── scripts/
-│   ├── serve.py        uvicorn entrypoint (port 5001)
-│   ├── tournament.py   Round-robin CLI runner
-│   ├── run_battle.py   Single-battle CLI
+│   ├── serve.py              uvicorn entrypoint (port 5001)
+│   ├── tournament.py         Round-robin CLI runner
+│   ├── run_battle.py         Single-battle CLI
+│   ├── build_natdex_sets.py  Regenerate natdex_movesets.json from Showdown data
 │   └── start_showdown.sh
-├── tests/              781 unit tests + 1 integration test (pytest.mark.integration)
+├── tests/              792 unit tests + 1 integration test (pytest.mark.integration)
 └── showdown/           Cloned Showdown server (gitignored)
 ```
 
@@ -168,13 +171,15 @@ nidozo/
 
 ## Prompt versions
 
-| Version | Format | Default |
-|---------|--------|---------|
-| `v2` | JSON: `{"reasoning":"…","action_type":"move","identifier":"thunderbolt"}` | ✓ |
-| `v3` | Draft-aware: same JSON format with draft context + team roster in system prompt | — |
+| Version | Format | Notes |
+|---------|--------|-------|
+| `v5` | JSON — full decision framework: survival check → KO check → matchup → switch value | Default |
+| `v4` | JSON — structured reasoning with battle history + threat map | — |
+| `v3` | JSON — draft-aware: team roster + draft context in system prompt | Auto-used for drafted battles |
+| `v2` | JSON: `{"reasoning":"…","action_type":"move","identifier":"thunderbolt"}` | — |
 | `v1` | Legacy text: `ACTION: move thunderbolt` | — |
 
-Pass `--prompt-version v1` to the tournament runner or API to use the legacy format. Draft battles automatically use `v3`.
+All prompts use **Gen 9 NatDex** mechanics. Pass `--prompt-version v2` (or `v1`) to the tournament runner or API to use an older format. Draft battles automatically use `v3`.
 
 ---
 
