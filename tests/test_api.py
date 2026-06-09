@@ -1235,3 +1235,80 @@ async def test_cancel_already_completed_season_returns_409(
 
     cancel_resp = await client.post(f"/api/seasons/{sid}/cancel")
     assert cancel_resp.status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# EventBus replay buffer
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_eventbus_replays_structural_events_to_late_subscriber() -> None:
+    """A subscriber that connects after battle_start receives buffered events."""
+    from nidozo.api.events import EventBus
+
+    bus = EventBus()
+
+    # Publish a battle_start + two draft events before anyone subscribes
+    await bus.publish({"type": "battle_start", "battle_id": 1})
+    await bus.publish({"type": "draft_start", "player_role": "p1"})
+    await bus.publish({"type": "draft_pick", "player_role": "p1", "species": "charizard"})
+
+    # Late subscriber — connects after the above events were published
+    q = bus.subscribe()
+
+    replayed = []
+    while not q.empty():
+        replayed.append(q.get_nowait())
+
+    types = [e["type"] for e in replayed]
+    assert "battle_start" in types
+    assert "draft_start" in types
+    assert "draft_pick" in types
+
+
+@pytest.mark.asyncio
+async def test_eventbus_clears_replay_on_new_battle_start() -> None:
+    """battle_start clears the replay buffer so previous battle events aren't replayed."""
+    from nidozo.api.events import EventBus
+
+    bus = EventBus()
+
+    await bus.publish({"type": "battle_start", "battle_id": 1})
+    await bus.publish({"type": "draft_start", "player_role": "p1", "battle_id": 1})
+
+    # Second battle starts — first battle's events should be wiped
+    await bus.publish({"type": "battle_start", "battle_id": 2})
+    await bus.publish({"type": "draft_start", "player_role": "p1", "battle_id": 2})
+
+    q = bus.subscribe()
+    replayed = []
+    while not q.empty():
+        replayed.append(q.get_nowait())
+
+    battle_ids = {e.get("battle_id") for e in replayed}
+    assert 1 not in battle_ids, "Events from the previous battle must not be replayed"
+    assert 2 in battle_ids
+
+
+@pytest.mark.asyncio
+async def test_eventbus_does_not_replay_per_turn_events() -> None:
+    """turn and state_update events are excluded from the replay buffer."""
+    from nidozo.api.events import EventBus
+
+    bus = EventBus()
+    await bus.publish({"type": "battle_start", "battle_id": 1})
+    await bus.publish({"type": "turn", "turn": 1})
+    await bus.publish({"type": "state_update", "turn": 1})
+    await bus.publish({"type": "thinking", "player_role": "p1"})
+
+    q = bus.subscribe()
+    replayed = []
+    while not q.empty():
+        replayed.append(q.get_nowait())
+
+    types = [e["type"] for e in replayed]
+    assert "turn" not in types
+    assert "state_update" not in types
+    assert "thinking" not in types
+    assert "battle_start" in types  # structural event IS replayed
