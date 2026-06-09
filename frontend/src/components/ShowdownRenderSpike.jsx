@@ -63,8 +63,10 @@ export default function ShowdownRenderSpike() {
     try {
       const $ = window.jQuery
       if (!$ || !window.Battle) {
-        setRenderError(new Error('window.jQuery or window.Battle missing after bundle load'))
-        setStatus('error')
+        queueMicrotask(() => {
+          setRenderError(new Error('window.jQuery or window.Battle missing after bundle load'))
+          setStatus('error')
+        })
         return
       }
 
@@ -84,10 +86,12 @@ export default function ShowdownRenderSpike() {
       // Seek to the final state instantly (no animation) so we see the
       // end-of-battle snapshot without waiting for the turn timer.
       battle.seekTurn(Infinity, true)
-      setStatus('rendered')
+      queueMicrotask(() => setStatus('rendered'))
     } catch (err) {
-      setRenderError(err)
-      setStatus('error')
+      queueMicrotask(() => {
+        setRenderError(err)
+        setStatus('error')
+      })
     }
 
     return () => {

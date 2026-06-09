@@ -104,7 +104,7 @@ export default function ShowdownBattleScene({ room }) {
         subscription: (s) => setStatus(s === 'ended' ? 'ended' : 'live'),
       })
     } catch {
-      setStatus('error')
+      queueMicrotask(() => setStatus('error'))
     }
     return () => {
       battleRef.current?.destroy?.()

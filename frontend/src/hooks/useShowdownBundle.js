@@ -112,10 +112,9 @@ export function useShowdownBundle() {
 
   useEffect(() => {
     mounted.current = true
-    if (typeof window.Battle === 'function') {
-      setReady(true)
-      return
-    }
+    // If already loaded (e.g. bundle was injected by a prior mount), the
+    // useState initializer already set ready=true — no synchronous setState needed.
+    if (typeof window.Battle === 'function') return
     loadBundle()
       .then(() => { if (mounted.current) setReady(true) })
       .catch(err => { if (mounted.current) setError(err) })
