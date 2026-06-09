@@ -8,13 +8,15 @@ import GlobalStats from './components/GlobalStats'
 import TournamentView from './components/TournamentView'
 import SeasonView from './components/SeasonView'
 import DraftPhase from './components/DraftPhase'
-import ShowdownRenderSpike from './components/ShowdownRenderSpike'
 import ShowdownBattleScene from './components/ShowdownBattleScene'
 import { useBattleStream } from './hooks/useBattleStream'
 
 function App() {
   const [view, setView]                       = useState('home')
   const [dismissed, setDismissed]             = useState(false)
+  const [battleView, setBattleViewRaw]        = useState(
+    () => localStorage.getItem('nidozo-battle-view') ?? 'classic'
+  )
   const [replayBattleId, setReplayBattleId]   = useState(null)
   const [statsModelId, setStatsModelId]       = useState(null)
   const [tournamentId, setTournamentId]       = useState(null)
@@ -120,6 +122,11 @@ function App() {
     setView('home')
   }
 
+  function setBattleView(v) {
+    setBattleViewRaw(v)
+    localStorage.setItem('nidozo-battle-view', v)
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -157,12 +164,6 @@ function App() {
               SCORES
             </button>
           )}
-          {/* OP-02 Stage 2: render spike nav — remove once Stage 4 toggle lands */}
-          <button
-            className={`nav-btn ${view === 'showdown-spike' ? 'active' : ''}`}
-            onClick={() => setView('showdown-spike')}
-            title="OP-02 Stage 2 render spike"
-          >SHOWDOWN</button>
         </nav>
       </header>
 
@@ -210,24 +211,42 @@ function App() {
               />
             )}
             {!draft && (
-              <BattleField
-                p1State={p1State}
-                p2State={p2State}
-                battleInfo={battleInfo}
-                battleResult={result}
-                events={events}
-                thinking={thinking}
-                coachThinking={coachThinking}
-                tournament={tournament}
-                onDismiss={() => setDismissed(true)}
-                onReplaySelected={handleReplaySelected}
-                onTournamentScoreboard={() => {
-                  if (tournament?.id) {
-                    setTournamentId(tournament.id)
-                    setView('tournament')
-                  }
-                }}
-              />
+              <>
+                <div className="battle-view-toggle">
+                  <button
+                    className={`bvt-btn ${battleView === 'classic' ? 'active' : ''}`}
+                    onClick={() => setBattleView('classic')}
+                  >CLASSIC</button>
+                  <button
+                    className={`bvt-btn ${battleView === 'showdown' ? 'active' : ''}`}
+                    onClick={() => setBattleView('showdown')}
+                    title={showdownRoom ? 'Pokémon Showdown renderer' : 'Available once a battle starts'}
+                  >SHOWDOWN</button>
+                </div>
+                {battleView === 'showdown' && showdownRoom
+                  ? <ShowdownBattleScene room={showdownRoom} />
+                  : (
+                    <BattleField
+                      p1State={p1State}
+                      p2State={p2State}
+                      battleInfo={battleInfo}
+                      battleResult={result}
+                      events={events}
+                      thinking={thinking}
+                      coachThinking={coachThinking}
+                      tournament={tournament}
+                      onDismiss={() => setDismissed(true)}
+                      onReplaySelected={handleReplaySelected}
+                      onTournamentScoreboard={() => {
+                        if (tournament?.id) {
+                          setTournamentId(tournament.id)
+                          setView('tournament')
+                        }
+                      }}
+                    />
+                  )
+                }
+              </>
             )}
           </>
         )}
@@ -245,12 +264,6 @@ function App() {
             battleId={replayBattleId}
             onClose={handleReplayClose}
           />
-        )}
-        {/* OP-02 Stage 3: live Showdown renderer; falls back to spike when no battle active */}
-        {view === 'showdown-spike' && (
-          showdownRoom
-            ? <ShowdownBattleScene room={showdownRoom} />
-            : <ShowdownRenderSpike />
         )}
       </main>
     </div>

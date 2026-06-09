@@ -5631,3 +5631,39 @@ body::after {
 .sbs-status-overlay--connecting { color: var(--text-muted); }
 .sbs-status-overlay--ended      { color: #ffc800; }
 .sbs-status-overlay--error      { color: #ff4444; }
+
+/* ── Battle view toggle (Classic / Showdown) ─────────────────────────────── */
+
+.battle-view-toggle {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.bvt-btn {
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  padding: 0.35rem 0.9rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+  letter-spacing: 0.05em;
+}
+
+.bvt-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: rgba(0,221,255,0.06);
+}
+
+.bvt-btn.active {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: rgba(0,221,255,0.1);
+  box-shadow: 0 0 8px rgba(0,221,255,0.15);
+}
