@@ -43,8 +43,8 @@ async def run_battles(
 
     do_draft = req.tier != "random" and req.draft
     showdown_format = (
-        "gen3randombattle" if req.tier == "random"
-        else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+        "gen9randombattle" if req.tier == "random"
+        else TIER_TO_FORMAT.get(req.tier, "gen9nationaldexag")
     )
     effective_prompt = "v3" if do_draft else req.prompt_version
     cfg = LocalhostServerConfiguration
@@ -196,8 +196,8 @@ async def run_tournament(
 
     do_draft = req.tier != "random" and req.draft
     showdown_format = (
-        "gen3randombattle" if req.tier == "random"
-        else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+        "gen9randombattle" if req.tier == "random"
+        else TIER_TO_FORMAT.get(req.tier, "gen9nationaldexag")
     )
     effective_prompt = "v3" if do_draft else req.prompt_version
     cfg = LocalhostServerConfiguration
@@ -590,8 +590,8 @@ async def run_bracket_tournament(
 
     do_draft = req.tier != "random" and req.draft
     showdown_format = (
-        "gen3randombattle" if req.tier == "random"
-        else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+        "gen9randombattle" if req.tier == "random"
+        else TIER_TO_FORMAT.get(req.tier, "gen9nationaldexag")
     )
     effective_prompt = "v3" if do_draft else req.prompt_version
     cfg = LocalhostServerConfiguration
@@ -850,8 +850,8 @@ async def run_season(
 
     do_draft = req.tier != "random" and req.draft
     showdown_format = (
-        "gen3randombattle" if req.tier == "random"
-        else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+        "gen9randombattle" if req.tier == "random"
+        else TIER_TO_FORMAT.get(req.tier, "gen9nationaldexag")
     )
     effective_prompt = "v3" if do_draft else req.prompt_version
     cfg = LocalhostServerConfiguration

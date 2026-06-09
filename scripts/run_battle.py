@@ -19,7 +19,7 @@ Environment variables:
     OPENAI_API_KEY      — required when --p1 or --p2 is "openai"
     LM_STUDIO_BASE_URL  — base URL for LM Studio (default: http://localhost:1234/v1)
     LM_STUDIO_MODEL     — model name for LM Studio (default: local-model)
-    NIMZO_DB            — path to SQLite DB (default: nimzo.db in repo root)
+    NIDOZO_DB           — path to SQLite DB (default: nidozo.db in repo root)
 """
 
 import argparse
