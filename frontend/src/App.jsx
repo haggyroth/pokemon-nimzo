@@ -27,7 +27,6 @@ function App() {
   const result = dismissed ? null : battleResult
 
   function handleBattleStarted() {
-    reset()
     setDismissed(false)
     setView('battle')
   }
