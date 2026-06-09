@@ -167,16 +167,68 @@
 - **Integration test gate**: `pytest.mark.integration` marker; `test_proxy_relays_init_battle_and_turn_frames` creates a real Gen 3 battle and asserts the proxy relays `|init|battle` + `|turn|`; excluded from the default test run via `addopts`
 - Small fixes: LM Studio stats `json_extract` guard (#95); model labels not cleared before next `battle_start` (#96)
 
+### v0.25 — E2E Testing & Moveset Correctness
+- **Playwright smoke suite**: full pipeline test — start battle → watch 5 turns via WebSocket → cancel → replay; headless Chromium; cancel-based design avoids stall-game timeouts; `npm run test:e2e`
+- **React StrictMode purity fix**: `delete buf[n]` inside `setEvents` updater crashed on StrictMode's double-invocation; moved eviction to the ref before the pure updater
+- **Vite proxy noise**: `ECONNRESET` + `EPIPE` added to the silent-error set so the dev terminal stays clean when the browser disconnects mid-stream
+- **Illegal Gen3 moves removed**: Signal Beam (espeon → Baton Pass) and Iron Head (mawile → Rock Slide) are Gen 4+ and were rejected by Showdown's legality checker
+- **Hidden Power IV spreads**: all 22 HP users now carry explicit `ivs` in `gen3_movesets.json`; without them Showdown defaulted to all-31 (= HP Dark); all 7 types now emit at max power (70 BP); `build_pokemon_block` extended with `IVs:` line support; 5 new tests verify type/power correctness
+
 ---
 
 ## Upcoming
 
+### Player Experience
+
+**Personality Profiles**
+- Named play-style personas (Aggressive, Defensive, Balanced, Trickster, etc.) selectable per player
+- Persona injected into the system prompt to shape reasoning style and risk appetite
+- Profiles stored per model; switchable per battle or tournament
+
+**Party Presets — Trainer Themes**
+- Curated 6-mon teams inspired by trainer archetypes and notable in-game characters (Gym Leaders, Elite Four, rivals)
+- Selectable alongside random and draft modes in the battle form
+- Preset metadata: trainer name, flavour text, Gen-legal moveset validation
+
+**Human Player Mode**
+- Allow a human to take one side of a battle via the browser
+- Move/switch selection UI replaces the model selector for the human slot
+- Useful for testing heuristics and experiencing battles directly
+
+**Achievements & Badges**
+- Per-model milestone badges: first win, win streak ≥5, perfect game (no KO taken), upset win (vs higher ELO)
+- Badge gallery on the per-model stats page
+- Badge events emitted via WebSocket so they appear live in the UI
+
+---
+
+### UI & Visualisation
+
+**Showdown Scene Expansion**
+- Overlay heuristic scores and move type badges on the Showdown battle view (currently Classic-tab-only)
+- Win-probability sparkline and live HP ratio in the Showdown tab
+- Player name / model labels displayed above each side in the Showdown view (currently unlabelled)
+
+**Stats Page Expansion**
+- Global stats: damage-per-turn distribution, average battle length by tier, type usage heatmap
+- Per-model: H2H matrix inline on the stats page; matchup efficiency (win rate vs type disadvantage)
+- Export stats to CSV/JSON for offline analysis
+
+**UI/UX Overhaul**
+- Visual design pass across all pages: typography hierarchy, spacing system, animation polish
+- Mobile-responsive layout (currently desktop-only)
+- Dark/light theme toggle persisted to `localStorage`
+- Onboarding empty states for leaderboard, battles list, and stats when no data exists yet
+
+---
+
 ### Platform Expansion
 
-**Gen 1 & Gen 2 Coverage Expansion** *(tracked in #85)*
-- Add all Gen 1 and Gen 2 Pokémon to the draft pool
-- Update heuristics for Gen 1/2-specific mechanics (no special split in Gen 1)
-- Serializer and format compatibility audit — see GitHub issue OP-03
+**OP-03 — National Pokédex Expansion (revised scope)**
+- Expand draft pool beyond Gen 3 — format-agnostic species list so any legal Gen can be supported
+- Decouple moveset data from a fixed-generation assumption: each entry declares its `gen` and legality is validated per format
+- Heuristic engine updated for Gen 4+ mechanics (physical/special split, new types, abilities)
+- Gen 1 and Gen 2 format compatibility audit *(originally tracked in #85)*
 
 **3v3 / 6v6 Team Size Config**
 - Expose team size as a configurable battle option alongside tier and format
@@ -195,9 +247,23 @@
 
 ### Technical Debt & Housekeeping
 
+**Fallback Move Investigation**
+- Audit when and why `LLMPlayer` falls back to a random move (parse failure, timeout, invalid action)
+- Log fallback events explicitly with reason; surface fallback rate in per-model stats
+- Reduce fallback rate: improve parser robustness, tighten output schema enforcement
+
+**File Logging**
+- Structured file-based log output (JSON lines) alongside the current console logs
+- Configurable log level and rotation; separate logs for battle events, LLM calls, and errors
+- Useful for post-hoc debugging and offline analysis without a DB query
+
+**Containerisation**
+- `docker-compose.yml` for the full dev stack: Showdown server, FastAPI backend, Vite dev server
+- Production Dockerfile: multi-stage build, static frontend served from FastAPI
+- README updated with Docker-first quickstart
+
 **Test Coverage**
 - **Tier 3 (partial)** — `pytest.mark.integration` infrastructure is in place; `test_ws_showdown_integration.py` covers the spectator proxy. Still needed: integration tests for `battle/orchestration.py` and `llm/draft.py`; dedicated CI job that starts the Showdown server
 
 **Infrastructure**
-- E2E smoke tests (Playwright) covering start → watch → replay → analyze
 - Dependabot for Python and npm dependency updates
