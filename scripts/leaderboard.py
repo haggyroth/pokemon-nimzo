@@ -3,7 +3,7 @@ Print the current ELO leaderboard and recent battle results.
 
 Usage:
     uv run python scripts/leaderboard.py
-    uv run python scripts/leaderboard.py --db path/to/nimzo.db
+    uv run python scripts/leaderboard.py --db path/to/nidozo.db
 """
 
 import argparse
@@ -58,6 +58,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     db_path = Path(args.db) if args.db else Path(
-        os.environ.get("NIMZO_DB", "nimzo.db")
+        os.environ.get("NIDOZO_DB", "nidozo.db")
     )
     main(db_path)

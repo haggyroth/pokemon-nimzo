@@ -125,11 +125,25 @@ def test_log_turn_parse_failure(store) -> None:
     p2 = store.get_or_create_model("random", "random")
     bid = store.create_battle("battle-7", "gen3randombattle", p1, p2)
 
-    store.log_turn(bid, 3, "p1", "v1", None, False, "I'm not sure...")
+    store.log_turn(bid, 3, "p1", "v1", None, False, "I'm not sure...",
+                   fallback_reason="parse_failure")
 
     row = store._conn.execute("SELECT * FROM turns WHERE battle_id=?", (bid,)).fetchone()
     assert row["parse_success"] == 0
     assert row["action_chosen"] is None
+    assert row["fallback_reason"] == "parse_failure"
+
+
+def test_log_turn_success_has_no_fallback_reason(store) -> None:
+    p1 = store.get_or_create_model("anthropic", "claude-sonnet-4-6")
+    p2 = store.get_or_create_model("random", "random")
+    bid = store.create_battle("battle-7b", "gen3randombattle", p1, p2)
+
+    store.log_turn(bid, 1, "p1", "v5", "move 1", True, "Thunderbolt it is.")
+
+    row = store._conn.execute("SELECT * FROM turns WHERE battle_id=?", (bid,)).fetchone()
+    assert row["parse_success"] == 1
+    assert row["fallback_reason"] is None
 
 
 # ------------------------------------------------------------------
