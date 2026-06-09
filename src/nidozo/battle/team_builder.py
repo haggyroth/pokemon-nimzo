@@ -54,12 +54,17 @@ def build_pokemon_block(species_id: str, moveset: dict[str, Any]) -> str:
         Salamence @ Choice Band
         Ability: Intimidate
         EVs: 4 HP / 252 Atk / 252 Spe
+        IVs: 30 HP / 30 Atk / 30 Def / 30 SpA / 30 SpD
         Adamant Nature
         Level: 100
         - Dragon Claw
         - Rock Slide
         - Earthquake
         - Hidden Power [Flying]
+
+    IVs default to 31 in all stats.  Only specify ``ivs`` in the moveset dict
+    when a particular IV spread is required (e.g. to obtain a specific Hidden
+    Power type).  Only non-31 values need to be listed — the rest are assumed 31.
     """
     species: str = moveset.get("species", species_id.title())
     item: str = moveset.get("item", "Leftovers")
@@ -67,6 +72,7 @@ def build_pokemon_block(species_id: str, moveset: dict[str, Any]) -> str:
     nature: str = moveset.get("nature", "Serious")
     level: int = moveset.get("level", 100)
     evs: dict[str, int] = moveset.get("evs", {})
+    ivs: dict[str, int] = moveset.get("ivs", {})
     moves: list[str] = moveset.get("moves", [])
 
     lines: list[str] = []
@@ -87,6 +93,11 @@ def build_pokemon_block(species_id: str, moveset: dict[str, Any]) -> str:
     ev_parts = [f"{val} {stat}" for stat, val in evs.items() if val]
     if ev_parts:
         lines.append(f"EVs: {' / '.join(ev_parts)}")
+
+    # IVs — only include non-31 stats (31 is the Showdown default)
+    iv_parts = [f"{val} {stat}" for stat, val in ivs.items() if val != 31]
+    if iv_parts:
+        lines.append(f"IVs: {' / '.join(iv_parts)}")
 
     lines.append(f"{nature} Nature")
 

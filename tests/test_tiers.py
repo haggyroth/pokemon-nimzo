@@ -166,6 +166,83 @@ class TestBuildPokemonBlock:
             move_lines = [ln for ln in block.splitlines() if ln.startswith("- ")]
             assert len(move_lines) == 4, f"{sid!r} block has {len(move_lines)} move lines"
 
+    def test_iv_line_emitted_when_ivs_present(self) -> None:
+        """If a moveset specifies non-31 IVs the block must include an IVs: line."""
+        moveset = {
+            "species": "Zapdos",
+            "item": "Leftovers",
+            "ability": "Pressure",
+            "nature": "Timid",
+            "evs": {"SpA": 252, "Spe": 252, "HP": 4},
+            "ivs": {"Spe": 30},   # HP Ice requires 30 Spe
+            "moves": ["Thunderbolt", "Hidden Power [Ice]", "Thunder Wave", "Roost"],
+        }
+        block = build_pokemon_block("zapdos", moveset)
+        assert "IVs: 30 Spe" in block
+
+    def test_no_iv_line_when_all_31(self) -> None:
+        """If all IVs are 31 (or ivs key absent) no IVs: line should appear."""
+        ms = load_movesets()
+        # Tyranitar uses no Hidden Power — should have no ivs key and no IVs line.
+        block = build_pokemon_block("tyranitar", ms["tyranitar"])
+        assert "IVs:" not in block
+
+    def test_iv_line_omits_31_values(self) -> None:
+        """Only sub-31 IVs should be listed, not the 31s."""
+        moveset = {
+            "species": "TestMon",
+            "nature": "Hardy",
+            "ivs": {"HP": 30, "Atk": 31, "SpA": 28},
+            "moves": ["Tackle"],
+        }
+        block = build_pokemon_block("testmon", moveset)
+        assert "30 HP" in block
+        assert "28 SpA" in block
+        assert "31 Atk" not in block
+
+    def test_hidden_power_users_have_correct_iv_spreads(self) -> None:
+        """Every Hidden Power user in gen3_movesets.json must have IVs that
+        match the declared HP type (type formula) and hit max power (70)."""
+        stats_order = ["HP", "Atk", "Def", "Spe", "SpA", "SpD"]
+        weights = [1, 2, 4, 8, 16, 32]
+        type_names = [
+            "Fighting", "Flying", "Poison", "Ground", "Rock", "Bug", "Ghost",
+            "Steel", "Fire", "Water", "Grass", "Electric", "Psychic", "Ice",
+            "Dragon", "Dark",
+        ]
+
+        def calc_hp(ivs: dict) -> tuple[str, int]:
+            iv_vals = {s: ivs.get(s, 31) for s in stats_order}
+            sum1 = sum(weights[i] * (iv_vals[stats_order[i]] % 2) for i in range(6))
+            sum2 = sum(weights[i] * ((iv_vals[stats_order[i]] >> 1) % 2) for i in range(6))
+            hp_type = type_names[(15 * sum1) // 63]
+            hp_power = (40 * sum2) // 63 + 30
+            return hp_type, hp_power
+
+        ms = load_movesets()
+        for sid, entry in ms.items():
+            for move in entry.get("moves", []):
+                if move.startswith("Hidden Power ["):
+                    expected_type = move[14:-1]
+                    ivs = entry.get("ivs", {})
+                    actual_type, power = calc_hp(ivs)
+                    assert actual_type == expected_type, (
+                        f"{sid}: move '{move}' but IVs give HP {actual_type}"
+                    )
+                    assert power == 70, (
+                        f"{sid}: HP power is {power}, expected 70"
+                    )
+
+    def test_no_illegal_gen4_moves(self) -> None:
+        """Signal Beam and Iron Head were Gen 4+ in Gen 3 context — must not appear."""
+        ms = load_movesets()
+        illegal = {"Signal Beam", "Iron Head"}
+        for sid, entry in ms.items():
+            for move in entry.get("moves", []):
+                assert move not in illegal, (
+                    f"{sid} still has illegal Gen 4 move '{move}'"
+                )
+
 
 class TestBuildTeamString:
     def test_six_pokemon_produces_five_separators(self) -> None:
