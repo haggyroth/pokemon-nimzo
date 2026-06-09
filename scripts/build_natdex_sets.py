@@ -35,7 +35,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -231,7 +230,6 @@ def _load_types_from_pokedex() -> dict[str, list[str]]:
     # Pattern: "species_id": { ... types: ["Type1", "Type2"] ... }
     block_re  = re.compile(r'"?(\w+)"?\s*:\s*\{([^}]+)\}', re.DOTALL)
     types_re  = re.compile(r'types\s*:\s*\[([^\]]+)\]')
-    name_re   = re.compile(r'name\s*:\s*["\']([^"\']+)["\']')
 
     for m in block_re.finditer(text):
         key   = m.group(1).lower()
@@ -390,7 +388,7 @@ def build(out_path: Path) -> None:
         "total":   len(combined),
         "with_types": sum(1 for e in combined.values() if e.get("types")),
     }
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Factory (competitive quality): {stats['factory']}")
     print(f"  Synthesised (from randbat):     {stats['synth']}")
     print(f"  Total species:                  {stats['total']}")
