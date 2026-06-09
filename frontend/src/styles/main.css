@@ -276,6 +276,17 @@ body::after {
 .btn-start:active { transform: translateY(0); }
 .btn-start:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
+.form-error {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--hp-low, #ef4444);
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--hp-low, #ef4444);
+  font-size: 0.8rem;
+  font-family: var(--font-mono, monospace);
+  border-radius: 0 4px 4px 0;
+}
+
 /* ---- Leaderboard ---- */
 .leaderboard-table {
   width: 100%;

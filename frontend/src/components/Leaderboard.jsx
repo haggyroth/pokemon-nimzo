@@ -312,6 +312,7 @@ function CoachSelector({ label, provider, model, onProviderChange, onModelChange
 
 function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [form, setForm] = useState({
     p1_provider: 'lmstudio', p2_provider: 'lmstudio',
     p1_model: '', p2_model: '',
@@ -339,6 +340,7 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
   async function handleSubmit(e) {
     e.preventDefault()
     setLoading(true)
+    setError(null)
     try {
       const body = { ...form, n_battles: Number(form.n_battles) }
       if (!body.p1_model || body.p1_provider === 'random') delete body.p1_model
@@ -355,8 +357,9 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
       })
       const data = await res.json()
       if (res.ok) onBattleStarted?.(data)
+      else setError(data?.detail ?? 'Failed to start battle — check server logs')
     } catch (err) {
-      console.error(err)
+      setError(err.message ?? 'Network error')
     } finally {
       setLoading(false)
     }
@@ -423,6 +426,7 @@ function BattleForm({ onBattleStarted, lmModels, lmLoading }) {
           onChange={e => setForm(f => ({ ...f, n_battles: e.target.value }))}
         />
       </div>
+      {error && <p className="form-error">{error}</p>}
       <button className="btn-start" type="submit" disabled={loading}>
         {loading ? '▶ STARTING…' : '▶ START BATTLE'}
       </button>
@@ -444,6 +448,7 @@ const TOURNAMENT_FORMATS = [
 
 function TournamentForm({ onTournamentStarted, lmModels }) {
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [rounds, setRounds] = useState(3)
   const [tier, setTier] = useState('random')
   const [draft, setDraft] = useState(false)
@@ -496,6 +501,7 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
   async function handleSubmit(e) {
     e.preventDefault()
     setLoading(true)
+    setError(null)
     try {
       const payload = {
         players: players.map(p => {
@@ -521,8 +527,9 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
       })
       const data = await res.json()
       if (res.ok) onTournamentStarted?.(data)
+      else setError(data?.detail ?? 'Failed to start tournament — check server logs')
     } catch (err) {
-      console.error(err)
+      setError(err.message ?? 'Network error')
     } finally {
       setLoading(false)
     }
@@ -638,6 +645,7 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
         </div>
       )}
 
+      {error && <p className="form-error">{error}</p>}
       <button className="btn-start" type="submit" disabled={loading || players.length < 2}>
         {loading ? '⚔ STARTING…' : `⚔ START TOURNAMENT`}
       </button>
@@ -651,6 +659,7 @@ function TournamentForm({ onTournamentStarted, lmModels }) {
 
 function SeasonForm({ onSeasonStarted, lmModels }) {
   const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
   const [name, setName]       = useState('')
   const [rounds, setRounds]   = useState(2)
   const [tier, setTier]       = useState('random')
@@ -697,6 +706,7 @@ function SeasonForm({ onSeasonStarted, lmModels }) {
     e.preventDefault()
     if (!name.trim()) return
     setLoading(true)
+    setError(null)
     try {
       const payload = {
         name: name.trim(),
@@ -719,8 +729,9 @@ function SeasonForm({ onSeasonStarted, lmModels }) {
       })
       const data = await res.json()
       if (res.ok) onSeasonStarted?.(data)
+      else setError(data?.detail ?? 'Failed to start season — check server logs')
     } catch (err) {
-      console.error(err)
+      setError(err.message ?? 'Network error')
     } finally {
       setLoading(false)
     }
@@ -832,6 +843,7 @@ function SeasonForm({ onSeasonStarted, lmModels }) {
         </div>
       )}
 
+      {error && <p className="form-error">{error}</p>}
       <button className="btn-start" type="submit" disabled={loading || players.length < 2 || !name.trim()}>
         {loading ? '🏆 STARTING…' : '🏆 START SEASON'}
       </button>
