@@ -260,13 +260,17 @@ export function useBattleStream() {
         })
 
         if (event.type === 'battle_start') {
+          // Clear the previous battle's log here rather than in handleBattleStarted,
+          // so the model-name labels are always set by this event and never wiped by
+          // a reset() that races the WS delivery of battle_start.
+          setEvents([])
           setBattleInfo(event)
           setBattleResult(null)
           setP1State(null)
           setP2State(null)
           setThinking(null)
           setCoachThinking(null)
-          setDraft(null)   // clear draft once battle proper begins
+          setDraft(null)
         }
 
         if (event.type === 'turn') {
