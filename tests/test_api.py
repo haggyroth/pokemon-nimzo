@@ -1312,3 +1312,24 @@ async def test_eventbus_does_not_replay_per_turn_events() -> None:
     assert "state_update" not in types
     assert "thinking" not in types
     assert "battle_start" in types  # structural event IS replayed
+
+
+@pytest.mark.asyncio
+async def test_eventbus_replays_showdown_room_to_late_subscriber() -> None:
+    """showdown_room is in _REPLAY_TYPES so spectators that connect after the
+    room was announced still learn the room id."""
+    from nidozo.api.events import EventBus
+
+    bus = EventBus()
+    await bus.publish({"type": "battle_start", "battle_id": 5})
+    await bus.publish({"type": "showdown_room", "battle_id": 5, "room": "battle-gen3randombattle-5"})
+
+    q = bus.subscribe()
+    replayed = []
+    while not q.empty():
+        replayed.append(q.get_nowait())
+
+    types = [e["type"] for e in replayed]
+    assert "showdown_room" in types
+    rooms = [e["room"] for e in replayed if e["type"] == "showdown_room"]
+    assert rooms == ["battle-gen3randombattle-5"]

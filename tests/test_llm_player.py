@@ -491,7 +491,11 @@ def _drain(queue) -> list:
 
 
 def _make_streaming_player(bus, *, role="p1"):
-    """Build a StreamingLLMPlayer without a live server and stub a battle."""
+    """Build a StreamingLLMPlayer without a live server and stub a battle.
+
+    Pre-announces the battle room so state_update tests are not cluttered with
+    showdown_room events — that event is covered by test_streaming_player.py.
+    """
     from nidozo.battle.streaming_player import StreamingLLMPlayer
 
     with patch("poke_env.player.Player.__init__", return_value=None):
@@ -502,6 +506,7 @@ def _make_streaming_player(bus, *, role="p1"):
     battle.turn = 6
     battle.finished = False
     player._battles = {"battle-gen3randombattle-1": battle}
+    player._announced_rooms.add("battle-gen3randombattle-1")
     return player, battle
 
 

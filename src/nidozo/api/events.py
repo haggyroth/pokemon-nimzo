@@ -32,6 +32,8 @@ _REPLAY_TYPES: frozenset[str] = frozenset({
     "tournament_result",
     "season_start",
     "season_result",
+    # OP-02: lets late-joining WS clients learn the Showdown room id for spectating.
+    "showdown_room",
 })
 
 
