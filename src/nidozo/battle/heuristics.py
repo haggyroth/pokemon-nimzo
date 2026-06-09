@@ -8,8 +8,8 @@ structure it would otherwise have to infer from raw numbers.
 
 Design rules:
 - Advisory, never prescriptive. Notes say "you move first", not "use this".
-- Gen 3 mechanics where they differ from later gens (paralysis = 25% speed,
-  burn = halved attack, no Fairy type, etc.).
+- Gen 9 mechanics: paralysis reduces speed to 50%, burn halves physical attack,
+  18-type chart (includes Fairy), Terastal ignored for damage estimates.
 - Damage estimates are rough but directionally correct. They incorporate
   stat stages, weather, STAB, and accuracy — enough to tell a 2HKO from a
   4HKO, not a precise damage calculator.
@@ -40,7 +40,7 @@ def _stage_mult(stage: int) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Weather damage modifiers (Gen 3)
+# Weather damage modifiers
 # ---------------------------------------------------------------------------
 
 # Maps (weather_name, move_type_name) → multiplier
@@ -49,8 +49,8 @@ _WEATHER_MODS: dict[tuple[str, str], float] = {
     ("RAINDANCE", "FIRE"):   0.5,
     ("SUNNYDAY",  "FIRE"):   1.5,
     ("SUNNYDAY",  "WATER"):  0.5,
-    # Sandstorm boosts Rock SpD in Gen 3+ but doesn't modify damage
-    # Hail has no damage modifier in Gen 3
+    # Sandstorm boosts Rock-type SpD but doesn't modify move damage
+    # Hail/Snow has no move-damage modifier
 }
 
 
@@ -61,15 +61,15 @@ def _weather_damage_mod(weather_name: str | None, move_type_name: str) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Status effect names → Gen 3 mechanical impact summaries
+# Status effect mechanical impact summaries
 # ---------------------------------------------------------------------------
 
 _STATUS_IMPACT: dict[str, str] = {
-    "BRN": "Burn: attack stat halved; takes 1/8 HP per turn",
-    "PAR": "Paralysis: speed reduced to 25%; 25% chance to be fully paralyzed each turn",
+    "BRN": "Burn: physical attack halved; takes 1/16 HP per turn",
+    "PAR": "Paralysis: speed reduced to 50%; 25% chance to be fully paralyzed each turn",
     "PSN": "Poison: takes 1/8 HP per turn",
     "TOX": "Badly Poisoned: damage increases each turn (1/16, 2/16, 3/16…)",
-    "SLP": "Sleep: cannot act (1–7 turns)",
+    "SLP": "Sleep: cannot act (1–3 turns in Gen 9)",
     "FRZ": "Frozen: cannot act until thawed (rare thaw chance each turn)",
 }
 
@@ -84,7 +84,7 @@ _STATUS_MOVE_EFFECTS: dict[str, dict[str, Any]] = {
     "lovelykiss":   {"inflicts": "SLP", "note": "inflicts Sleep (75% accurate)"},
     "yawn":         {"inflicts": "SLP", "note": "inflicts Sleep next turn (opponent can switch)"},
     # Paralysis
-    "thunderwave":  {"inflicts": "PAR", "note": "inflicts Paralysis (100% accurate) — slows opponent to 25% speed, 25% chance to not act"},
+    "thunderwave":  {"inflicts": "PAR", "note": "inflicts Paralysis (100% accurate) — slows opponent to 50% speed, 25% chance to not act"},
     "stunspore":    {"inflicts": "PAR", "note": "inflicts Paralysis (75% accurate)"},
     "glare":        {"inflicts": "PAR", "note": "inflicts Paralysis (75% accurate) — hits Normal types unlike Thunder Wave"},
     "bodyslam":     {"inflicts": "PAR", "note": "30% paralysis chance on hit"},
@@ -197,9 +197,9 @@ def _effective_speed(mon: Pokemon, is_own: bool) -> float:
         stage_raw = mon.boosts.get("spe", 0)
         stage = int(stage_raw) if isinstance(stage_raw, int | float) else 0
         spd = base_spd * _stage_mult(stage)
-        # Gen 3: paralysis reduces speed to 25%
+        # Gen 9: paralysis reduces speed to 50%
         if mon.status and mon.status.name == "PAR":
-            spd *= 0.25
+            spd *= 0.5
         return spd
     except (TypeError, ValueError, AttributeError):
         return 80.0  # safe fallback
@@ -274,7 +274,7 @@ def _estimate_incoming_damage(
         move_type_name = move.type.name if hasattr(move, "type") else ""
         w_mod = _weather_damage_mod(weather, move_type_name)
 
-        # Gen 3 damage formula (level 100, no crit, no random roll)
+        # Damage formula (level 100, no crit, no random roll)
         raw = ((42 * move.base_power * opp_atk / own_def) / 50 + 2) * type_mult * w_mod
 
         # Defender HP pool — use actual HP stat if known, else base-stat approximation
@@ -479,7 +479,7 @@ def _score_move(
     except (AttributeError, TypeError, ValueError):
         acc_frac = 1.0
 
-    # Rough damage estimate — Gen 3 formula, simplified for advisory use
+    # Rough damage estimate — standard formula simplified for advisory use
     if own is not None:
         own_stats = own.stats or {}
         is_physical = move.category == MoveCategory.PHYSICAL
@@ -495,11 +495,11 @@ def _score_move(
         own_atk = own_atk_base * _stage_mult(own_atk_stage)
         opp_def = opp_def_base * _stage_mult(opp_def_stage)
 
-        # Gen 3: burn halves physical attack
+        # Burn halves physical attack
         if is_physical and own.status and own.status.name == "BRN":
             own_atk *= 0.5
 
-        # Gen 3 damage formula (level 100, no crit, no random roll), with weather
+        # Damage formula (level 100, no crit, no random roll), with weather
         raw = ((42 * move.base_power * own_atk / opp_def) / 50 + 2) * mult * weather_mod
 
         # Express as % of a typical opponent HP pool (base HP × approx level-100 multiplier)
@@ -515,7 +515,7 @@ def _score_move(
         elif pct >= 34:
             score["notes"].append("likely 3HKO")
 
-        # Burn impact note for physical moves
+        # Burn note for physical moves
         if is_physical and own.status and own.status.name == "BRN":
             score["notes"].append("Burn halves your Attack — physical damage is reduced")
 
@@ -747,7 +747,7 @@ def _score_switch(
             score["notes"].append("Active mon is burned (attack halved) — switching may recover offensive pressure")
             score["switch_quality"] += 1
         elif status_name == "PAR":
-            score["notes"].append("Active mon is paralyzed (25% speed) — switching avoids full-paralysis turns")
+            score["notes"].append("Active mon is paralyzed (50% speed) — switching avoids full-paralysis turns")
 
     # Clamp switch_quality to [-3, +3]
     score["switch_quality"] = max(-3, min(3, score["switch_quality"]))

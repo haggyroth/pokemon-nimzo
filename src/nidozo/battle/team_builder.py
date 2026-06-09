@@ -1,8 +1,14 @@
 """team_builder — convert a list of drafted species into a Showdown team string.
 
-Reads standard Gen 3 movesets from ``data/gen3_movesets.json`` and serialises
-a picked team into Pokémon Showdown's human-readable export format so it can be
-passed to poke-env's ``Player(team=...)`` parameter.
+Reads National Dex competitive movesets from ``data/natdex_movesets.json`` and
+serialises a picked team into Pokémon Showdown's human-readable export format so
+it can be passed to poke-env's ``Player(team=...)`` parameter.
+
+The moveset data covers ~500 species across all generations using Gen 9 NatDex
+legal sets, sourced from Showdown's factory-sets (competitive quality) with
+synthesised sets for randbat-only species.  Regenerate with:
+
+    python scripts/build_natdex_sets.py
 
 Usage::
 
@@ -10,7 +16,7 @@ Usage::
 
     movesets = load_movesets()
     team_str = build_team_string(["salamence", "tyranitar", "gengar",
-                                  "swampert", "skarmory", "blissey"],
+                                  "garchomp", "ferrothorn", "blissey"],
                                   movesets)
 """
 
@@ -22,7 +28,7 @@ from typing import Any
 
 # Resolve data/ relative to the repo root (four directories above this file).
 _REPO_ROOT = Path(__file__).parent.parent.parent.parent
-_MOVESETS_PATH = _REPO_ROOT / "data" / "gen3_movesets.json"
+_MOVESETS_PATH = _REPO_ROOT / "data" / "natdex_movesets.json"
 
 # Cache so we only read the file once per process.
 _MOVESET_CACHE: dict[str, Any] | None = None
@@ -129,7 +135,7 @@ def build_team_string(
         if sid not in ms:
             raise KeyError(
                 f"No moveset defined for species '{sid}'. "
-                f"Add it to data/gen3_movesets.json first."
+                f"Add it to data/natdex_movesets.json or regenerate via scripts/build_natdex_sets.py."
             )
         blocks.append(build_pokemon_block(sid, ms[sid]))
     return "\n\n".join(blocks)

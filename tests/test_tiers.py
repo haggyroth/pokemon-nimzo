@@ -50,9 +50,11 @@ class TestGetPool:
             get_pool("superubers", {"salamence"})
 
     def test_lc_pool_contains_lc_pokemon(self) -> None:
+        """LC pool returns only the intersection of LC tier and available movesets."""
         ms = load_movesets()
         pool = get_pool("lc", set(ms.keys()))
-        assert "elekid" in pool
+        # misdreavus is in both the LC tier definition and natdex_movesets.json
+        assert "misdreavus" in pool
 
     def test_pool_only_includes_species_in_movesets(self) -> None:
         """Pool never returns a species that lacks a moveset definition."""
@@ -63,25 +65,26 @@ class TestGetPool:
 
 class TestIsValidTier:
     def test_known_tiers_are_valid(self) -> None:
-        for tier in ("ubers", "ou", "uu", "nu", "lc", "freeforall", "random"):
+        for tier in ("ubers", "ou", "uu", "lc", "freeforall", "random"):
             assert is_valid_tier(tier), f"Expected {tier!r} to be valid"
 
     def test_unknown_tier_is_invalid(self) -> None:
         assert not is_valid_tier("bl2")
         assert not is_valid_tier("")
-        assert not is_valid_tier("gen3ou")
+        assert not is_valid_tier("gen9ou")
+        assert not is_valid_tier("nu")
 
 
 class TestTierConstants:
     def test_all_tiers_have_display_names(self) -> None:
-        for tier in ("ubers", "ou", "uu", "nu", "lc", "freeforall", "random"):
+        for tier in ("ubers", "ou", "uu", "lc", "freeforall", "random"):
             assert tier in TIER_DISPLAY
 
     def test_all_tiers_have_format_mapping(self) -> None:
-        for tier in ("ubers", "ou", "uu", "nu", "lc", "freeforall"):
+        for tier in ("ubers", "ou", "uu", "lc", "freeforall"):
             assert tier in TIER_TO_FORMAT
             fmt = TIER_TO_FORMAT[tier]
-            assert fmt.startswith("gen3"), f"Expected gen3 format for {tier!r}, got {fmt!r}"
+            assert fmt.startswith("gen9"), f"Expected gen9 format for {tier!r}, got {fmt!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -105,10 +108,12 @@ class TestLoadMovesets:
             missing = required - entry.keys()
             assert not missing, f"{sid!r} missing fields: {missing}"
 
-    def test_each_entry_has_four_moves(self) -> None:
+    def test_each_entry_has_between_one_and_four_moves(self) -> None:
+        """Some Gen 9 species (e.g. Ditto with only Transform) have fewer than 4 moves."""
         ms = load_movesets()
         for sid, entry in ms.items():
-            assert len(entry["moves"]) == 4, f"{sid!r} has {len(entry['moves'])} moves"
+            n = len(entry["moves"])
+            assert 1 <= n <= 4, f"{sid!r} has {n} moves (expected 1–4)"
 
     def test_ev_totals_do_not_exceed_510(self) -> None:
         ms = load_movesets()
@@ -136,12 +141,19 @@ class TestAllSpecies:
 
 class TestBuildPokemonBlock:
     def test_basic_block_structure(self) -> None:
+        """Salamence uses a Gen 9 NatDex set — verify the current factory set renders correctly."""
         ms = load_movesets()
-        block = build_pokemon_block("salamence", ms["salamence"])
-        assert "Salamence @ Choice Band" in block
-        assert "Ability: Intimidate" in block
-        assert "Adamant Nature" in block
-        assert "- Dragon Claw" in block
+        entry = ms["salamence"]
+        block = build_pokemon_block("salamence", entry)
+        # Header contains species + item
+        assert f"Salamence @ {entry['item']}" in block
+        # Ability line present
+        assert f"Ability: {entry['ability']}" in block
+        # Nature line present
+        assert f"{entry['nature']} Nature" in block
+        # All 4 moves rendered
+        for move in entry["moves"]:
+            assert f"- {move}" in block
 
     def test_ev_line_format(self) -> None:
         ms = load_movesets()
@@ -154,9 +166,18 @@ class TestBuildPokemonBlock:
         block = build_pokemon_block("salamence", ms["salamence"])
         assert "Level: 100" not in block
 
-    def test_lc_level_5_is_shown(self) -> None:
-        ms = load_movesets()
-        block = build_pokemon_block("elekid", ms["elekid"])
+    def test_level_5_is_shown_when_set(self) -> None:
+        """build_pokemon_block must emit 'Level: 5' for a moveset that specifies level=5."""
+        moveset = {
+            "species": "Elekid",
+            "item": "Eviolite",
+            "ability": "Static",
+            "nature": "Timid",
+            "level": 5,
+            "evs": {"SpA": 196, "Spe": 196},
+            "moves": ["Thunderbolt", "Ice Punch", "Cross Chop", "Hidden Power [Ice]"],
+        }
+        block = build_pokemon_block("elekid", moveset)
         assert "Level: 5" in block
 
     def test_four_moves_rendered(self) -> None:
@@ -233,14 +254,14 @@ class TestBuildPokemonBlock:
                         f"{sid}: HP power is {power}, expected 70"
                     )
 
-    def test_no_illegal_gen4_moves(self) -> None:
-        """Signal Beam and Iron Head were Gen 4+ in Gen 3 context — must not appear."""
+    def test_no_splash_or_struggle_in_sets(self) -> None:
+        """Splash and Struggle are filler moves — no competitive set should use them."""
         ms = load_movesets()
-        illegal = {"Signal Beam", "Iron Head"}
+        filler = {"Splash", "Struggle"}
         for sid, entry in ms.items():
             for move in entry.get("moves", []):
-                assert move not in illegal, (
-                    f"{sid} still has illegal Gen 4 move '{move}'"
+                assert move not in filler, (
+                    f"{sid} has filler move '{move}' in its competitive set"
                 )
 
 
@@ -291,7 +312,7 @@ class TestStoreTeams:
         team_id = store.save_team(
             model_id=model_id,
             tier="ou",
-            format_="gen3ou",
+            format_="gen9nationaldex",
             pokemon=["salamence", "tyranitar", "gengar"],
             team_string="Salamence @ ...",
         )
@@ -326,10 +347,10 @@ class TestStoreTeams:
         p1_id = store.get_or_create_model("lmstudio", "m1", "v3")
         p2_id = store.get_or_create_model("lmstudio", "m2", "v3")
 
-        bid = store.create_battle("tag-abc", "gen3ou", p1_id, p2_id)
+        bid = store.create_battle("tag-abc", "gen9nationaldex", p1_id, p2_id)
 
-        t1 = store.save_team(p1_id, "ou", "gen3ou", ["salamence"], "Salamence @ ...")
-        t2 = store.save_team(p2_id, "ou", "gen3ou", ["tyranitar"], "Tyranitar @ ...")
+        t1 = store.save_team(p1_id, "ou", "gen9nationaldex", ["salamence"], "Salamence @ ...")
+        t2 = store.save_team(p2_id, "ou", "gen9nationaldex", ["tyranitar"], "Tyranitar @ ...")
 
         store.set_battle_teams(bid, t1, t2, "ou")
 
@@ -346,7 +367,7 @@ class TestStoreTeams:
         p1_id = store.get_or_create_model("random", "random", "v2")
         p2_id = store.get_or_create_model("random", "random", "v2")
 
-        bid = store.create_battle("tag-xyz", "gen3randombattle", p1_id, p2_id)
+        bid = store.create_battle("tag-xyz", "gen9randombattle", p1_id, p2_id)
         p1_team, p2_team = store.get_battle_teams(bid)
         assert p1_team is None
         assert p2_team is None

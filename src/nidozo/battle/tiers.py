@@ -1,12 +1,18 @@
-"""Gen 3 Smogon tier definitions and pool helpers.
+"""NatDex tier definitions and pool helpers.
 
-Species keys use Showdown internal IDs (lowercase, no spaces/special characters).
-Tier hierarchy: ubers > ou > uu > nu > lc.  Higher-tier Pokémon may be used in
-lower-tier pools if the tournament host specifically allows it, but by default
-each tier pool is restricted to Pokémon that belong to that exact tier.
+Nidozo uses Gen 9 National Dex as its canonical ruleset so that any Pokémon from
+any generation can be used with any move it can legally learn today.  This
+eliminates per-generation legality maintenance and lets Showdown validate teams
+automatically.
 
-``freeforall`` is a sentinel meaning no tier restriction — the pool is all
-Pokémon in the moveset data that have a defined set.
+Showdown format strings used:
+  gen9randombattle    — random tier (Showdown auto-generates teams, no data needed)
+  gen9nationaldexag   — freeforall / ubers (NatDex Anything Goes, no ban list)
+  gen9nationaldex     — ou (NatDex OU bans applied)
+  gen9nationaldexlc   — lc (NatDex Little Cup)
+
+Tier pools are sourced from Showdown's factory-sets.json (competitive Gen 9 tiers).
+``freeforall`` has no restriction — the pool is everything in natdex_movesets.json.
 """
 
 from __future__ import annotations
@@ -14,104 +20,150 @@ from __future__ import annotations
 from typing import Final
 
 # ---------------------------------------------------------------------------
-# Tier sets — Showdown species IDs
+# Tier sets — Showdown species IDs, sourced from Gen 9 factory-sets
 # ---------------------------------------------------------------------------
 
+# Uber: the very top of the power hierarchy (Ubers-legal)
 UBERS: Final[frozenset[str]] = frozenset({
+    "calyrexice",
+    "calyrexshadow",
+    "chiyu",
+    "chienpaorestricted",
+    "dialga",
+    "dialga-origin",
+    "eternatus",
+    "fluttermane",
     "groudon",
+    "ho-oh",
+    "koraidon",
     "kyogre",
-    "rayquaza",
-    "mewtwo",
+    "kyurem",
+    "kyuremblack",
+    "kyuremwhite",
     "lugia",
-    "hooh",
-    "latias",
-    "latios",
-    "wobbuffet",
-    "jirachi",
+    "lunala",
+    "marshadow",
+    "mewtwo",
+    "miraidon",
+    "necrozma-dusk-mane",
+    "necrozma-dawn-wings",
+    "rayquaza",
+    "solgaleo",
+    "xerneas",
+    "yveltal",
+    "zacian",
+    "zamazenta",
+    "zekrom",
+    "reshiram",
+    "palkia",
+    "giratina",
+    "arceus",
 })
 
+# OU: the main competitive tier (NatDex OU and above that aren't Uber-banned)
 OU: Final[frozenset[str]] = frozenset({
-    "salamence",
-    "tyranitar",
-    "metagross",
-    "gengar",
-    "alakazam",
-    "blissey",
-    "skarmory",
-    "swampert",
-    "snorlax",
+    "dragapult",
+    "garchomp",
+    "heatran",
+    "landorus",
+    "landorustherian",
+    "toxapex",
+    "ferrothorn",
+    "rotomwash",
+    "clefable",
+    "corviknight",
     "zapdos",
-    "starmie",
-    "dugtrio",
-    "jolteon",
-    "gyarados",
-    "celebi",
-    "suicune",
-    "forretress",
+    "tyranitar",
+    "hippowdon",
+    "kartana",
+    "volcarona",
+    "urshifu",
+    "urshifurapidstrike",
+    "tornadus",
+    "tornadustherian",
+    "tapu-koko",
+    "tapu-fini",
+    "tapu-lele",
+    "tapu-bulu",
+    "buzzwole",
+    "naganadel",
+    "magearna",
+    "blissey",
+    "chansey",
+    "skarmory",
+    "magnezone",
+    "excadrill",
+    "serperior",
+    "dragonite",
+    "pelipper",
+    "swampert",
+    "hawlucha",
+    "gliscor",
+    "greninja",
+    "slowbro",
+    "slowbrotrop",  # Slowbro-Galar
+    "alakazam",
+    "alakazammega",
+    "gengar",
+    "gengarmega",
+    "scizor",
+    "scizormega",
     "heracross",
-    "claydol",
-    "breloom",
-    "milotic",
-    "umbreon",
-    "weezing",
-    "vaporeon",
-    "regice",
-    "flygon",
-    "machamp",
-    "magneton",
-    "sceptile",
-    "aerodactyl",
+    "heracrossmega",
+    "salamence",
+    "salamencemega",
+    "metagross",
+    "metagrossmega",
     "gardevoir",
-    "tauros",
-    "tentacruel",
-    "jynx",
-    "kangaskhan",
-    "slaking",
-    "moltres",
-    "articuno",
-    "rhydon",
+    "gardevoirmega",
+    "lucario",
+    "lucariomega",
 })
 
+# UU: strong but not broken — use NatDex UU-legal species
 UU: Final[frozenset[str]] = frozenset({
+    "azumarill",
     "arcanine",
-    "espeon",
-    "slowbro",
-    "porygon2",
-    "hitmontop",
     "nidoking",
     "nidoqueen",
-    "quagsire",
-    "omastar",
-    "sandslash",
-    "hitmonlee",
-    "ludicolo",
-    "manectric",
-    "haunter",
-    "donphan",
-    "hypno",
-    "victreebel",
-    "mantine",
-    "electrode",
-    "granbull",
-    "poliwrath",
-    "misdreavus",
-    "ursaring",
-    "scizor",
-    "ampharos",
-})
-
-NU: Final[frozenset[str]] = frozenset({
-    "absol",
-    "crawdaunt",
-    "lanturn",
-    "chimecho",
-    "linoone",
-    "furret",
+    "slowking",
+    "slowkinggalar",
+    "tentacruel",
+    "gyarados",
+    "gyaradosmega",
+    "umbreon",
+    "espeon",
+    "sylveon",
+    "togekiss",
     "glalie",
-    "wigglytuff",
-    "raticate",
+    "glaliemega",
+    "rotomheat",
+    "rotomcut",
+    "rotomfrost",
+    "rotomfan",
+    "talonflame",
+    "amoonguss",
+    "reuniclus",
+    "jellicent",
+    "shaymin",
+    "victini",
+    "cobalion",
+    "virizion",
+    "terrakion",
+    "keldeo",
+    "thundurus",
+    "thundurustherian",
+    "aegislash",
+    "mantine",
+    "suicune",
+    "entei",
+    "raikou",
+    "jirachi",
+    "celebi",
+    "mew",
 })
 
+# LC: Little Cup (first-stage unevolved Pokémon at level 5)
 LC: Final[frozenset[str]] = frozenset({
     "elekid",
     "magby",
@@ -123,33 +175,50 @@ LC: Final[frozenset[str]] = frozenset({
     "abra",
     "snorunt",
     "carvanha",
+    "mienfoo",
+    "pawniard",
+    "murkrow",
+    "misdreavus",
+    "gothita",
+    "solosis",
+    "timburr",
+    "scraggy",
+    "snover",
+    "hippopotas",
+    "bronzor",
+    "staryu",
+    "wynaut",
+    "porygon",
+    "vulpix",
+    "slowpoke",
+    "shellder",
+    "seel",
+    "diglett",
 })
 
 # Ordered from most to least restrictive (ascending leniency)
-TIER_HIERARCHY: Final[list[str]] = ["lc", "nu", "uu", "ou", "ubers"]
+TIER_HIERARCHY: Final[list[str]] = ["lc", "uu", "ou", "ubers"]
 
 # ---------------------------------------------------------------------------
 # Format mapping — Nidozo tier → Pokémon Showdown format string
 # ---------------------------------------------------------------------------
 
 TIER_TO_FORMAT: Final[dict[str, str]] = {
-    "ubers":      "gen3ubers",
-    "ou":         "gen3ou",
-    "uu":         "gen3ou",     # Showdown doesn't have gen3uu; use gen3ou with our pool
-    "nu":         "gen3ou",     # same
-    "lc":         "gen3lc",
-    "freeforall": "gen3ubers",  # most permissive; our pool is all sets in JSON
+    "ubers":      "gen9nationaldexag",   # NatDex Anything Goes — no ban list
+    "ou":         "gen9nationaldex",     # NatDex OU
+    "uu":         "gen9nationaldex",     # NatDex OU rules; our pool restricts species
+    "lc":         "gen9nationaldexlc",   # NatDex Little Cup
+    "freeforall": "gen9nationaldexag",   # most permissive; full natdex_movesets pool
 }
 
 # Display names shown in the frontend
 TIER_DISPLAY: Final[dict[str, str]] = {
-    "ubers":      "Ubers",
-    "ou":         "OverUsed (OU)",
-    "uu":         "UnderUsed (UU)",
-    "nu":         "NeverUsed (NU)",
-    "lc":         "Little Cup (LC)",
-    "freeforall": "Free-for-All",
-    "random":     "Random Battle",
+    "ubers":      "Ubers (NatDex AG)",
+    "ou":         "OU (NatDex)",
+    "uu":         "UU (NatDex)",
+    "lc":         "Little Cup (NatDex)",
+    "freeforall": "Free-for-All (NatDex AG)",
+    "random":     "Random Battle (Gen 9)",
 }
 
 # Map tier ID → frozenset (None means "no restriction")
@@ -157,7 +226,6 @@ _TIER_POOLS: dict[str, frozenset[str] | None] = {
     "ubers":      UBERS,
     "ou":         OU,
     "uu":         UU,
-    "nu":         NU,
     "lc":         LC,
     "freeforall": None,
 }
