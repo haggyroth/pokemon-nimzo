@@ -38,7 +38,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 logger = logging.getLogger(__name__)
 
 # Only well-formed battle room ids may be proxied.  Showdown battle rooms look
-# like ``battle-gen3randombattle-17`` or ``battle-gen3ou-1234-abcdef``.
+# like ``battle-gen9randombattle-17`` or ``battle-gen9nationaldex-1234-abcdef``.
 _ROOM_RE = re.compile(r"^battle-[a-z0-9-]+$")
 
 # Seconds to wait for the guest login + room join to complete before giving up.
