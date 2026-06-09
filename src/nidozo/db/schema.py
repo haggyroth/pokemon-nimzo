@@ -2,7 +2,7 @@
 
 import sqlite3
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 # Table definitions only — safe to run against any DB version via IF NOT EXISTS.
 # Indexes are kept separate because they may reference columns (e.g. tournament_id)
@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS turns (
     prompt_version TEXT   NOT NULL,
     action_chosen TEXT,               -- e.g. "move 2" or "switch pikachu"
     parse_success INTEGER NOT NULL DEFAULT 1,  -- 0=fell back to random
+    fallback_reason TEXT,                      -- why the turn fell back: 'parse_failure' | 'no_legal_move' | NULL
     llm_response  TEXT,                        -- full raw response (may be large)
     state_json    TEXT,                        -- serialized battle state at decision time (v2+)
     coach_advice  TEXT                         -- free-form advice from the coach model (NULL if no coach)
@@ -118,10 +119,10 @@ CREATE TABLE IF NOT EXISTS seasons (
     id              INTEGER PRIMARY KEY,
     name            TEXT    NOT NULL,
     tier            TEXT    NOT NULL DEFAULT 'random',
-    format          TEXT    NOT NULL DEFAULT 'gen3randombattle',
+    format          TEXT    NOT NULL DEFAULT 'gen9randombattle',
     participants    TEXT    NOT NULL,  -- JSON [{provider, model_name}]
     rounds          INTEGER NOT NULL DEFAULT 1,
-    prompt_version  TEXT    NOT NULL DEFAULT 'v4',
+    prompt_version  TEXT    NOT NULL DEFAULT 'v5',
     total_battles   INTEGER NOT NULL DEFAULT 0,
     status          TEXT    NOT NULL DEFAULT 'pending',  -- pending|running|completed|cancelled
     created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
@@ -331,10 +332,10 @@ def migrate(conn: sqlite3.Connection) -> None:
                 id              INTEGER PRIMARY KEY,
                 name            TEXT    NOT NULL,
                 tier            TEXT    NOT NULL DEFAULT 'random',
-                format          TEXT    NOT NULL DEFAULT 'gen3randombattle',
+                format          TEXT    NOT NULL DEFAULT 'gen9randombattle',
                 participants    TEXT    NOT NULL,
                 rounds          INTEGER NOT NULL DEFAULT 1,
-                prompt_version  TEXT    NOT NULL DEFAULT 'v4',
+                prompt_version  TEXT    NOT NULL DEFAULT 'v5',
                 total_battles   INTEGER NOT NULL DEFAULT 0,
                 status          TEXT    NOT NULL DEFAULT 'pending',
                 created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
@@ -361,4 +362,15 @@ def migrate(conn: sqlite3.Connection) -> None:
         except sqlite3.OperationalError:
             pass  # column already exists
         conn.execute("UPDATE schema_version SET version=11")
+        conn.commit()
+
+    if version < 12:
+        # Add fallback_reason column to turns to distinguish parse failures from
+        # forced fallbacks (no legal move available).
+        # Values: 'parse_failure' | 'no_legal_move' | NULL (success)
+        try:
+            conn.execute("ALTER TABLE turns ADD COLUMN fallback_reason TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        conn.execute("UPDATE schema_version SET version=12")
         conn.commit()

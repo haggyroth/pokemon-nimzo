@@ -437,15 +437,18 @@ class BattleStore:
         llm_response: str | None = None,
         state_json: str | None = None,
         coach_advice: str | None = None,
+        fallback_reason: str | None = None,
     ) -> None:
         self._conn.execute(
             """INSERT INTO turns
                (battle_id, turn_number, player_role, prompt_version,
-                action_chosen, parse_success, llm_response, state_json, coach_advice)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+                action_chosen, parse_success, fallback_reason,
+                llm_response, state_json, coach_advice)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
             (
                 battle_id, turn_number, player_role, prompt_version,
-                action_chosen, int(parse_success), llm_response, state_json, coach_advice,
+                action_chosen, int(parse_success), fallback_reason,
+                llm_response, state_json, coach_advice,
             ),
         )
         self._conn.commit()
