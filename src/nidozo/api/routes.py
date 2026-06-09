@@ -272,7 +272,7 @@ def create_router(
             result.append({
                 "id": tier_id,
                 "name": display,
-                "showdown_format": TIER_TO_FORMAT.get(tier_id, "gen3ou"),
+                "showdown_format": TIER_TO_FORMAT.get(tier_id, "gen9nationaldexag"),
                 "pokemon_count": count,
             })
         return result
@@ -313,8 +313,8 @@ def create_router(
             raise HTTPException(status_code=400, detail=f"Unknown tier: {req.tier!r}")
 
         showdown_format = (
-            "gen3randombattle" if req.tier == "random"
-            else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+            "gen9randombattle" if req.tier == "random"
+            else TIER_TO_FORMAT.get(req.tier, "gen9nationaldexag")
         )
         effective_prompt = "v3" if (req.tier != "random" and req.draft) else req.prompt_version
 
@@ -371,8 +371,8 @@ def create_router(
             )
 
         showdown_format = (
-            "gen3randombattle" if req.tier == "random"
-            else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+            "gen9randombattle" if req.tier == "random"
+            else TIER_TO_FORMAT.get(req.tier, "gen9nationaldexag")
         )
         effective_prompt = "v3" if (req.tier != "random" and req.draft) else req.prompt_version
 
@@ -479,8 +479,8 @@ def create_router(
             raise HTTPException(status_code=400, detail=f"Unknown tier: {req.tier!r}")
 
         showdown_format = (
-            "gen3randombattle" if req.tier == "random"
-            else TIER_TO_FORMAT.get(req.tier, "gen3ou")
+            "gen9randombattle" if req.tier == "random"
+            else TIER_TO_FORMAT.get(req.tier, "gen9nationaldexag")
         )
         effective_prompt = "v3" if (req.tier != "random" and req.draft) else req.prompt_version
 

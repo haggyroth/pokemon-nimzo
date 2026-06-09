@@ -233,18 +233,18 @@ class TestBattleContext:
         assert ctx["speed"]["you_move_first"] is False
 
     def test_paralysis_reduces_own_effective_speed(self) -> None:
-        """A paralyzed mon with 200 base speed should have effective speed ~50,
-        which is less than an opponent at 80 base speed."""
+        """A paralyzed mon with 120 base speed should have effective speed 60 (Gen 9: 50%),
+        which is less than an opponent at 80 base speed → moves second."""
         status_par = MagicMock()
         status_par.name = "PAR"
         own = _mock_pokemon(
-            base_stats={"hp": 80, "atk": 80, "def": 80, "spa": 80, "spd": 80, "spe": 200},
+            base_stats={"hp": 80, "atk": 80, "def": 80, "spa": 80, "spd": 80, "spe": 120},
             status=status_par,
         )
         opp = _mock_pokemon(base_stats={"hp": 80, "atk": 80, "def": 80, "spa": 80, "spd": 80, "spe": 80})
         battle = _mock_battle(own=own, opp=opp)
         ctx = score_actions(battle)["battle_context"]
-        # 200 * 0.25 = 50 < 80 → moves second
+        # 120 * 0.50 = 60 < 80 → moves second (Gen 9 paralysis halves speed)
         assert ctx["speed"]["you_move_first"] is False
 
     def test_active_matchup_favorable(self) -> None:
