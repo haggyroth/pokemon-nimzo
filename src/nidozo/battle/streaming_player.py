@@ -142,6 +142,8 @@ class _StreamingMixin:
         # Tracks whether choose_move ran during the current frame, so the
         # post-parse hook doesn't double-emit a state_update.
         self._chose_during_frame = False
+        # Battle tags for which we've already emitted showdown_room (OP-02).
+        self._announced_rooms: set[str] = set()
 
     async def _emit_state_update(self, battle: AbstractBattle) -> None:
         """Publish a render-only snapshot of the current battle state."""
@@ -211,6 +213,22 @@ class _StreamingMixin:
         )
 
     async def _handle_battle_message(self, split_messages: list[list[str]]) -> None:
+        # Emit showdown_room once per battle on the first frame so the browser
+        # can open the spectator-proxy socket as soon as the room is known (OP-02).
+        try:
+            raw_tag = split_messages[0][0]
+            if raw_tag.startswith(">"):
+                battle_tag = raw_tag[1:]
+                if battle_tag not in self._announced_rooms:
+                    self._announced_rooms.add(battle_tag)
+                    await self._bus.publish({
+                        "type": "showdown_room",
+                        "battle_id": getattr(self, "_battle_id", None),
+                        "room": battle_tag,
+                    })
+        except (IndexError, AttributeError):
+            pass
+
         # Let poke-env parse the frame (mutating the battle, possibly invoking
         # choose_move on a request). Delegating keeps us robust to library
         # internals changing between versions.

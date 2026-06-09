@@ -16,6 +16,7 @@ export function useBattleStream() {
   const [tournament, setTournament]     = useState(null)   // tournament progress state
   const [season, setSeason]             = useState(null)   // season progress state
   const [draft, setDraft]               = useState(null)   // draft phase state
+  const [showdownRoom, setShowdownRoom] = useState(null)   // OP-02: Showdown battle room id for spectating
   const wsRef         = useRef(null)
   const shouldConnect = useRef(false)
   const retryDelay    = useRef(1000)
@@ -90,6 +91,13 @@ export function useBattleStream() {
               [role]: { picks: event.team, done: true },
             }
           })
+          return
+        }
+
+        // OP-02: browser learns the Showdown room id so ShowdownBattleScene can
+        // open the spectator-proxy socket as soon as the room is available.
+        if (event.type === 'showdown_room') {
+          setShowdownRoom(event.room)
           return
         }
 
@@ -271,6 +279,7 @@ export function useBattleStream() {
           setThinking(null)
           setCoachThinking(null)
           setDraft(null)
+          setShowdownRoom(null)
         }
 
         if (event.type === 'turn') {
@@ -323,6 +332,7 @@ export function useBattleStream() {
     setThinking(null)
     setCoachThinking(null)
     setDraft(null)
+    setShowdownRoom(null)
   }, [])
 
   const clearTournament = useCallback(() => setTournament(null), [])
@@ -335,6 +345,6 @@ export function useBattleStream() {
 
   return {
     events, isConnected, p1State, p2State, battleInfo, battleResult,
-    thinking, coachThinking, tournament, season, draft, reset, clearTournament, clearSeason,
+    thinking, coachThinking, tournament, season, draft, showdownRoom, reset, clearTournament, clearSeason,
   }
 }
