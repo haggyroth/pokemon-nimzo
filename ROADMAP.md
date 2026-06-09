@@ -158,16 +158,20 @@
 - **Baton Pass ban**: removed from 6 gen3ubers-incompatible movesets
 - **Challenge hang**: 60 s timeout on `_battle_semaphore.acquire()` converts infinite hangs to clean `failed` status
 
+### v0.24 — Showdown Built-in Battle Scene (OP-02)
+- **Spectator-proxy WebSocket** (`/ws/showdown/{room}`): guest login + `/join` + verbatim frame relay to the browser; room ids validated against a strict `battle-*` pattern; login frames suppressed; injectable upstream for unit testing
+- **`showdown_room` EventBus event**: emitted on the first battle frame so the frontend learns the Showdown room id; included in the replay buffer for late-joining subscribers
+- **PS bundle loader** (`useShowdownBundle`): fetches 14 CDN scripts from `play.pokemonshowdown.com` in strict dependency order; singleton load promise; `window.Config` stub injected first
+- **`ShowdownBattleScene`**: opens the spectator-proxy socket after the PS `Battle` instance is ready; Showdown server replay eliminates any line-buffer requirement
+- **Classic / Showdown toggle**: tab bar in the live battle view; defaults to Classic; `localStorage`-persisted preference; graceful fallback to Classic when no room is available yet
+- **Integration test gate**: `pytest.mark.integration` marker; `test_proxy_relays_init_battle_and_turn_frames` creates a real Gen 3 battle and asserts the proxy relays `|init|battle` + `|turn|`; excluded from the default test run via `addopts`
+- Small fixes: LM Studio stats `json_extract` guard (#95); model labels not cleared before next `battle_start` (#96)
+
 ---
 
 ## Upcoming
 
 ### Platform Expansion
-
-**🎮 Pokémon Showdown Built-in Battle Scene** *(major milestone — tracked in #84)*
-- Embed the Showdown client's own animated battle scene with animated sprites, move effects, and sound
-- Likely approach: proxy the Showdown protocol through our WebSocket so the client renders the live battle while our LLMs drive it
-- See GitHub issue OP-02 for architecture notes
 
 **Gen 1 & Gen 2 Coverage Expansion** *(tracked in #85)*
 - Add all Gen 1 and Gen 2 Pokémon to the draft pool
@@ -192,7 +196,7 @@
 ### Technical Debt & Housekeeping
 
 **Test Coverage**
-- **Tier 3** — integration tests for `battle/orchestration.py` and `llm/draft.py` that require a live local Showdown server; separate CI job with `[integration]` marker
+- **Tier 3 (partial)** — `pytest.mark.integration` infrastructure is in place; `test_ws_showdown_integration.py` covers the spectator proxy. Still needed: integration tests for `battle/orchestration.py` and `llm/draft.py`; dedicated CI job that starts the Showdown server
 
 **Infrastructure**
 - E2E smoke tests (Playwright) covering start → watch → replay → analyze

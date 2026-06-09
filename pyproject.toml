@@ -1,6 +1,6 @@
 [project]
 name = "nidozo"
-version = "0.13.0"
+version = "0.24.0"
 description = "LLM vs LLM Pokémon battle arena powered by Pokémon Showdown and poke-env"
 requires-python = ">=3.12"
 dependencies = [
@@ -25,6 +25,10 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: requires a live Showdown server on localhost:8000 (deselected by default)",
+]
 
 [tool.mypy]
 strict = true
