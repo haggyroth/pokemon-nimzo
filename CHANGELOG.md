@@ -7,6 +7,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Qwen / LM Studio 0% JSON parse rate** — `v5` was missing from
+  `_JSON_OUTPUT_PROMPT_VERSIONS`, so json_mode was never activated for the
+  current default prompt. LM Studio now uses the simpler `json_object` grammar
+  (`{"type":"json_object"}`) instead of the full `json_schema` that many local
+  models reject. (#117)
+- **Schema v12** — stale `gen3randombattle` and `v4` defaults replaced with
+  `gen9randombattle` / `v5` in the seasons DDL and v10 migration; new
+  `fallback_reason TEXT` column on `turns` records whether a move was chosen
+  due to a parse failure or a backend error. (#118)
+- **Action parser fuzzy move matching** — `_resolve_move` now applies the same
+  `difflib` fuzzy matching that `_resolve_switch` already had, so one-character
+  typos in a model's output no longer fall back to a random move. (#119)
+- **`fallback_reason` end-to-end** — wired through store queries, replay API
+  endpoint, analyzer, and BattleReplay UI so the distinction between a "parse
+  failure" and a "random fallback" is surfaced everywhere. (#119, #121)
+- **Orchestration format defaults** — `run_battles`, `run_tournament`,
+  `run_bracket_tournament`, and `run_season` were using `gen3randombattle` /
+  `gen3ou` while the API recorded battles as gen9, silently mismatching
+  ruleset. (#122)
+- **`run_battle.py` model version tracking** — `get_or_create_model` was
+  called without `prompt_version`, defaulting to `"v1"` regardless of
+  `--prompt-version`, splitting ELO tracking into separate model rows. (#123)
+- **`get_model_stats` SQL aggregation** — replaced a Python-side row fetch +
+  count loop with a single `SELECT COUNT(*), SUM(parse_success)` query. (#123)
+- **Form error display** — BattleForm, TournamentForm, and SeasonForm silently
+  swallowed API errors. Non-2xx responses now surface `data.detail` in a red
+  banner above the submit button; network failures are shown too. (#124)
+- **`get_tournament` import / except clause** — redundant `import json as _json`
+  removed (module-level `import json` was already present); bare
+  `except Exception` tightened to `except json.JSONDecodeError`. (#125)
+- **`draft.py` format fallback** — unreachable `"gen3ou"` fallback in
+  `TIER_TO_FORMAT.get` corrected to `"gen9nationaldexag"`. (#125)
+- **`build_natdex_sets.py` lint** — removed unused `import sys`, dead `name_re`
+  regex, and a spurious f-string prefix flagged by ruff. (#127)
+
+### Changed
+- Leaderboard script now reads `NIDOZO_DB` env var (was `NIMZO_DB`; old name
+  still accepted as a backward-compat alias). (#121)
+- CLI scripts (`run_battle.py`, `tournament.py`) updated to default
+  `prompt_version="v5"` and `fmt="gen9randombattle"`, matching the API. (#120)
+
 ---
 
 ## [0.24.0] — 2026-06-09
