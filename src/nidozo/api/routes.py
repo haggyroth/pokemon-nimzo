@@ -213,15 +213,14 @@ def create_router(
 
     @router.get("/api/tournaments/{tournament_id}")
     def get_tournament(tournament_id: int) -> dict[str, Any]:
-        import json as _json
         t = store.get_tournament(tournament_id)
         if not t:
             raise HTTPException(status_code=404, detail="Tournament not found")
         # Parse bracket_state JSON so the client receives an object, not a string
         if t.get("bracket_state") and isinstance(t["bracket_state"], str):
             try:
-                t["bracket_state"] = _json.loads(t["bracket_state"])
-            except Exception:
+                t["bracket_state"] = json.loads(t["bracket_state"])
+            except json.JSONDecodeError:
                 t["bracket_state"] = None
         return t
 
