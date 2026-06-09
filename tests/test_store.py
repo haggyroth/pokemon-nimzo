@@ -1137,3 +1137,42 @@ def test_get_global_stats_top_moves(store) -> None:
     # shadowball appears in p2 turns; flamethrower in p1 — both should be present globally
     assert "flamethrower" in moves
     assert "shadowball" in moves
+
+
+def _seed_malformed_llm_response(store: BattleStore) -> tuple[int, int]:
+    """Seed a battle with one well-formed and one malformed llm_response row."""
+    p1 = store.get_or_create_model("lmstudio", "qwen3-bad", "v5")
+    p2 = store.get_or_create_model("random", "random", "v1")
+    bid = store.create_battle("bad-resp-tag", "gen3randombattle", p1, p2)
+    store.finish_battle(bid, winner=1, total_turns=2)
+    # Good row
+    store.log_turn(bid, 1, "p1", "v5", "move flamethrower", True,
+                   _json.dumps({"action_type": "move", "identifier": "flamethrower"}),
+                   _json.dumps({"my_active": {"species": "Charizard"}}))
+    # Malformed row: raw text stored on parse failure (not valid JSON)
+    store.log_turn(bid, 2, "p1", "v5", None, False,
+                   "I choose Thunderbolt because it has high damage",
+                   None)
+    # Empty-string row: stored when retries exhausted
+    store.log_turn(bid, 3, "p1", "v5", None, False, "", None)
+    return p1, bid
+
+
+def test_model_usage_stats_tolerates_malformed_llm_response(store) -> None:
+    """get_model_usage_stats does not 500 when llm_response contains non-JSON text."""
+    p1, _ = _seed_malformed_llm_response(store)
+    usage = store.get_model_usage_stats(p1)
+    # Only the well-formed row should count
+    moves = {r["move"]: r["cnt"] for r in usage["top_moves"]}
+    assert moves.get("flamethrower") == 1
+    dist = {r["action_type"]: r["cnt"] for r in usage["action_distribution"]}
+    # malformed rows excluded — only the one valid JSON move row counts
+    assert dist.get("move", 0) == 1
+
+
+def test_get_global_stats_tolerates_malformed_llm_response(store) -> None:
+    """get_global_stats does not 500 when llm_response contains non-JSON text."""
+    _seed_malformed_llm_response(store)
+    gs = store.get_global_stats()
+    moves = {r["move"]: r["cnt"] for r in gs["top_moves"]}
+    assert moves.get("flamethrower") == 1
