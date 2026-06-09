@@ -5464,3 +5464,103 @@ body::after {
 .btn-replay[title]::after {
   /* done via title tooltip — no additional CSS needed */
 }
+
+/* ================================================================
+   OP-02 Stage 2 — ShowdownRenderSpike
+   ================================================================ */
+
+.srs-wrapper {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.srs-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.srs-title {
+  font-family: var(--font-pixel);
+  font-size: 0.7rem;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: 0.05em;
+}
+
+.srs-subtitle {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin: 0;
+  flex: 1;
+}
+
+.srs-badge {
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  letter-spacing: 0.1em;
+}
+.srs-badge--loading-bundle { background: rgba(255,200,0,0.15); color: #ffc800; border: 1px solid rgba(255,200,0,0.3); }
+.srs-badge--rendered       { background: rgba(0,255,100,0.12); color: #00e664; border: 1px solid rgba(0,255,100,0.3); }
+.srs-badge--error          { background: rgba(255,60,60,0.15);  color: #ff4444; border: 1px solid rgba(255,60,60,0.3); }
+
+.srs-scene {
+  background: #1a1a2e;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* The PS Battle class sizes $frame and $logFrame itself; we just host them. */
+.srs-frame {
+  width: 640px;
+  height: 400px;
+  max-width: 100%;
+  position: relative;
+}
+
+.srs-log {
+  border-top: 1px solid var(--border);
+  min-height: 120px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+}
+
+.srs-loading {
+  margin-top: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.srs-error {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: #ff4444;
+  background: rgba(255,60,60,0.08);
+  border: 1px solid rgba(255,60,60,0.25);
+  border-radius: 4px;
+  padding: 1rem;
+}
+
+/* ShowdownBattleScene (Stage 3 container) */
+.sbs-placeholder--error {
+  color: #ff4444;
+  background: rgba(255,60,60,0.08);
+  border: 1px solid rgba(255,60,60,0.25);
+  border-radius: 4px;
+  padding: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+}

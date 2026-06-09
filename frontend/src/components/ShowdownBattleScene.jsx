@@ -26,6 +26,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { useShowdownBundle } from '../hooks/useShowdownBundle'
 
 /**
  * The proxy forwards frames verbatim, including the leading `>ROOMID` line.
@@ -40,6 +41,7 @@ function protocolLinesFromFrame(frame) {
 }
 
 export default function ShowdownBattleScene({ room }) {
+  const { ready: bundleReady, error: bundleError } = useShowdownBundle()
   const frameRef = useRef(null)     // scene container (passed as $frame)
   const logRef   = useRef(null)     // text-log container (passed as $logFrame)
   const battleRef = useRef(null)    // the live `Battle` instance (Stage 3)
@@ -86,37 +88,55 @@ export default function ShowdownBattleScene({ room }) {
     }
   }, [room])
 
-  // Stage 2/3: instantiate the vendored renderer once the bundle is loaded.
-  // useEffect(() => {
-  //   if (!window.Battle || !frameRef.current) return
-  //   battleRef.current = new window.Battle({
-  //     $frame: window.jQuery(frameRef.current),
-  //     $logFrame: window.jQuery(logRef.current),
-  //     id: room,
-  //     subscription: (s) => setStatus(s === 'ended' ? 'ended' : 'live'),
-  //   })
-  //   return () => battleRef.current?.destroy()
-  // }, [room])
+  // Stage 2/3: instantiate the renderer once the bundle is loaded and room is known.
+  useEffect(() => {
+    if (!bundleReady || !room || !frameRef.current || !logRef.current) return
+    if (battleRef.current) {
+      battleRef.current.destroy?.()
+      battleRef.current = null
+    }
+    try {
+      battleRef.current = new window.Battle({
+        $frame: window.jQuery(frameRef.current),
+        $logFrame: window.jQuery(logRef.current),
+        id: room,
+        paused: true,
+        subscription: (s) => setStatus(s === 'ended' ? 'ended' : 'live'),
+      })
+    } catch {
+      setStatus('error')
+    }
+    return () => {
+      battleRef.current?.destroy?.()
+      battleRef.current = null
+    }
+  }, [bundleReady, room])
+
+  if (bundleError) {
+    return (
+      <div className="sbs-placeholder sbs-placeholder--error">
+        Showdown renderer unavailable: {bundleError.message}
+      </div>
+    )
+  }
 
   if (!room) {
     return (
       <div className="sbs-placeholder">
-        Waiting for the Showdown room id…
+        {bundleReady ? 'Waiting for the Showdown room id…' : 'Loading Showdown renderer…'}
       </div>
     )
   }
 
   return (
     <div className="showdown-battle-scene">
-      {/* Stage 2: vendored renderer draws into these two containers. */}
+      {/* Stage 2: renderer draws into these two containers. */}
       <div ref={frameRef} className="sbs-frame" />
       <div ref={logRef} className="sbs-log" />
 
-      {/* PoC placeholder so the data path is observable before the bundle lands. */}
+      {/* Status overlay — visible while Stage 3 live-stream wiring is pending. */}
       <div className="sbs-status">
         Showdown scene ({status}) — room <code>{room}</code> — {lineCount} protocol lines received.
-        <br />
-        Renderer bundle not yet vendored; see docs/op-02-architecture.md (Stage 2).
       </div>
     </div>
   )

@@ -8,6 +8,7 @@ import GlobalStats from './components/GlobalStats'
 import TournamentView from './components/TournamentView'
 import SeasonView from './components/SeasonView'
 import DraftPhase from './components/DraftPhase'
+import ShowdownRenderSpike from './components/ShowdownRenderSpike'
 import { useBattleStream } from './hooks/useBattleStream'
 
 function App() {
@@ -155,6 +156,12 @@ function App() {
               SCORES
             </button>
           )}
+          {/* OP-02 Stage 2: render spike nav — remove once Stage 4 toggle lands */}
+          <button
+            className={`nav-btn ${view === 'showdown-spike' ? 'active' : ''}`}
+            onClick={() => setView('showdown-spike')}
+            title="OP-02 Stage 2 render spike"
+          >SHOWDOWN</button>
         </nav>
       </header>
 
@@ -238,6 +245,8 @@ function App() {
             onClose={handleReplayClose}
           />
         )}
+        {/* OP-02 Stage 2: render spike — remove once Stage 4 toggle lands */}
+        {view === 'showdown-spike' && <ShowdownRenderSpike />}
       </main>
     </div>
   )
