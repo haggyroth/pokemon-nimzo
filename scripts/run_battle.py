@@ -1,5 +1,5 @@
 """
-Run a Gen 3 random-singles battle between two players.
+Run a random-singles battle between two players.
 
 Requires the local Showdown server to be running first:
     ./scripts/start_showdown.sh
@@ -38,7 +38,10 @@ from nidozo.llm import AnthropicBackend, OpenAIBackend
 
 logging.basicConfig(level=logging.WARNING)
 
-_FORMAT = "gen3randombattle"
+_FORMAT = "gen9randombattle"
+
+
+_JSON_VERSIONS = frozenset({"v2", "v3", "v4", "v5"})
 
 
 def _build_player(
@@ -47,12 +50,14 @@ def _build_player(
     role: str,
     store: BattleStore,
     battle_id: int,
-    prompt_version: str = "v2",
+    prompt_version: str = "v5",
 ) -> Player:
     cfg = LocalhostServerConfiguration
 
     if provider == "random":
         return RandomBot(battle_format=_FORMAT, server_configuration=cfg)
+
+    use_json_mode = prompt_version in _JSON_VERSIONS and provider in ("lmstudio", "openai")
 
     if provider == "anthropic":
         backend = AnthropicBackend(
@@ -63,12 +68,14 @@ def _build_player(
         backend = OpenAIBackend(
             model=model or "gpt-4o",
             api_key=os.environ.get("OPENAI_API_KEY"),
+            json_mode=use_json_mode, use_json_object=False,
         )
     elif provider == "lmstudio":
         backend = OpenAIBackend(
             model=model or os.environ.get("LM_STUDIO_MODEL", "local-model"),
             base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
             api_key="lm-studio",
+            json_mode=use_json_mode, use_json_object=True,
         )
     else:
         raise ValueError(
@@ -102,7 +109,7 @@ async def main(
     model: str | None,
     db_path: Path,
     n_battles: int = 1,
-    prompt_version: str = "v2",
+    prompt_version: str = "v5",
 ) -> None:
     store = BattleStore(db_path)
 
@@ -177,8 +184,9 @@ if __name__ == "__main__":
                         help="Number of battles to run (default: 1)")
     parser.add_argument("--db", default=None,
                         help="Path to SQLite DB (default: nidozo.db in repo root)")
-    parser.add_argument("--prompt-version", default="v2", choices=["v1", "v2"],
-                        help="Prompt version to use (default: v2)")
+    parser.add_argument("--prompt-version", default="v5",
+                        choices=["v1", "v2", "v3", "v4", "v5"],
+                        help="Prompt version to use (default: v5)")
     args = parser.parse_args()
 
     db_path = Path(args.db) if args.db else Path(

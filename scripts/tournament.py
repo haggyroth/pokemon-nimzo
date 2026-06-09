@@ -64,7 +64,8 @@ def _build_player(provider: str, model: str, role: str, store: BattleStore,
             battle_format=fmt, server_configuration=cfg,
         )
 
-    use_json_mode = prompt_version == "v2" and provider in ("lmstudio", "openai")
+    _JSON_VERSIONS = frozenset({"v2", "v3", "v4", "v5"})
+    use_json_mode = prompt_version in _JSON_VERSIONS and provider in ("lmstudio", "openai")
 
     if provider == "anthropic":
         backend = AnthropicBackend(
@@ -73,14 +74,14 @@ def _build_player(provider: str, model: str, role: str, store: BattleStore,
     elif provider == "openai":
         backend = OpenAIBackend(
             model=model, api_key=os.environ.get("OPENAI_API_KEY"),
-            json_mode=use_json_mode,
+            json_mode=use_json_mode, use_json_object=False,
         )
-    else:  # lmstudio
+    else:  # lmstudio — use simple json_object (strict json_schema fails on many local models)
         backend = OpenAIBackend(
             model=model,
             api_key="lm-studio",
             base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
-            json_mode=use_json_mode,
+            json_mode=use_json_mode, use_json_object=True,
         )
 
     return StreamingLLMPlayer(
@@ -98,8 +99,8 @@ async def run_one_battle(
     p1_provider: str, p1_model: str,
     p2_provider: str, p2_model: str,
     store: BattleStore,
-    prompt_version: str = "v2",
-    fmt: str = "gen3randombattle",
+    prompt_version: str = "v5",
+    fmt: str = "gen9randombattle",
 ) -> dict:
     """Run one battle, persist results, return summary dict."""
     from poke_env import LocalhostServerConfiguration
@@ -151,7 +152,7 @@ async def run_tournament(
     players: list[tuple[str, str]],
     rounds: int,
     store: BattleStore,
-    prompt_version: str = "v1",
+    prompt_version: str = "v5",
 ) -> None:
     pairs = list(itertools.combinations(players, 2))
     total = len(pairs) * rounds * 2  # each pair plays both ways each round
@@ -230,8 +231,8 @@ def main() -> None:
         help="Number of rounds per matchup (each pair plays both sides). Default: 1",
     )
     parser.add_argument(
-        "--prompt-version", default="v2",
-        help="Prompt template version (v1=text, v2=JSON output). Default: v2",
+        "--prompt-version", default="v5",
+        help="Prompt template version (v1=text, v2–v5=JSON output). Default: v5",
     )
     parser.add_argument(
         "--db", default=None,
