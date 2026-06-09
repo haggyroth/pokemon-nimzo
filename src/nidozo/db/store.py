@@ -852,8 +852,9 @@ class BattleStore:
                JOIN battles b ON b.id = t.battle_id
                WHERE ((b.p1_model_id = ? AND t.player_role = 'p1')
                    OR (b.p2_model_id = ? AND t.player_role = 'p2'))
-                 AND json_extract(t.llm_response, '$.action_type') = 'move'
                  AND t.llm_response IS NOT NULL
+                 AND json_valid(t.llm_response)
+                 AND json_extract(t.llm_response, '$.action_type') = 'move'
                GROUP BY move
                ORDER BY cnt DESC LIMIT 10""",
             (model_id, model_id),
@@ -867,6 +868,7 @@ class BattleStore:
                JOIN battles b ON b.id = t.battle_id
                WHERE ((b.p1_model_id = ? AND t.player_role = 'p1')
                    OR (b.p2_model_id = ? AND t.player_role = 'p2'))
+                 AND (t.llm_response IS NULL OR json_valid(t.llm_response))
                GROUP BY action_type""",
             (model_id, model_id),
         ).fetchall()
@@ -927,8 +929,9 @@ class BattleStore:
             """SELECT json_extract(t.llm_response, '$.identifier') AS move,
                       COUNT(*) AS cnt
                FROM turns t
-               WHERE json_extract(t.llm_response, '$.action_type') = 'move'
-                 AND t.llm_response IS NOT NULL
+               WHERE t.llm_response IS NOT NULL
+                 AND json_valid(t.llm_response)
+                 AND json_extract(t.llm_response, '$.action_type') = 'move'
                GROUP BY move ORDER BY cnt DESC LIMIT 12"""
         ).fetchall()
 
