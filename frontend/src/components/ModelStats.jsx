@@ -287,7 +287,10 @@ function LessonsLog({ lessons }) {
 
 function spriteUrl(species) {
   if (!species) return null
-  return `https://play.pokemonshowdown.com/sprites/gen3/${species.toLowerCase().replace(/[^a-z0-9]/g, '')}.png`
+  const id = species.toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+  return `https://play.pokemonshowdown.com/sprites/home/${id}.png`
 }
 
 function UsagePokemon({ rows }) {
