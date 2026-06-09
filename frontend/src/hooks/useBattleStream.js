@@ -20,6 +20,9 @@ export function useBattleStream() {
   const wsRef         = useRef(null)
   const shouldConnect = useRef(false)
   const retryDelay    = useRef(1000)
+  // Buffer for turn log entries: { [turnNum]: { p1: event|null, p2: event|null } }
+  // Flushed to the log in P1 → P2 order once both sides arrive for a given turn.
+  const turnBufferRef = useRef({})
   // Stable ref so the ws.onclose handler can schedule a reconnect without
   // capturing `connect` in a closure before it's declared (immutability rule).
   const connectRef    = useRef(null)
@@ -262,6 +265,75 @@ export function useBattleStream() {
           return
         }
 
+        // Turn events are buffered so the log always shows P1 → P2 regardless
+        // of which LLM responds first. State updates and thinking clear
+        // immediately so HP bars and indicators still animate in real time.
+        if (event.type === 'turn') {
+          setThinking(null)
+          setCoachThinking(null)
+          if (event.player_role === 'p1') setP1State(event)
+          if (event.player_role === 'p2') setP2State(event)
+          if (event.turn === 1) {
+            setTournament(prev => prev ? { ...prev, done: Math.max(0, (prev.done || 0)) } : null)
+          }
+
+          const buf = turnBufferRef.current
+          // Flush stale entries from earlier turns (e.g. one-sided random-bot turns
+          // that will never receive a second event).
+          const stale = Object.keys(buf).map(Number).filter(n => n < event.turn).sort((a, b) => a - b)
+          if (stale.length) {
+            setEvents(prev => {
+              let next = [...prev]
+              for (const n of stale) {
+                if (buf[n].p1) next.push(buf[n].p1)
+                if (buf[n].p2) next.push(buf[n].p2)
+                delete buf[n]
+              }
+              return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next
+            })
+          }
+
+          if (!buf[event.turn]) buf[event.turn] = { p1: null, p2: null }
+          buf[event.turn][event.player_role] = event
+
+          if (buf[event.turn].p1 && buf[event.turn].p2) {
+            const p1ev = buf[event.turn].p1
+            const p2ev = buf[event.turn].p2
+            delete buf[event.turn]
+            setEvents(prev => {
+              const next = [...prev, p1ev, p2ev]
+              return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next
+            })
+          }
+          return
+        }
+
+        // Flush any remaining buffered turns before the battle-end entry so the
+        // log ordering is complete even if one side never emitted.
+        if (event.type === 'battle_end' || event.type === 'battle_cancelled') {
+          const buf = turnBufferRef.current
+          const pending = Object.keys(buf).map(Number).sort((a, b) => a - b)
+          turnBufferRef.current = {}
+          setEvents(prev => {
+            let next = [...prev]
+            for (const n of pending) {
+              if (buf[n].p1) next.push(buf[n].p1)
+              if (buf[n].p2) next.push(buf[n].p2)
+            }
+            next.push(event)
+            return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next
+          })
+          if (event.type === 'battle_end') {
+            setBattleResult(event)
+            setTournament(prev => prev ? { ...prev, done: (prev.done || 0) + 1 } : null)
+          } else {
+            setBattleResult({ ...event, cancelled: true })
+          }
+          setThinking(null)
+          setCoachThinking(null)
+          return
+        }
+
         setEvents(prev => {
           const next = [...prev, event]
           return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next
@@ -271,6 +343,7 @@ export function useBattleStream() {
           // Clear the previous battle's log here rather than in handleBattleStarted,
           // so the model-name labels are always set by this event and never wiped by
           // a reset() that races the WS delivery of battle_start.
+          turnBufferRef.current = {}
           setEvents([])
           setBattleInfo(event)
           setBattleResult(null)
@@ -282,29 +355,6 @@ export function useBattleStream() {
           setShowdownRoom(null)
         }
 
-        if (event.type === 'turn') {
-          setThinking(null)
-          setCoachThinking(null)
-          if (event.player_role === 'p1') setP1State(event)
-          if (event.player_role === 'p2') setP2State(event)
-          // Increment tournament battle counter on each new turn 1
-          if (event.turn === 1) {
-            setTournament(prev => prev ? { ...prev, done: Math.max(0, (prev.done || 0)) } : null)
-          }
-        }
-
-        if (event.type === 'battle_end') {
-          setBattleResult(event)
-          setThinking(null)
-          setCoachThinking(null)
-          setTournament(prev => prev ? { ...prev, done: (prev.done || 0) + 1 } : null)
-        }
-
-        if (event.type === 'battle_cancelled') {
-          setBattleResult({ ...event, cancelled: true })
-          setThinking(null)
-          setCoachThinking(null)
-        }
       } catch {
         // non-JSON WebSocket frames are silently ignored
       }
