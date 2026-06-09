@@ -53,8 +53,13 @@ function typeAccentStyle(types, side) {
 
 function spriteUrl(species) {
   if (!species) return null
-  const slug = species.toLowerCase().replace(/[^a-z0-9]/g, '')
-  return `https://play.pokemonshowdown.com/sprites/gen3/${slug}.png`
+  // Build the Showdown sprite ID: lowercase, spaces→hyphens, strip non-alphanumeric
+  // except hyphens (which separate form names like "deoxys-speed", "rotom-wash").
+  const id = species.toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+  // HOME sprites cover every National-Dex entry through Gen 9.
+  return `https://play.pokemonshowdown.com/sprites/home/${id}.png`
 }
 
 function PokemonSprite({ species, size = 80, isThinking = false, animClass = '' }) {
@@ -72,7 +77,7 @@ function PokemonSprite({ species, size = 80, isThinking = false, animClass = '' 
         width={size}
         height={size}
         onError={e => { e.currentTarget.style.display = 'none' }}
-        style={{ imageRendering: 'pixelated' }}
+        style={{ imageRendering: 'auto' }}
       />
       {isThinking && (
         <div className="thinking-dots">
@@ -119,7 +124,7 @@ function BenchSlot({ mon }) {
             alt={mon.species}
             className="bench-sprite"
             onError={e => { e.currentTarget.style.display = 'none' }}
-            style={{ imageRendering: 'pixelated' }}
+            style={{ imageRendering: 'auto' }}
           />
         ) : (
           <div className="bench-sprite-fallback">{mon.species?.slice(0, 2).toUpperCase()}</div>

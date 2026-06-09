@@ -17,8 +17,31 @@ from __future__ import annotations
 from typing import Any
 
 from poke_env.battle import AbstractBattle, Move, Pokemon
+from poke_env.data.gen_data import GenData
 
 from nidozo.battle.heuristics import score_actions
+
+
+def _species_name(mon: Pokemon) -> str:
+    """Return a display-friendly species name suitable for sprites and prompts.
+
+    poke-env normalises species IDs via ``to_id_str()`` — stripping all
+    special characters including hyphens — so form Pokémon come out as e.g.
+    ``"deoxysspeed"``.  Showdown sprite filenames and the Pokédex ``name``
+    field use the hyphenated form (``"Deoxys-Speed"``), which is also more
+    readable in LLM prompts.
+
+    Looks up the ``name`` field from the Gen 9 Pokédex entry and falls back
+    to the raw poke-env ID if the entry is missing or the lookup fails.
+    """
+    try:
+        entry = GenData.from_gen(mon.gen).pokedex.get(mon.species)
+        if entry:
+            return entry.get("name") or mon.species
+    except Exception:  # noqa: BLE001
+        pass
+    return mon.species
+
 
 # ---------------------------------------------------------------------------
 # Public entry point
@@ -80,7 +103,7 @@ def serialize_battle(battle: AbstractBattle, *, light: bool = False) -> dict[str
         return state
 
     state["available_moves"] = [_serialize_move(m) for m in battle.available_moves]
-    state["available_switches"] = [p.species for p in battle.available_switches]
+    state["available_switches"] = [_species_name(p) for p in battle.available_switches]
     state["heuristics"] = score_actions(battle)
     state["opponent_threat_map"] = _compute_threat_map(battle)
     return state
@@ -101,7 +124,7 @@ def _serialize_own_pokemon(mon: Pokemon | None) -> dict[str, Any] | None:
     actual = {k: v for k, v in (mon.stats or {}).items() if v is not None}
     last_move = mon.last_move
     return {
-        "species": mon.species,
+        "species": _species_name(mon),
         "level": mon.level,
         "types": [t.name for t in mon.types],
         "hp_fraction": round(mon.current_hp_fraction, 3),
@@ -134,7 +157,7 @@ def _serialize_opponent_pokemon(mon: Pokemon | None) -> dict[str, Any] | None:
     revealed_moves = {name: _serialize_move_basic(m) for name, m in mon.moves.items()}
     last_move = mon.last_move
     return {
-        "species": mon.species,
+        "species": _species_name(mon),
         "level": mon.level,
         "types": [t.name for t in mon.types],
         "hp_fraction": round(mon.current_hp_fraction, 3),
@@ -253,14 +276,14 @@ def _compute_threat_map(battle: AbstractBattle) -> list[dict[str, Any]]:
                     default=1.0,
                 )
                 if max_mult >= 2.0:
-                    threatens.append(own.species)
+                    threatens.append(_species_name(own))
                 elif max_mult <= 0.5:
-                    resists.append(own.species)
+                    resists.append(_species_name(own))
             except Exception:  # noqa: BLE001
                 pass
 
         result.append({
-            "species": opp.species,
+            "species": _species_name(opp),
             "threatens": threatens,
             "resists": resists,
         })
