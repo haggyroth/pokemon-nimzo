@@ -224,11 +224,48 @@
 
 ### Platform Expansion
 
-**OP-03 — National Pokédex Expansion (revised scope)**
-- Expand draft pool beyond Gen 3 — format-agnostic species list so any legal Gen can be supported
-- Decouple moveset data from a fixed-generation assumption: each entry declares its `gen` and legality is validated per format
-- Heuristic engine updated for Gen 4+ mechanics (physical/special split, new types, abilities)
-- Gen 1 and Gen 2 format compatibility audit *(originally tracked in #85)*
+**OP-03 — Gen 9 NatDex: One Format, Full Pokédex** *(#85 — revised scope)*
+
+*Revised direction:* instead of maintaining per-generation rule sets (Gen 1/2/3 each needing their own type-chart, stat-model, and legality data), adopt **Gen 9 National Dex** as the single canonical ruleset. Any Pokémon from the full national Pokédex, any move it can legally learn in the current generation, no cross-gen legality juggling.
+
+**Why this is better than the original OP-03 plan:**
+- The root cause of the Signal Beam / Iron Head / Hidden Power IV failures was maintaining Gen 3 legality by hand — an unbounded maintenance surface
+- Gen 9 moves and forms are a superset of all earlier gens; moves that were move-tutor-only in Gen 3 are straightforwardly legal
+- Showdown validates Gen 9 teams automatically; we stop being an ad-hoc legality checker
+- The `gen9nationaldexag` format (NatDex Anything Goes) is already live on our local Showdown server
+
+**Showdown formats to use:**
+- `gen9randombattle` — random tier (Showdown auto-generates teams, zero moveset data needed, immediate drop-in)
+- `gen9nationaldexag` — drafted / freeforall tiers (full national dex, no ban list beyond true illegality)
+- `gen9nationaldex` — competitive drafted tiers (NatDex OU bans apply)
+- `gen9nationaldexlc` — Little Cup equivalent
+
+**Implementation phases:**
+
+*Phase 1 — Random battles (minimal change, no data needed):*
+- Change `"gen3randombattle"` → `"gen9randombattle"` in `routes.py` (3 occurrences) and `tiers.py`
+- Immediate payoff: Showdown generates legal Gen 9 teams automatically; zero moveset JSON involved
+
+*Phase 2 — Moveset data overhaul:*
+- Replace/extend `gen3_movesets.json` with a `movesets.json` covering the full national dex
+- Sets source: Smogon Gen 9 NatDex competitive analyses or a script that pulls from poke-env `GenData.from_gen(9)`
+- Each species entry: same schema (species, item, ability, nature, evs, ivs, moves) but Gen 9 legal
+- IVs field already exists (added in v0.25); Hidden Power is gone in Gen 9 so the IV complexity disappears
+- Script approach: query Showdown's own NatDex random-sets data (`data/random-battles/gen9/sets.json`)
+
+*Phase 3 — Tier definitions:*
+- Replace Gen 3 ADV tier sets in `tiers.py` with Gen 9 NatDex tier classifications (ND OU, ND UU, ND Ubers, etc.)
+- Or simplify to fewer tiers: `freeforall` (NatDex AG), `ou` (NatDex OU), `ubers` (NatDex Ubers), `lc` (NatDex LC)
+- TIER_TO_FORMAT updated to `gen9nationaldexag`, `gen9nationaldex`, etc.
+
+*Phase 4 — Heuristics:*
+- Remove Gen 3 specific comments; most mechanics (paralysis, burn, weather) are identical in Gen 9
+- Add Fairy type to damage modifier lookups (18-type chart)
+- Optionally: Terastal awareness (secondary type during Tera); safe to ignore in v1
+
+*Phase 5 — Serializer + prompts:*
+- Serializer already uses SpA/SpD (correct for Gen 9); minor audit for Gen 9-specific fields (Tera type)
+- Prompt templates: remove "Gen 3" references, no functional change needed initially
 
 **3v3 / 6v6 Team Size Config**
 - Expose team size as a configurable battle option alongside tier and format
