@@ -24,6 +24,7 @@ import json
 import logging
 import re
 from difflib import get_close_matches
+from typing import Any
 
 from poke_env.battle import AbstractBattle
 from poke_env.player.battle_order import BattleOrder
@@ -159,9 +160,10 @@ def _sanitize_json_strings(text: str) -> str:
     their escaped forms so the document becomes parseable.  The substitution
     is a no-op on already-valid JSON.
     """
-    def _escape_in_string(m: re.Match) -> str:  # type: ignore[type-arg]
+    def _escape_in_string(m: re.Match[str]) -> str:
+        raw: str = m.group()
         return (
-            m.group()
+            raw
             .replace("\n", "\\n")
             .replace("\r", "\\r")
             .replace("\t", "\\t")
@@ -199,7 +201,7 @@ def _parse_json_action(
     if not text.startswith("{"):
         return None
 
-    data: dict | None = None
+    data: dict[str, Any] | None = None
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
