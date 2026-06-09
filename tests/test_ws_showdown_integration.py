@@ -83,7 +83,7 @@ async def _make_battle_room() -> str:
             while not ready.is_set():
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=_TIMEOUT)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     return
                 text = raw.decode() if isinstance(raw, bytes) else raw
 
