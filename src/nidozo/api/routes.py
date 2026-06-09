@@ -161,6 +161,7 @@ def create_router(
                 "state":         state,
                 "action":        row["action_chosen"],
                 "parse_success": bool(row["parse_success"]),
+                "fallback_reason": row.get("fallback_reason"),
                 "coach_advice":  row.get("coach_advice"),
             }
 

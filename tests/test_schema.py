@@ -693,3 +693,114 @@ def test_migration_v11_narrative_column_already_exists(tmp_path) -> None:
     version = conn.execute("SELECT version FROM schema_version").fetchone()[0]
     assert version == SCHEMA_VERSION
     conn.close()
+
+
+def test_migration_v11_to_v12_adds_fallback_reason_column(tmp_path) -> None:
+    """A v11 database gains the fallback_reason column on turns after migrate()."""
+    import sqlite3
+
+    db_path = tmp_path / "v11.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+
+    # Minimal v11 schema — turns table without fallback_reason
+    conn.executescript("""
+        PRAGMA foreign_keys=ON;
+        CREATE TABLE schema_version (version INTEGER NOT NULL);
+        INSERT INTO schema_version VALUES (11);
+        CREATE TABLE models (
+            id INTEGER PRIMARY KEY,
+            provider TEXT NOT NULL,
+            model_name TEXT NOT NULL,
+            prompt_version TEXT NOT NULL DEFAULT 'v1',
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE TABLE elo_ratings (
+            model_id INTEGER PRIMARY KEY,
+            rating REAL NOT NULL DEFAULT 1000.0,
+            games INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        );
+        CREATE TABLE battles (
+            id INTEGER PRIMARY KEY,
+            battle_tag TEXT NOT NULL UNIQUE,
+            format TEXT NOT NULL,
+            p1_model_id INTEGER NOT NULL,
+            p2_model_id INTEGER NOT NULL,
+            winner INTEGER,
+            total_turns INTEGER,
+            status TEXT NOT NULL DEFAULT 'pending',
+            started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            finished_at TEXT,
+            narrative TEXT
+        );
+        CREATE TABLE elo_history (
+            id INTEGER PRIMARY KEY,
+            battle_id INTEGER NOT NULL,
+            model_id INTEGER NOT NULL,
+            rating_before REAL NOT NULL,
+            rating_after REAL NOT NULL,
+            delta REAL NOT NULL
+        );
+        CREATE TABLE turns (
+            id INTEGER PRIMARY KEY,
+            battle_id INTEGER NOT NULL,
+            turn_number INTEGER NOT NULL,
+            player_role TEXT NOT NULL,
+            prompt_version TEXT NOT NULL,
+            action_chosen TEXT,
+            parse_success INTEGER NOT NULL DEFAULT 1,
+            llm_response TEXT,
+            state_json TEXT,
+            coach_advice TEXT
+        );
+        CREATE TABLE tournaments (id INTEGER PRIMARY KEY, players TEXT NOT NULL);
+        CREATE TABLE seasons (id INTEGER PRIMARY KEY, name TEXT NOT NULL,
+            participants TEXT NOT NULL);
+        CREATE TABLE lessons (id INTEGER PRIMARY KEY, model_id INTEGER NOT NULL,
+            battle_id INTEGER NOT NULL, content TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
+        CREATE TABLE teams (id INTEGER PRIMARY KEY, model_id INTEGER NOT NULL,
+            tier TEXT NOT NULL, format TEXT NOT NULL, pokemon TEXT NOT NULL,
+            team_string TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
+        CREATE TABLE draft_sessions (id INTEGER PRIMARY KEY, model_id INTEGER NOT NULL,
+            tier TEXT NOT NULL, pool_size INTEGER NOT NULL, picked TEXT NOT NULL,
+            prompt_version TEXT NOT NULL DEFAULT 'v3',
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
+        CREATE UNIQUE INDEX idx_elohist_battle ON elo_history(battle_id, model_id);
+    """)
+    conn.commit()
+    conn.close()
+
+    conn2 = sqlite3.connect(str(db_path))
+    conn2.row_factory = sqlite3.Row
+    migrate(conn2)
+    conn2.close()
+
+    conn3 = sqlite3.connect(str(db_path))
+    conn3.row_factory = sqlite3.Row
+    cols = {r[1] for r in conn3.execute("PRAGMA table_info(turns)").fetchall()}
+    assert "fallback_reason" in cols, "fallback_reason column not added by v12 migration"
+
+    version = conn3.execute("SELECT version FROM schema_version").fetchone()[0]
+    assert version == SCHEMA_VERSION
+    conn3.close()
+
+
+def test_migration_v12_fallback_reason_already_exists(tmp_path) -> None:
+    """v12 migration must not fail if fallback_reason column already exists."""
+    import sqlite3
+
+    db_path = tmp_path / "v12_idem.db"
+    conn = sqlite3.connect(str(db_path))
+    migrate(conn)  # fresh install — fallback_reason present from the start
+
+    # Simulate re-running from v11
+    conn.execute("UPDATE schema_version SET version=11")
+    conn.commit()
+
+    migrate(conn)  # should silently skip the duplicate ALTER TABLE
+    version = conn.execute("SELECT version FROM schema_version").fetchone()[0]
+    assert version == SCHEMA_VERSION
+    conn.close()
