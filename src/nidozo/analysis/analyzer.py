@@ -466,6 +466,7 @@ def _merge_turns(flat_turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "state": state,
             "action": row.get("action_chosen"),
             "parse_success": bool(row.get("parse_success", True)),
+            "fallback_reason": row.get("fallback_reason"),
         }
     return [{"turn_number": n, **by_num[n]} for n in sorted(by_num.keys())]
 
