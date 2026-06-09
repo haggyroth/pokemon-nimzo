@@ -24,6 +24,7 @@ import json
 import logging
 import re
 from difflib import get_close_matches
+from typing import Any
 
 from poke_env.battle import AbstractBattle
 from poke_env.player.battle_order import BattleOrder
@@ -146,6 +147,35 @@ def _resolve_switch(
     return None
 
 
+def _sanitize_json_strings(text: str) -> str:
+    """Escape bare control characters inside JSON string literals.
+
+    Some small models (e.g. ministral-3-3b) embed literal newlines in the
+    ``reasoning`` field instead of the required ``\\n`` escape, producing:
+
+        "reasoning": "
+        some text",   ← 0x0A byte makes json.loads raise InvalidControlCharacter
+
+    This replaces literal \\n / \\r / \\t inside any JSON string token with
+    their escaped forms so the document becomes parseable.  The substitution
+    is a no-op on already-valid JSON.
+    """
+    def _escape_in_string(m: re.Match[str]) -> str:
+        raw: str = m.group()
+        return (
+            raw
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+        )
+
+    # Match JSON string literals: opening ", then any run of (non-quote
+    # non-backslash chars | backslash + any char), then closing ".
+    # re.DOTALL lets [^"\\] already match newlines (char-class ignores DOTALL),
+    # but is set so the alternate \\. also matches literal newlines.
+    return re.sub(r'"(?:[^"\\]|\\.)*"', _escape_in_string, text, flags=re.DOTALL)
+
+
 def _parse_json_action(
     response: str,
     battle: AbstractBattle,
@@ -155,6 +185,12 @@ def _parse_json_action(
 
     Expected shape: {"action_type": "move"|"switch", "identifier": "...", "reasoning": "..."}
     The 'reasoning' key is logged for context but not required for parsing.
+
+    Two parse attempts are made:
+    1. Standard ``json.loads`` — handles well-formed responses.
+    2. Control-char sanitization + retry — recovers responses where the model
+       embedded literal newlines inside the ``reasoning`` string value instead
+       of the required ``\\n`` escape sequence.
     """
     text = response.strip()
 
@@ -165,10 +201,16 @@ def _parse_json_action(
     if not text.startswith("{"):
         return None
 
+    data: dict[str, Any] | None = None
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        return None
+        # Recovery: some models produce literal control chars inside strings.
+        try:
+            data = json.loads(_sanitize_json_strings(text))
+            logger.debug("JSON parsed after control-char sanitization")
+        except json.JSONDecodeError:
+            return None
 
     if not isinstance(data, dict):
         return None
