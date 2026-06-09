@@ -9,6 +9,7 @@ import TournamentView from './components/TournamentView'
 import SeasonView from './components/SeasonView'
 import DraftPhase from './components/DraftPhase'
 import ShowdownRenderSpike from './components/ShowdownRenderSpike'
+import ShowdownBattleScene from './components/ShowdownBattleScene'
 import { useBattleStream } from './hooks/useBattleStream'
 
 function App() {
@@ -22,7 +23,7 @@ function App() {
   const [replayOrigin, setReplayOrigin]       = useState('home')
   const {
     events, isConnected, p1State, p2State, battleInfo, battleResult,
-    thinking, coachThinking, tournament, season, draft, reset, clearTournament, clearSeason,
+    thinking, coachThinking, tournament, season, draft, showdownRoom, reset, clearTournament, clearSeason,
   } = useBattleStream()
 
   const result = dismissed ? null : battleResult
@@ -245,8 +246,12 @@ function App() {
             onClose={handleReplayClose}
           />
         )}
-        {/* OP-02 Stage 2: render spike — remove once Stage 4 toggle lands */}
-        {view === 'showdown-spike' && <ShowdownRenderSpike />}
+        {/* OP-02 Stage 3: live Showdown renderer; falls back to spike when no battle active */}
+        {view === 'showdown-spike' && (
+          showdownRoom
+            ? <ShowdownBattleScene room={showdownRoom} />
+            : <ShowdownRenderSpike />
+        )}
       </main>
     </div>
   )
