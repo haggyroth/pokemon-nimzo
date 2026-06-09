@@ -34,7 +34,8 @@ Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`. Keep the sub
 ```bash
 uv run ruff check src/          # lint
 uv run mypy --strict src/       # type check
-uv run pytest                   # 358 tests, no Showdown required
+uv run pytest                          # 781 unit tests, no Showdown required
+uv run pytest -m integration          # 1 integration test, requires Showdown on localhost:8000
 cd frontend && npm run lint      # frontend ESLint
 cd frontend && npm run build     # frontend build
 ```

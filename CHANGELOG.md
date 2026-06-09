@@ -9,6 +9,47 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.24.0] — 2026-06-09
+
+### Added
+- **Showdown spectator renderer (OP-02)** — the PS battle scene is now
+  available as a first-class view alongside the existing Classic battlefield.
+  Five-stage implementation:
+  - **Stage 0 (proxy)** — `/ws/showdown/{room}` WebSocket endpoint performs
+    guest login + `/join` against the local Showdown server and relays the raw
+    protocol stream verbatim to the browser. Room ids are validated against a
+    strict `battle-*` pattern; login frames are suppressed. Fully unit-tested
+    via an injectable `connect_upstream` fake.
+  - **Stage 1 (bus event)** — `_StreamingMixin._handle_battle_message` emits a
+    `showdown_room` event on the JSON EventBus (first frame per battle only) so
+    the frontend learns the Showdown room id. `showdown_room` added to the
+    replay-buffer set so late-joining WebSocket subscribers receive it.
+  - **Stage 2 (CDN bundle)** — `useShowdownBundle` hook loads the PS battle
+    renderer from `play.pokemonshowdown.com` in strict dependency order (14
+    scripts, singleton load promise, `window.Config` stub injected first).
+    `ShowdownRenderSpike` static-replay proof-of-concept verified in browser.
+  - **Stage 3 (live wiring)** — `ShowdownBattleScene` component opens the
+    spectator-proxy socket after the PS `Battle` instance is ready; Showdown
+    server replay eliminates any need for a line buffer.
+  - **Stage 4 (view toggle)** — Classic / Showdown toggle bar in the live
+    battle view; defaults to Classic; preference persisted in `localStorage`.
+    Falls back to Classic when the Showdown room is not yet available.
+- **Integration test gate** — `tests/test_ws_showdown_integration.py` (new
+  `pytest.mark.integration` marker) creates a real Gen 3 battle via raw
+  WebSocket bots, connects the in-process proxy, and asserts `|init|battle`
+  + `|turn|` are relayed. Auto-skips if Showdown is not on `localhost:8000`.
+  `addopts = "-m 'not integration'"` excludes it from the default test run.
+
+### Fixed
+- **LM Studio stats crash** — `json_extract` on `turns.llm_response` now
+  guards against non-JSON values (raw text fallbacks, error strings) that
+  caused `sqlite3.OperationalError` on the global stats page (#95).
+- **Model labels cleared too early** — `reset()` no longer clears `p1Label`
+  / `p2Label` before the next `battle_start` event arrives, preventing a
+  blank-label flash on back-to-back battles (#96).
+
+---
+
 ## [0.23.0] — 2026-06-08
 
 ### Fixed

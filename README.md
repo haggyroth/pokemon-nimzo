@@ -160,7 +160,7 @@ nidozo/
 │   ├── tournament.py   Round-robin CLI runner
 │   ├── run_battle.py   Single-battle CLI
 │   └── start_showdown.sh
-├── tests/              358 tests, no Showdown required
+├── tests/              781 unit tests + 1 integration test (pytest.mark.integration)
 └── showdown/           Cloned Showdown server (gitignored)
 ```
 
