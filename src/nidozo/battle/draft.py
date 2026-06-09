@@ -158,7 +158,7 @@ async def run_draft(
     pool_ids = get_pool(tier, set(movesets.keys()))
     pool_info = get_pool_info(pool_ids, movesets)  # [{species_id, species, types}]
     tier_display = TIER_DISPLAY.get(tier, tier.upper())
-    showdown_format = TIER_TO_FORMAT.get(tier, "gen3ou")
+    showdown_format = TIER_TO_FORMAT.get(tier, "gen9nationaldexag")
 
     # Load system prompt
     system_path = Path(__file__).parent.parent / "llm" / "prompts" / "v3" / "draft_system.txt"
