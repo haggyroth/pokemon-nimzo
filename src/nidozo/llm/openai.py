@@ -51,10 +51,15 @@ class OpenAIBackend:
         max_tokens: Maximum tokens to generate.
         api_key: API key (use any non-empty string for LM Studio, e.g. "lm-studio").
         base_url: Override base URL — set to "http://localhost:1234/v1" for LM Studio.
-        json_mode: If True, send response_format=json_schema so the model is
-                   grammar-sampled to produce output matching _ACTION_JSON_SCHEMA.
+        json_mode: If True, send response_format to grammar-sample JSON output.
                    Supported by LM Studio ≥0.3.6 and OpenAI.
                    Do NOT use with Anthropic backends.
+        use_json_object: When json_mode=True, use the simple {"type":"json_object"}
+                         format instead of the full json_schema.  Set this for LM
+                         Studio — local models often struggle with strict: true, but
+                         reliably honour json_object grammar sampling.  OpenAI cloud
+                         benefits from the richer json_schema (type enforcement +
+                         additionalProperties: false) so use the full schema there.
     """
 
     def __init__(
@@ -64,12 +69,14 @@ class OpenAIBackend:
         api_key: str | None = None,
         base_url: str | None = None,
         json_mode: bool = False,
+        use_json_object: bool = False,
     ) -> None:
         # base_url=None → OpenAI cloud; set to "http://localhost:1234/v1" for LM Studio
         self._client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
         self._model = model
         self._max_tokens = max_tokens
         self._json_mode = json_mode
+        self._use_json_object = use_json_object
 
     async def complete(self, messages: list[Message]) -> str:
         kwargs: dict[str, Any] = {
@@ -78,7 +85,12 @@ class OpenAIBackend:
             "messages": messages,
         }
         if self._json_mode:
-            kwargs["response_format"] = _ACTION_JSON_SCHEMA
+            if self._use_json_object:
+                # Simple JSON grammar sampling — all LM Studio models honour this.
+                kwargs["response_format"] = {"type": "json_object"}
+            else:
+                # Full structured-output schema — enforces exact shape on OpenAI cloud.
+                kwargs["response_format"] = _ACTION_JSON_SCHEMA
 
         response = await self._client.chat.completions.create(**kwargs)
         msg = response.choices[0].message
@@ -86,7 +98,7 @@ class OpenAIBackend:
 
         if not content:
             # Qwen 3 (and other thinking models) route all output through
-            # reasoning_content, leaving content empty.  When using json_schema
+            # reasoning_content, leaving content empty.  When using json_mode
             # the actual JSON lands in reasoning_content — use it as the response.
             reasoning = getattr(msg, "reasoning_content", None)
             if reasoning:
