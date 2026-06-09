@@ -24,6 +24,7 @@ Sibling project to [Nimzo](https://github.com/haggyroth/nimzo) (the LLM chess ar
 - **Battle Replay** — step through any completed battle turn by turn; HP timeline; scrub/keyboard nav; auto-play
 - **Post-game analysis** — decision quality (optimal/good/suboptimal/fallback), blunder detection, win-probability timeline, turning-point detection, RNG inference; key moments list (clickable, seeks replay); variance report (crit/miss tally with per-player benefit counts); draft critique (STAB coverage, shared weaknesses, execution quality)
 - **Live visualizer** — React frontend with Gen 3 sprites, type-themed card backgrounds, animated HP bars, hit/faint animations, thinking indicators, bench display, and a real-time battle log
+- **Showdown renderer** — toggle to the built-in Pokémon Showdown battle scene (sprites, animations, log) for any live battle; preference is persisted across sessions
 
 ---
 
@@ -97,6 +98,16 @@ cd frontend && npm run dev
 ```
 
 Open `http://localhost:5173`, select models, and click **▶ START BATTLE**. Switch to **LIVE** to watch turn by turn — the UI shows Gen 3 sprites, type-themed card backgrounds, animated HP bars, a thinking indicator while the model reasons, and the full bench. Use **⚔ TOURNAMENT** to run a round-robin across multiple models. Completed battles show **▶ REPLAY** and **▼ ANALYZE** buttons in the Recent Battles panel.
+
+#### Showdown renderer (optional)
+
+While watching a live battle, a **CLASSIC / SHOWDOWN** toggle appears at the top of the battle view. **SHOWDOWN** switches to the built-in Pokémon Showdown battle scene — the same animated renderer used on [play.pokemonshowdown.com](https://play.pokemonshowdown.com).
+
+Requirements:
+- The Showdown server must be started with `--no-security` (the default in `start_showdown.sh`) so the spectator proxy can connect as a guest.
+- Sprite and sound assets are loaded on demand from `play.pokemonshowdown.com` (~4 MB, CDN). An internet connection is required the first time; subsequent views use the browser cache.
+
+The renderer toggle preference is saved in `localStorage` and restored on reload.
 
 ### Tournament runner (CLI)
 

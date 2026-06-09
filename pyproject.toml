@@ -25,6 +25,10 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: requires a live Showdown server on localhost:8000 (deselected by default)",
+]
 
 [tool.mypy]
 strict = true
