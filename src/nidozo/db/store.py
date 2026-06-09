@@ -810,18 +810,18 @@ class BattleStore:
             (model_id, model_id, model_id, model_id, model_id, model_id),
         ).fetchall()
 
-        # Turn quality summary — parse_success rate
-        turn_rows = self._conn.execute(
-            """SELECT t.parse_success
+        # Turn quality summary — parse_success rate (aggregate in SQL, no row fetch)
+        parse_agg = self._conn.execute(
+            """SELECT COUNT(*) AS total, SUM(parse_success) AS ok
                FROM turns t
                JOIN battles b ON b.id = t.battle_id
                WHERE (b.p1_model_id = ? AND t.player_role = 'p1')
                   OR (b.p2_model_id = ? AND t.player_role = 'p2')""",
             (model_id, model_id),
-        ).fetchall()
+        ).fetchone()
 
-        total_turns = len(turn_rows)
-        parse_ok = sum(1 for r in turn_rows if r["parse_success"])
+        total_turns = parse_agg["total"] or 0
+        parse_ok = int(parse_agg["ok"] or 0)
         parse_fail = total_turns - parse_ok
         parse_success_rate = round(parse_ok / total_turns * 100, 1) if total_turns else None
 

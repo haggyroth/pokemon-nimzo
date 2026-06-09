@@ -116,8 +116,8 @@ async def main(
     p1_model = _model_name_for(p1_provider, model)
     p2_model = _model_name_for(p2_provider, model)
 
-    p1_id = store.get_or_create_model(p1_provider, p1_model)
-    p2_id = store.get_or_create_model(p2_provider, p2_model)
+    p1_id = store.get_or_create_model(p1_provider, p1_model, prompt_version)
+    p2_id = store.get_or_create_model(p2_provider, p2_model, prompt_version)
 
     for i in range(n_battles):
         # Placeholder tag — poke-env assigns the real tag after login;
