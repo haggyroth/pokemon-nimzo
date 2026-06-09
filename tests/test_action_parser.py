@@ -640,3 +640,110 @@ class TestThinkTagStripping:
         player = _make_player()
         parse_action(raw, battle, player)
         assert raw == original  # parse_action must not mutate the caller's string
+
+
+class TestJsonControlCharSanitization:
+    """Small models (e.g. ministral-3-3b) embed literal newlines inside the
+    JSON ``reasoning`` string instead of the required ``\\n`` escape, producing
+    invalid JSON that json.loads rejects with 'Invalid control character'.
+    The sanitization recovery path must handle these transparently.
+    """
+
+    def test_literal_newline_in_reasoning_move(self) -> None:
+        """Literal newline inside reasoning string is sanitized and move is parsed."""
+        moves = [_mock_move("fireblast")]
+        battle = _make_battle(moves=moves)
+        player = _make_player()
+
+        # Ministral-style: reasoning has literal 0x0A newline bytes, not \n escapes
+        response = (
+            '{\n'
+            '  "reasoning": "\n'                  # ← literal newline inside string
+            '  Survival Check: move first.\n'     # ← literal newline inside string
+            '  ",\n'
+            '  "action_type": "move",\n'
+            '  "identifier": "fireblast"\n'
+            '}'
+        )
+        result = parse_action(response, battle, player)
+        assert result is not None
+        player.create_order.assert_called_once_with(moves[0])
+
+    def test_literal_newline_in_reasoning_switch(self) -> None:
+        """Sanitization also works when action_type is switch."""
+        switches = [_mock_pokemon("blastoise"), _mock_pokemon("venusaur")]
+        battle = _make_battle(switches=switches)
+        player = _make_player()
+
+        response = (
+            '{\n'
+            '  "reasoning": "\n'
+            '  Switch value is high.\n'
+            '  ",\n'
+            '  "action_type": "switch",\n'
+            '  "identifier": "blastoise"\n'
+            '}'
+        )
+        result = parse_action(response, battle, player)
+        assert result is not None
+        player.create_order.assert_called_once_with(switches[0])
+
+    def test_multiline_reasoning_with_markdown(self) -> None:
+        """Literal newlines + markdown bold inside reasoning (real Ministral pattern)."""
+        moves = [_mock_move("thunderbolt"), _mock_move("tackle")]
+        battle = _make_battle(moves=moves)
+        player = _make_player()
+
+        response = (
+            '{\n'
+            '  "reasoning": "\n'
+            '  **Survival Check:** I move first.\n'
+            '  **KO Opportunity:** Thunderbolt is super effective.\n'
+            '  ",\n'
+            '  "action_type": "move",\n'
+            '  "identifier": "thunderbolt"\n'
+            '}'
+        )
+        result = parse_action(response, battle, player)
+        assert result is not None
+        player.create_order.assert_called_once_with(moves[0])
+
+    def test_code_fence_plus_literal_newlines(self) -> None:
+        """Code-fenced JSON with literal newlines in reasoning is fully recovered."""
+        moves = [_mock_move("surf")]
+        battle = _make_battle(moves=moves)
+        player = _make_player()
+
+        response = (
+            '```json\n'
+            '{\n'
+            '  "reasoning": "\n'
+            '  Surf is strong here.\n'
+            '  ",\n'
+            '  "action_type": "move",\n'
+            '  "identifier": "surf"\n'
+            '}\n'
+            '```'
+        )
+        result = parse_action(response, battle, player)
+        assert result is not None
+        player.create_order.assert_called_once_with(moves[0])
+
+    def test_valid_json_unaffected(self) -> None:
+        """Sanitization is a no-op on already-valid JSON — no regression."""
+        moves = [_mock_move("tackle")]
+        battle = _make_battle(moves=moves)
+        player = _make_player()
+
+        response = '{"reasoning": "clean reasoning", "action_type": "move", "identifier": "tackle"}'
+        result = parse_action(response, battle, player)
+        assert result is not None
+        player.create_order.assert_called_once_with(moves[0])
+
+    def test_unrecoverable_json_still_returns_none(self) -> None:
+        """Truly broken JSON (no action keys anywhere) still returns None after sanitization."""
+        battle = _make_battle(moves=[_mock_move("tackle")])
+        player = _make_player()
+
+        result = parse_action('{"totally": "wrong\nstructure"}', battle, player)
+        assert result is None
