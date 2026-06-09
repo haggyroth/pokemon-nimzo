@@ -151,7 +151,9 @@ function ActionRow({ role, label, data, ann }) {
         <span className="tap-action">
           {action}
           {!data.parse_success && (
-            <span className="tap-fallback"> · random fallback</span>
+            <span className="tap-fallback">
+              {' · '}{data.fallback_reason === 'parse_failure' ? 'parse failure' : 'random fallback'}
+            </span>
           )}
         </span>
         {ann && ann.decision_quality !== 'no_data' && (

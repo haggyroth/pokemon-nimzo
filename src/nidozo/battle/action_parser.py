@@ -49,6 +49,10 @@ _BARE_ACTION_RE = re.compile(
 
 _KEYWORDS = {"move", "switch"}
 
+# Fuzzy-match cutoff for move and switch name resolution.
+# 0.82 accepts a 1-char error on names of 5+ chars and rejects wild guesses.
+_FUZZY_CUTOFF = 0.82
+
 
 def _normalize(s: str) -> str:
     """Lowercase, strip non-alphanumeric for fuzzy name comparison."""
@@ -101,8 +105,7 @@ def _resolve_move(
         return player.create_order(norm_to_move[norm])
 
     # Fuzzy fallback: tolerate typos like "thunderolt" → "thunderbolt", "icebeam" → "ice beam"
-    # cutoff=0.82 accepts 1-char errors on 5-char names and up, rejects wild guesses
-    close = get_close_matches(norm, norm_to_move.keys(), n=1, cutoff=0.82)
+    close = get_close_matches(norm, norm_to_move.keys(), n=1, cutoff=_FUZZY_CUTOFF)
     if close:
         matched_id = norm_to_move[close[0]].id
         logger.debug("ACTION: fuzzy-matched move %r → %r", identifier, matched_id)
@@ -143,8 +146,7 @@ def _resolve_switch(
         return player.create_order(norm_to_mon[norm])
 
     # Fuzzy fallback: tolerate typos like "agron" → "aggron", "deoxysspeed" → "deoxyssp"
-    # cutoff=0.82 accepts 1-char errors on 5-char names and up, rejects wild guesses
-    close = get_close_matches(norm, norm_to_mon.keys(), n=1, cutoff=0.82)
+    close = get_close_matches(norm, norm_to_mon.keys(), n=1, cutoff=_FUZZY_CUTOFF)
     if close:
         matched_species = norm_to_mon[close[0]].species
         logger.debug(
