@@ -1,929 +1,3400 @@
 {
   "__comment": "Gen 3 RSE competitive movesets. Keys are Showdown species IDs (lowercase, no spaces). Sets sourced from Smogon Gen 3 ADV analyses. Used for drafted-team battles.",
-
   "groudon": {
-    "species": "Groudon", "item": "Lum Berry", "ability": "Drought",
-    "nature": "Adamant", "evs": {"HP": 188, "Atk": 80, "SpD": 176, "Spe": 64},
-    "moves": ["Earthquake", "Rock Slide", "Fire Blast", "Rest"],
-    "level": 100, "types": ["Ground"]
+    "species": "Groudon",
+    "item": "Lum Berry",
+    "ability": "Drought",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 188,
+      "Atk": 80,
+      "SpD": 176,
+      "Spe": 64
+    },
+    "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Fire Blast",
+      "Rest"
+    ],
+    "level": 100,
+    "types": [
+      "Ground"
+    ]
   },
   "kyogre": {
-    "species": "Kyogre", "item": "Lum Berry", "ability": "Drizzle",
-    "nature": "Modest", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Surf", "Thunder", "Ice Beam", "Calm Mind"],
-    "level": 100, "types": ["Water"]
+    "species": "Kyogre",
+    "item": "Lum Berry",
+    "ability": "Drizzle",
+    "nature": "Modest",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Surf",
+      "Thunder",
+      "Ice Beam",
+      "Calm Mind"
+    ],
+    "level": 100,
+    "types": [
+      "Water"
+    ]
   },
   "rayquaza": {
-    "species": "Rayquaza", "item": "Lum Berry", "ability": "Air Lock",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Dragon Claw", "Earthquake", "Rock Slide", "Extremespeed"],
-    "level": 100, "types": ["Dragon", "Flying"]
+    "species": "Rayquaza",
+    "item": "Lum Berry",
+    "ability": "Air Lock",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Dragon Claw",
+      "Earthquake",
+      "Rock Slide",
+      "Extremespeed"
+    ],
+    "level": 100,
+    "types": [
+      "Dragon",
+      "Flying"
+    ]
   },
   "mewtwo": {
-    "species": "Mewtwo", "item": "Lum Berry", "ability": "Pressure",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Calm Mind", "Recover", "Thunderbolt", "Ice Beam"],
-    "level": 100, "types": ["Psychic"]
+    "species": "Mewtwo",
+    "item": "Lum Berry",
+    "ability": "Pressure",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Calm Mind",
+      "Recover",
+      "Thunderbolt",
+      "Ice Beam"
+    ],
+    "level": 100,
+    "types": [
+      "Psychic"
+    ]
   },
   "lugia": {
-    "species": "Lugia", "item": "Leftovers", "ability": "Pressure",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 252, "SpA": 4},
-    "moves": ["Aeroblast", "Recover", "Ice Beam", "Whirlwind"],
-    "level": 100, "types": ["Psychic", "Flying"]
+    "species": "Lugia",
+    "item": "Leftovers",
+    "ability": "Pressure",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 252,
+      "SpA": 4
+    },
+    "moves": [
+      "Aeroblast",
+      "Recover",
+      "Ice Beam",
+      "Whirlwind"
+    ],
+    "level": 100,
+    "types": [
+      "Psychic",
+      "Flying"
+    ]
   },
   "hooh": {
-    "species": "Ho-Oh", "item": "Leftovers", "ability": "Pressure",
-    "nature": "Adamant", "evs": {"HP": 252, "Atk": 252, "Spe": 4},
-    "moves": ["Sacred Fire", "Earthquake", "Hidden Power [Rock]", "Recover"],
-    "level": 100, "types": ["Fire", "Flying"]
+    "species": "Ho-Oh",
+    "item": "Leftovers",
+    "ability": "Pressure",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 252,
+      "Atk": 252,
+      "Spe": 4
+    },
+    "moves": [
+      "Sacred Fire",
+      "Earthquake",
+      "Hidden Power [Rock]",
+      "Recover"
+    ],
+    "level": 100,
+    "types": [
+      "Fire",
+      "Flying"
+    ],
+    "ivs": {
+      "Atk": 30,
+      "Def": 30,
+      "Spe": 30,
+      "SpD": 30
+    }
   },
   "latias": {
-    "species": "Latias", "item": "Lum Berry", "ability": "Levitate",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Calm Mind", "Recover", "Thunderbolt", "Ice Beam"],
-    "level": 100, "types": ["Dragon", "Psychic"]
+    "species": "Latias",
+    "item": "Lum Berry",
+    "ability": "Levitate",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Calm Mind",
+      "Recover",
+      "Thunderbolt",
+      "Ice Beam"
+    ],
+    "level": 100,
+    "types": [
+      "Dragon",
+      "Psychic"
+    ]
   },
   "latios": {
-    "species": "Latios", "item": "Lum Berry", "ability": "Levitate",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Psychic", "Thunderbolt", "Dragon Claw", "Recover"],
-    "level": 100, "types": ["Dragon", "Psychic"]
+    "species": "Latios",
+    "item": "Lum Berry",
+    "ability": "Levitate",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Psychic",
+      "Thunderbolt",
+      "Dragon Claw",
+      "Recover"
+    ],
+    "level": 100,
+    "types": [
+      "Dragon",
+      "Psychic"
+    ]
   },
   "wobbuffet": {
-    "species": "Wobbuffet", "item": "Leftovers", "ability": "Shadow Tag",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 252, "SpD": 4},
-    "moves": ["Counter", "Mirror Coat", "Encore", "Safeguard"],
-    "level": 100, "types": ["Psychic"]
+    "species": "Wobbuffet",
+    "item": "Leftovers",
+    "ability": "Shadow Tag",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 252,
+      "SpD": 4
+    },
+    "moves": [
+      "Counter",
+      "Mirror Coat",
+      "Encore",
+      "Safeguard"
+    ],
+    "level": 100,
+    "types": [
+      "Psychic"
+    ]
   },
   "jirachi": {
-    "species": "Jirachi", "item": "Leftovers", "ability": "Serene Grace",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Calm Mind", "Psychic", "Thunderbolt", "Fire Punch"],
-    "level": 100, "types": ["Steel", "Psychic"]
+    "species": "Jirachi",
+    "item": "Leftovers",
+    "ability": "Serene Grace",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Calm Mind",
+      "Psychic",
+      "Thunderbolt",
+      "Fire Punch"
+    ],
+    "level": 100,
+    "types": [
+      "Steel",
+      "Psychic"
+    ]
   },
   "salamence": {
-    "species": "Salamence", "item": "Choice Band", "ability": "Intimidate",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Dragon Claw", "Rock Slide", "Earthquake", "Hidden Power [Flying]"],
-    "level": 100, "types": ["Dragon", "Flying"]
+    "species": "Salamence",
+    "item": "Choice Band",
+    "ability": "Intimidate",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Dragon Claw",
+      "Rock Slide",
+      "Earthquake",
+      "Hidden Power [Flying]"
+    ],
+    "level": 100,
+    "types": [
+      "Dragon",
+      "Flying"
+    ],
+    "ivs": {
+      "Atk": 30,
+      "Spe": 30,
+      "SpA": 30,
+      "SpD": 30
+    }
   },
   "tyranitar": {
-    "species": "Tyranitar", "item": "Leftovers", "ability": "Sand Stream",
-    "nature": "Adamant", "evs": {"HP": 252, "Atk": 80, "SpD": 176},
-    "moves": ["Rock Slide", "Earthquake", "Crunch", "Focus Punch"],
-    "level": 100, "types": ["Rock", "Dark"]
+    "species": "Tyranitar",
+    "item": "Leftovers",
+    "ability": "Sand Stream",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 252,
+      "Atk": 80,
+      "SpD": 176
+    },
+    "moves": [
+      "Rock Slide",
+      "Earthquake",
+      "Crunch",
+      "Focus Punch"
+    ],
+    "level": 100,
+    "types": [
+      "Rock",
+      "Dark"
+    ]
   },
   "metagross": {
-    "species": "Metagross", "item": "Lum Berry", "ability": "Clear Body",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Meteor Mash", "Earthquake", "Rock Slide", "Explosion"],
-    "level": 100, "types": ["Steel", "Psychic"]
+    "species": "Metagross",
+    "item": "Lum Berry",
+    "ability": "Clear Body",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Meteor Mash",
+      "Earthquake",
+      "Rock Slide",
+      "Explosion"
+    ],
+    "level": 100,
+    "types": [
+      "Steel",
+      "Psychic"
+    ]
   },
   "gengar": {
-    "species": "Gengar", "item": "Lum Berry", "ability": "Levitate",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Shadow Ball", "Thunderbolt", "Ice Punch", "Will-O-Wisp"],
-    "level": 100, "types": ["Ghost", "Poison"]
+    "species": "Gengar",
+    "item": "Lum Berry",
+    "ability": "Levitate",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Shadow Ball",
+      "Thunderbolt",
+      "Ice Punch",
+      "Will-O-Wisp"
+    ],
+    "level": 100,
+    "types": [
+      "Ghost",
+      "Poison"
+    ]
   },
   "alakazam": {
-    "species": "Alakazam", "item": "Lum Berry", "ability": "Synchronize",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Calm Mind", "Psychic", "Fire Punch", "Recover"],
-    "level": 100, "types": ["Psychic"]
+    "species": "Alakazam",
+    "item": "Lum Berry",
+    "ability": "Synchronize",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Calm Mind",
+      "Psychic",
+      "Fire Punch",
+      "Recover"
+    ],
+    "level": 100,
+    "types": [
+      "Psychic"
+    ]
   },
   "blissey": {
-    "species": "Blissey", "item": "Leftovers", "ability": "Natural Cure",
-    "nature": "Bold", "evs": {"HP": 148, "Def": 252, "SpD": 108},
-    "moves": ["Soft-Boiled", "Seismic Toss", "Flamethrower", "Thunder Wave"],
-    "level": 100, "types": ["Normal"]
+    "species": "Blissey",
+    "item": "Leftovers",
+    "ability": "Natural Cure",
+    "nature": "Bold",
+    "evs": {
+      "HP": 148,
+      "Def": 252,
+      "SpD": 108
+    },
+    "moves": [
+      "Soft-Boiled",
+      "Seismic Toss",
+      "Flamethrower",
+      "Thunder Wave"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "skarmory": {
-    "species": "Skarmory", "item": "Leftovers", "ability": "Keen Eye",
-    "nature": "Impish", "evs": {"HP": 252, "Def": 40, "SpD": 216},
-    "moves": ["Spikes", "Roar", "Drill Peck", "Rest"],
-    "level": 100, "types": ["Steel", "Flying"]
+    "species": "Skarmory",
+    "item": "Leftovers",
+    "ability": "Keen Eye",
+    "nature": "Impish",
+    "evs": {
+      "HP": 252,
+      "Def": 40,
+      "SpD": 216
+    },
+    "moves": [
+      "Spikes",
+      "Roar",
+      "Drill Peck",
+      "Rest"
+    ],
+    "level": 100,
+    "types": [
+      "Steel",
+      "Flying"
+    ]
   },
   "swampert": {
-    "species": "Swampert", "item": "Leftovers", "ability": "Torrent",
-    "nature": "Relaxed", "evs": {"HP": 240, "Atk": 216, "SpD": 52},
-    "moves": ["Earthquake", "Ice Beam", "Surf", "Roar"],
-    "level": 100, "types": ["Water", "Ground"]
+    "species": "Swampert",
+    "item": "Leftovers",
+    "ability": "Torrent",
+    "nature": "Relaxed",
+    "evs": {
+      "HP": 240,
+      "Atk": 216,
+      "SpD": 52
+    },
+    "moves": [
+      "Earthquake",
+      "Ice Beam",
+      "Surf",
+      "Roar"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Ground"
+    ]
   },
   "snorlax": {
-    "species": "Snorlax", "item": "Leftovers", "ability": "Thick Fat",
-    "nature": "Careful", "evs": {"HP": 188, "Atk": 104, "Def": 4, "SpD": 164},
-    "moves": ["Body Slam", "Earthquake", "Fire Punch", "Rest"],
-    "level": 100, "types": ["Normal"]
+    "species": "Snorlax",
+    "item": "Leftovers",
+    "ability": "Thick Fat",
+    "nature": "Careful",
+    "evs": {
+      "HP": 188,
+      "Atk": 104,
+      "Def": 4,
+      "SpD": 164
+    },
+    "moves": [
+      "Body Slam",
+      "Earthquake",
+      "Fire Punch",
+      "Rest"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "zapdos": {
-    "species": "Zapdos", "item": "Leftovers", "ability": "Pressure",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 152, "Spe": 104},
-    "moves": ["Thunderbolt", "Hidden Power [Ice]", "Rest", "Sleep Talk"],
-    "level": 100, "types": ["Electric", "Flying"]
+    "species": "Zapdos",
+    "item": "Leftovers",
+    "ability": "Pressure",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 152,
+      "Spe": 104
+    },
+    "moves": [
+      "Thunderbolt",
+      "Hidden Power [Ice]",
+      "Rest",
+      "Sleep Talk"
+    ],
+    "level": 100,
+    "types": [
+      "Electric",
+      "Flying"
+    ],
+    "ivs": {
+      "Spe": 30
+    }
   },
   "starmie": {
-    "species": "Starmie", "item": "Lum Berry", "ability": "Natural Cure",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Surf", "Thunderbolt", "Ice Beam", "Rapid Spin"],
-    "level": 100, "types": ["Water", "Psychic"]
+    "species": "Starmie",
+    "item": "Lum Berry",
+    "ability": "Natural Cure",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Surf",
+      "Thunderbolt",
+      "Ice Beam",
+      "Rapid Spin"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Psychic"
+    ]
   },
   "dugtrio": {
-    "species": "Dugtrio", "item": "Choice Band", "ability": "Arena Trap",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Earthquake", "Rock Slide", "Aerial Ace", "Shadow Ball"],
-    "level": 100, "types": ["Ground"]
+    "species": "Dugtrio",
+    "item": "Choice Band",
+    "ability": "Arena Trap",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Aerial Ace",
+      "Shadow Ball"
+    ],
+    "level": 100,
+    "types": [
+      "Ground"
+    ]
   },
   "jolteon": {
-    "species": "Jolteon", "item": "Lum Berry", "ability": "Volt Absorb",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Thunderbolt", "Shadow Ball", "Hidden Power [Ice]", "Substitute"],
-    "level": 100, "types": ["Electric"]
+    "species": "Jolteon",
+    "item": "Lum Berry",
+    "ability": "Volt Absorb",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Thunderbolt",
+      "Shadow Ball",
+      "Hidden Power [Ice]",
+      "Substitute"
+    ],
+    "level": 100,
+    "types": [
+      "Electric"
+    ],
+    "ivs": {
+      "Spe": 30
+    }
   },
   "gyarados": {
-    "species": "Gyarados", "item": "Lum Berry", "ability": "Intimidate",
-    "nature": "Adamant", "evs": {"HP": 88, "Atk": 252, "Spe": 168},
-    "moves": ["Dragon Dance", "Waterfall", "Return", "Earthquake"],
-    "level": 100, "types": ["Water", "Flying"]
+    "species": "Gyarados",
+    "item": "Lum Berry",
+    "ability": "Intimidate",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 88,
+      "Atk": 252,
+      "Spe": 168
+    },
+    "moves": [
+      "Dragon Dance",
+      "Waterfall",
+      "Return",
+      "Earthquake"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Flying"
+    ]
   },
   "celebi": {
-    "species": "Celebi", "item": "Leftovers", "ability": "Natural Cure",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 220, "Spe": 36},
-    "moves": ["Leech Seed", "Recover", "Psychic", "Hidden Power [Fire]"],
-    "level": 100, "types": ["Psychic", "Grass"]
+    "species": "Celebi",
+    "item": "Leftovers",
+    "ability": "Natural Cure",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 220,
+      "Spe": 36
+    },
+    "moves": [
+      "Leech Seed",
+      "Recover",
+      "Psychic",
+      "Hidden Power [Fire]"
+    ],
+    "level": 100,
+    "types": [
+      "Psychic",
+      "Grass"
+    ],
+    "ivs": {
+      "HP": 30,
+      "Def": 30,
+      "Spe": 30,
+      "SpA": 30
+    }
   },
   "suicune": {
-    "species": "Suicune", "item": "Leftovers", "ability": "Pressure",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 252, "SpA": 4},
-    "moves": ["Surf", "Ice Beam", "Calm Mind", "Rest"],
-    "level": 100, "types": ["Water"]
+    "species": "Suicune",
+    "item": "Leftovers",
+    "ability": "Pressure",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 252,
+      "SpA": 4
+    },
+    "moves": [
+      "Surf",
+      "Ice Beam",
+      "Calm Mind",
+      "Rest"
+    ],
+    "level": 100,
+    "types": [
+      "Water"
+    ]
   },
   "forretress": {
-    "species": "Forretress", "item": "Leftovers", "ability": "Sturdy",
-    "nature": "Relaxed", "evs": {"HP": 252, "Atk": 40, "Def": 216},
-    "moves": ["Spikes", "Rapid Spin", "Earthquake", "Explosion"],
-    "level": 100, "types": ["Bug", "Steel"]
+    "species": "Forretress",
+    "item": "Leftovers",
+    "ability": "Sturdy",
+    "nature": "Relaxed",
+    "evs": {
+      "HP": 252,
+      "Atk": 40,
+      "Def": 216
+    },
+    "moves": [
+      "Spikes",
+      "Rapid Spin",
+      "Earthquake",
+      "Explosion"
+    ],
+    "level": 100,
+    "types": [
+      "Bug",
+      "Steel"
+    ]
   },
   "heracross": {
-    "species": "Heracross", "item": "Choice Band", "ability": "Guts",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Megahorn", "Brick Break", "Rock Slide", "Earthquake"],
-    "level": 100, "types": ["Bug", "Fighting"]
+    "species": "Heracross",
+    "item": "Choice Band",
+    "ability": "Guts",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Megahorn",
+      "Brick Break",
+      "Rock Slide",
+      "Earthquake"
+    ],
+    "level": 100,
+    "types": [
+      "Bug",
+      "Fighting"
+    ]
   },
   "claydol": {
-    "species": "Claydol", "item": "Leftovers", "ability": "Levitate",
-    "nature": "Careful", "evs": {"HP": 252, "Def": 4, "SpD": 252},
-    "moves": ["Earthquake", "Rapid Spin", "Cosmic Power", "Explosion"],
-    "level": 100, "types": ["Ground", "Psychic"]
+    "species": "Claydol",
+    "item": "Leftovers",
+    "ability": "Levitate",
+    "nature": "Careful",
+    "evs": {
+      "HP": 252,
+      "Def": 4,
+      "SpD": 252
+    },
+    "moves": [
+      "Earthquake",
+      "Rapid Spin",
+      "Cosmic Power",
+      "Explosion"
+    ],
+    "level": 100,
+    "types": [
+      "Ground",
+      "Psychic"
+    ]
   },
   "breloom": {
-    "species": "Breloom", "item": "Lum Berry", "ability": "Effect Spore",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Spore", "Sky Uppercut", "Rock Slide", "Focus Punch"],
-    "level": 100, "types": ["Grass", "Fighting"]
+    "species": "Breloom",
+    "item": "Lum Berry",
+    "ability": "Effect Spore",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Spore",
+      "Sky Uppercut",
+      "Rock Slide",
+      "Focus Punch"
+    ],
+    "level": 100,
+    "types": [
+      "Grass",
+      "Fighting"
+    ]
   },
   "milotic": {
-    "species": "Milotic", "item": "Leftovers", "ability": "Marvel Scale",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 252, "SpA": 4},
-    "moves": ["Surf", "Ice Beam", "Recover", "Mirror Coat"],
-    "level": 100, "types": ["Water"]
+    "species": "Milotic",
+    "item": "Leftovers",
+    "ability": "Marvel Scale",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 252,
+      "SpA": 4
+    },
+    "moves": [
+      "Surf",
+      "Ice Beam",
+      "Recover",
+      "Mirror Coat"
+    ],
+    "level": 100,
+    "types": [
+      "Water"
+    ]
   },
   "umbreon": {
-    "species": "Umbreon", "item": "Leftovers", "ability": "Synchronize",
-    "nature": "Careful", "evs": {"HP": 252, "Atk": 4, "SpD": 252},
-    "moves": ["Moonlight", "Toxic", "Mean Look", "Pursuit"],
-    "level": 100, "types": ["Dark"]
+    "species": "Umbreon",
+    "item": "Leftovers",
+    "ability": "Synchronize",
+    "nature": "Careful",
+    "evs": {
+      "HP": 252,
+      "Atk": 4,
+      "SpD": 252
+    },
+    "moves": [
+      "Moonlight",
+      "Toxic",
+      "Mean Look",
+      "Pursuit"
+    ],
+    "level": 100,
+    "types": [
+      "Dark"
+    ]
   },
   "weezing": {
-    "species": "Weezing", "item": "Leftovers", "ability": "Levitate",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 252, "SpD": 4},
-    "moves": ["Sludge Bomb", "Flamethrower", "Will-O-Wisp", "Pain Split"],
-    "level": 100, "types": ["Poison"]
+    "species": "Weezing",
+    "item": "Leftovers",
+    "ability": "Levitate",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 252,
+      "SpD": 4
+    },
+    "moves": [
+      "Sludge Bomb",
+      "Flamethrower",
+      "Will-O-Wisp",
+      "Pain Split"
+    ],
+    "level": 100,
+    "types": [
+      "Poison"
+    ]
   },
   "vaporeon": {
-    "species": "Vaporeon", "item": "Leftovers", "ability": "Water Absorb",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 252, "SpA": 4},
-    "moves": ["Wish", "Protect", "Surf", "Ice Beam"],
-    "level": 100, "types": ["Water"]
+    "species": "Vaporeon",
+    "item": "Leftovers",
+    "ability": "Water Absorb",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 252,
+      "SpA": 4
+    },
+    "moves": [
+      "Wish",
+      "Protect",
+      "Surf",
+      "Ice Beam"
+    ],
+    "level": 100,
+    "types": [
+      "Water"
+    ]
   },
   "regice": {
-    "species": "Regice", "item": "Leftovers", "ability": "Clear Body",
-    "nature": "Calm", "evs": {"HP": 252, "SpA": 4, "SpD": 252},
-    "moves": ["Ice Beam", "Thunderbolt", "Rest", "Sleep Talk"],
-    "level": 100, "types": ["Ice"]
+    "species": "Regice",
+    "item": "Leftovers",
+    "ability": "Clear Body",
+    "nature": "Calm",
+    "evs": {
+      "HP": 252,
+      "SpA": 4,
+      "SpD": 252
+    },
+    "moves": [
+      "Ice Beam",
+      "Thunderbolt",
+      "Rest",
+      "Sleep Talk"
+    ],
+    "level": 100,
+    "types": [
+      "Ice"
+    ]
   },
   "flygon": {
-    "species": "Flygon", "item": "Choice Band", "ability": "Levitate",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Dragon Claw", "Earthquake", "Rock Slide", "Hidden Power [Bug]"],
-    "level": 100, "types": ["Dragon", "Ground"]
+    "species": "Flygon",
+    "item": "Choice Band",
+    "ability": "Levitate",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Dragon Claw",
+      "Earthquake",
+      "Rock Slide",
+      "Hidden Power [Bug]"
+    ],
+    "level": 100,
+    "types": [
+      "Dragon",
+      "Ground"
+    ],
+    "ivs": {
+      "Atk": 30,
+      "Spe": 30,
+      "SpD": 30
+    }
   },
   "machamp": {
-    "species": "Machamp", "item": "Lum Berry", "ability": "Guts",
-    "nature": "Adamant", "evs": {"HP": 252, "Atk": 252, "Spe": 4},
-    "moves": ["Cross Chop", "Rock Slide", "Earthquake", "Bulk Up"],
-    "level": 100, "types": ["Fighting"]
+    "species": "Machamp",
+    "item": "Lum Berry",
+    "ability": "Guts",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 252,
+      "Atk": 252,
+      "Spe": 4
+    },
+    "moves": [
+      "Cross Chop",
+      "Rock Slide",
+      "Earthquake",
+      "Bulk Up"
+    ],
+    "level": 100,
+    "types": [
+      "Fighting"
+    ]
   },
   "magneton": {
-    "species": "Magneton", "item": "Lum Berry", "ability": "Magnet Pull",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Thunderbolt", "Hidden Power [Ice]", "Thunder Wave", "Toxic"],
-    "level": 100, "types": ["Electric", "Steel"]
+    "species": "Magneton",
+    "item": "Lum Berry",
+    "ability": "Magnet Pull",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Thunderbolt",
+      "Hidden Power [Ice]",
+      "Thunder Wave",
+      "Toxic"
+    ],
+    "level": 100,
+    "types": [
+      "Electric",
+      "Steel"
+    ],
+    "ivs": {
+      "Spe": 30
+    }
   },
   "sceptile": {
-    "species": "Sceptile", "item": "Lum Berry", "ability": "Overgrow",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Leaf Blade", "Dragon Claw", "Hidden Power [Ice]", "Leech Seed"],
-    "level": 100, "types": ["Grass"]
+    "species": "Sceptile",
+    "item": "Lum Berry",
+    "ability": "Overgrow",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Leaf Blade",
+      "Dragon Claw",
+      "Hidden Power [Ice]",
+      "Leech Seed"
+    ],
+    "level": 100,
+    "types": [
+      "Grass"
+    ],
+    "ivs": {
+      "Spe": 30
+    }
   },
   "aerodactyl": {
-    "species": "Aerodactyl", "item": "Choice Band", "ability": "Rock Head",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Rock Slide", "Earthquake", "Aerial Ace", "Double-Edge"],
-    "level": 100, "types": ["Rock", "Flying"]
+    "species": "Aerodactyl",
+    "item": "Choice Band",
+    "ability": "Rock Head",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Rock Slide",
+      "Earthquake",
+      "Aerial Ace",
+      "Double-Edge"
+    ],
+    "level": 100,
+    "types": [
+      "Rock",
+      "Flying"
+    ]
   },
   "gardevoir": {
-    "species": "Gardevoir", "item": "Lum Berry", "ability": "Synchronize",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Psychic", "Thunderbolt", "Calm Mind", "Will-O-Wisp"],
-    "level": 100, "types": ["Psychic"]
+    "species": "Gardevoir",
+    "item": "Lum Berry",
+    "ability": "Synchronize",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Psychic",
+      "Thunderbolt",
+      "Calm Mind",
+      "Will-O-Wisp"
+    ],
+    "level": 100,
+    "types": [
+      "Psychic"
+    ]
   },
   "tauros": {
-    "species": "Tauros", "item": "Choice Band", "ability": "Intimidate",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Return", "Earthquake", "Hidden Power [Ghost]", "Iron Tail"],
-    "level": 100, "types": ["Normal"]
+    "species": "Tauros",
+    "item": "Choice Band",
+    "ability": "Intimidate",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Return",
+      "Earthquake",
+      "Hidden Power [Ghost]",
+      "Iron Tail"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ],
+    "ivs": {
+      "HP": 30,
+      "Def": 30,
+      "SpD": 30
+    }
   },
   "tentacruel": {
-    "species": "Tentacruel", "item": "Leftovers", "ability": "Clear Body",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 252, "SpD": 4},
-    "moves": ["Rapid Spin", "Surf", "Sludge Bomb", "Ice Beam"],
-    "level": 100, "types": ["Water", "Poison"]
+    "species": "Tentacruel",
+    "item": "Leftovers",
+    "ability": "Clear Body",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 252,
+      "SpD": 4
+    },
+    "moves": [
+      "Rapid Spin",
+      "Surf",
+      "Sludge Bomb",
+      "Ice Beam"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Poison"
+    ]
   },
   "jynx": {
-    "species": "Jynx", "item": "Lum Berry", "ability": "Oblivious",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Ice Beam", "Lovely Kiss", "Psychic", "Calm Mind"],
-    "level": 100, "types": ["Ice", "Psychic"]
+    "species": "Jynx",
+    "item": "Lum Berry",
+    "ability": "Oblivious",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Ice Beam",
+      "Lovely Kiss",
+      "Psychic",
+      "Calm Mind"
+    ],
+    "level": 100,
+    "types": [
+      "Ice",
+      "Psychic"
+    ]
   },
   "kangaskhan": {
-    "species": "Kangaskhan", "item": "Choice Band", "ability": "Early Bird",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Return", "Earthquake", "Shadow Ball", "Focus Punch"],
-    "level": 100, "types": ["Normal"]
+    "species": "Kangaskhan",
+    "item": "Choice Band",
+    "ability": "Early Bird",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Return",
+      "Earthquake",
+      "Shadow Ball",
+      "Focus Punch"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "slaking": {
-    "species": "Slaking", "item": "Choice Band", "ability": "Truant",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Return", "Earthquake", "Shadow Ball", "Hyper Beam"],
-    "level": 100, "types": ["Normal"]
+    "species": "Slaking",
+    "item": "Choice Band",
+    "ability": "Truant",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Return",
+      "Earthquake",
+      "Shadow Ball",
+      "Hyper Beam"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "moltres": {
-    "species": "Moltres", "item": "Lum Berry", "ability": "Pressure",
-    "nature": "Modest", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Fire Blast", "Hidden Power [Grass]", "Flamethrower", "Agility"],
-    "level": 100, "types": ["Fire", "Flying"]
+    "species": "Moltres",
+    "item": "Lum Berry",
+    "ability": "Pressure",
+    "nature": "Modest",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Fire Blast",
+      "Hidden Power [Grass]",
+      "Flamethrower",
+      "Agility"
+    ],
+    "level": 100,
+    "types": [
+      "Fire",
+      "Flying"
+    ],
+    "ivs": {
+      "HP": 30,
+      "Def": 30,
+      "SpA": 30
+    }
   },
   "articuno": {
-    "species": "Articuno", "item": "Leftovers", "ability": "Pressure",
-    "nature": "Calm", "evs": {"HP": 252, "SpA": 4, "SpD": 252},
-    "moves": ["Ice Beam", "Blizzard", "Rest", "Sleep Talk"],
-    "level": 100, "types": ["Ice", "Flying"]
+    "species": "Articuno",
+    "item": "Leftovers",
+    "ability": "Pressure",
+    "nature": "Calm",
+    "evs": {
+      "HP": 252,
+      "SpA": 4,
+      "SpD": 252
+    },
+    "moves": [
+      "Ice Beam",
+      "Blizzard",
+      "Rest",
+      "Sleep Talk"
+    ],
+    "level": 100,
+    "types": [
+      "Ice",
+      "Flying"
+    ]
   },
   "arcanine": {
-    "species": "Arcanine", "item": "Lum Berry", "ability": "Intimidate",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Fire Blast", "Extremespeed", "Crunch", "Iron Tail"],
-    "level": 100, "types": ["Fire"]
+    "species": "Arcanine",
+    "item": "Lum Berry",
+    "ability": "Intimidate",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Fire Blast",
+      "Extremespeed",
+      "Crunch",
+      "Iron Tail"
+    ],
+    "level": 100,
+    "types": [
+      "Fire"
+    ]
   },
   "espeon": {
-    "species": "Espeon", "item": "Lum Berry", "ability": "Synchronize",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Calm Mind", "Psychic", "Signal Beam", "Shadow Ball"],
-    "level": 100, "types": ["Psychic"]
+    "species": "Espeon",
+    "item": "Lum Berry",
+    "ability": "Synchronize",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Calm Mind",
+      "Psychic",
+      "Baton Pass",
+      "Shadow Ball"
+    ],
+    "level": 100,
+    "types": [
+      "Psychic"
+    ]
   },
   "slowbro": {
-    "species": "Slowbro", "item": "Leftovers", "ability": "Own Tempo",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 252, "SpA": 4},
-    "moves": ["Surf", "Psychic", "Calm Mind", "Rest"],
-    "level": 100, "types": ["Water", "Psychic"]
+    "species": "Slowbro",
+    "item": "Leftovers",
+    "ability": "Own Tempo",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 252,
+      "SpA": 4
+    },
+    "moves": [
+      "Surf",
+      "Psychic",
+      "Calm Mind",
+      "Rest"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Psychic"
+    ]
   },
   "porygon2": {
-    "species": "Porygon2", "item": "Leftovers", "ability": "Trace",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 252, "SpA": 4},
-    "moves": ["Ice Beam", "Thunderbolt", "Recover", "Tri Attack"],
-    "level": 100, "types": ["Normal"]
+    "species": "Porygon2",
+    "item": "Leftovers",
+    "ability": "Trace",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 252,
+      "SpA": 4
+    },
+    "moves": [
+      "Ice Beam",
+      "Thunderbolt",
+      "Recover",
+      "Tri Attack"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "hitmontop": {
-    "species": "Hitmontop", "item": "Leftovers", "ability": "Intimidate",
-    "nature": "Impish", "evs": {"HP": 252, "Atk": 4, "Def": 252},
-    "moves": ["Rapid Spin", "Counter", "Hidden Power [Ghost]", "Bulk Up"],
-    "level": 100, "types": ["Fighting"]
+    "species": "Hitmontop",
+    "item": "Leftovers",
+    "ability": "Intimidate",
+    "nature": "Impish",
+    "evs": {
+      "HP": 252,
+      "Atk": 4,
+      "Def": 252
+    },
+    "moves": [
+      "Rapid Spin",
+      "Counter",
+      "Hidden Power [Ghost]",
+      "Bulk Up"
+    ],
+    "level": 100,
+    "types": [
+      "Fighting"
+    ],
+    "ivs": {
+      "HP": 30,
+      "Def": 30,
+      "SpD": 30
+    }
   },
   "nidoking": {
-    "species": "Nidoking", "item": "Lum Berry", "ability": "Poison Point",
-    "nature": "Modest", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Ice Beam", "Thunderbolt", "Fire Blast", "Earthquake"],
-    "level": 100, "types": ["Poison", "Ground"]
+    "species": "Nidoking",
+    "item": "Lum Berry",
+    "ability": "Poison Point",
+    "nature": "Modest",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Ice Beam",
+      "Thunderbolt",
+      "Fire Blast",
+      "Earthquake"
+    ],
+    "level": 100,
+    "types": [
+      "Poison",
+      "Ground"
+    ]
   },
   "quagsire": {
-    "species": "Quagsire", "item": "Leftovers", "ability": "Damp",
-    "nature": "Careful", "evs": {"HP": 252, "Atk": 4, "SpD": 252},
-    "moves": ["Earthquake", "Surf", "Ice Beam", "Amnesia"],
-    "level": 100, "types": ["Water", "Ground"]
+    "species": "Quagsire",
+    "item": "Leftovers",
+    "ability": "Damp",
+    "nature": "Careful",
+    "evs": {
+      "HP": 252,
+      "Atk": 4,
+      "SpD": 252
+    },
+    "moves": [
+      "Earthquake",
+      "Surf",
+      "Ice Beam",
+      "Amnesia"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Ground"
+    ]
   },
   "omastar": {
-    "species": "Omastar", "item": "Leftovers", "ability": "Swift Swim",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Surf", "Ice Beam", "Spikes", "Ancient Power"],
-    "level": 100, "types": ["Rock", "Water"]
+    "species": "Omastar",
+    "item": "Leftovers",
+    "ability": "Swift Swim",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Surf",
+      "Ice Beam",
+      "Spikes",
+      "Ancient Power"
+    ],
+    "level": 100,
+    "types": [
+      "Rock",
+      "Water"
+    ]
   },
   "sandslash": {
-    "species": "Sandslash", "item": "Leftovers", "ability": "Sand Veil",
-    "nature": "Adamant", "evs": {"HP": 252, "Atk": 252, "Spe": 4},
-    "moves": ["Earthquake", "Rock Slide", "Swords Dance", "Rapid Spin"],
-    "level": 100, "types": ["Ground"]
+    "species": "Sandslash",
+    "item": "Leftovers",
+    "ability": "Sand Veil",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 252,
+      "Atk": 252,
+      "Spe": 4
+    },
+    "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Swords Dance",
+      "Rapid Spin"
+    ],
+    "level": 100,
+    "types": [
+      "Ground"
+    ]
   },
   "hitmonlee": {
-    "species": "Hitmonlee", "item": "Choice Band", "ability": "Limber",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Hi Jump Kick", "Rock Slide", "Earthquake", "Hidden Power [Ghost]"],
-    "level": 100, "types": ["Fighting"]
+    "species": "Hitmonlee",
+    "item": "Choice Band",
+    "ability": "Limber",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Hi Jump Kick",
+      "Rock Slide",
+      "Earthquake",
+      "Hidden Power [Ghost]"
+    ],
+    "level": 100,
+    "types": [
+      "Fighting"
+    ],
+    "ivs": {
+      "HP": 30,
+      "Def": 30,
+      "SpD": 30
+    }
   },
   "ludicolo": {
-    "species": "Ludicolo", "item": "Lum Berry", "ability": "Swift Swim",
-    "nature": "Modest", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Surf", "Ice Beam", "Giga Drain", "Rain Dance"],
-    "level": 100, "types": ["Water", "Grass"]
+    "species": "Ludicolo",
+    "item": "Lum Berry",
+    "ability": "Swift Swim",
+    "nature": "Modest",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Surf",
+      "Ice Beam",
+      "Giga Drain",
+      "Rain Dance"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Grass"
+    ]
   },
   "manectric": {
-    "species": "Manectric", "item": "Lum Berry", "ability": "Static",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Thunderbolt", "Flamethrower", "Hidden Power [Ice]", "Crunch"],
-    "level": 100, "types": ["Electric"]
+    "species": "Manectric",
+    "item": "Lum Berry",
+    "ability": "Static",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Thunderbolt",
+      "Flamethrower",
+      "Hidden Power [Ice]",
+      "Crunch"
+    ],
+    "level": 100,
+    "types": [
+      "Electric"
+    ],
+    "ivs": {
+      "Spe": 30
+    }
   },
   "haunter": {
-    "species": "Haunter", "item": "Lum Berry", "ability": "Levitate",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Shadow Ball", "Thunderbolt", "Ice Punch", "Hypnosis"],
-    "level": 100, "types": ["Ghost", "Poison"]
+    "species": "Haunter",
+    "item": "Lum Berry",
+    "ability": "Levitate",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Shadow Ball",
+      "Thunderbolt",
+      "Ice Punch",
+      "Hypnosis"
+    ],
+    "level": 100,
+    "types": [
+      "Ghost",
+      "Poison"
+    ]
   },
   "donphan": {
-    "species": "Donphan", "item": "Leftovers", "ability": "Sturdy",
-    "nature": "Impish", "evs": {"HP": 252, "Atk": 4, "Def": 252},
-    "moves": ["Earthquake", "Rock Slide", "Rapid Spin", "Roar"],
-    "level": 100, "types": ["Ground"]
+    "species": "Donphan",
+    "item": "Leftovers",
+    "ability": "Sturdy",
+    "nature": "Impish",
+    "evs": {
+      "HP": 252,
+      "Atk": 4,
+      "Def": 252
+    },
+    "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Rapid Spin",
+      "Roar"
+    ],
+    "level": 100,
+    "types": [
+      "Ground"
+    ]
   },
   "hypno": {
-    "species": "Hypno", "item": "Leftovers", "ability": "Insomnia",
-    "nature": "Calm", "evs": {"HP": 252, "Def": 4, "SpD": 252},
-    "moves": ["Psychic", "Hypnosis", "Seismic Toss", "Fire Punch"],
-    "level": 100, "types": ["Psychic"]
+    "species": "Hypno",
+    "item": "Leftovers",
+    "ability": "Insomnia",
+    "nature": "Calm",
+    "evs": {
+      "HP": 252,
+      "Def": 4,
+      "SpD": 252
+    },
+    "moves": [
+      "Psychic",
+      "Hypnosis",
+      "Seismic Toss",
+      "Fire Punch"
+    ],
+    "level": 100,
+    "types": [
+      "Psychic"
+    ]
   },
   "victreebel": {
-    "species": "Victreebel", "item": "Lum Berry", "ability": "Chlorophyll",
-    "nature": "Modest", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Sludge Bomb", "Giga Drain", "Sleep Powder", "Hidden Power [Fire]"],
-    "level": 100, "types": ["Grass", "Poison"]
+    "species": "Victreebel",
+    "item": "Lum Berry",
+    "ability": "Chlorophyll",
+    "nature": "Modest",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Sludge Bomb",
+      "Giga Drain",
+      "Sleep Powder",
+      "Hidden Power [Fire]"
+    ],
+    "level": 100,
+    "types": [
+      "Grass",
+      "Poison"
+    ],
+    "ivs": {
+      "HP": 30,
+      "Def": 30,
+      "Spe": 30,
+      "SpA": 30
+    }
   },
   "mantine": {
-    "species": "Mantine", "item": "Leftovers", "ability": "Water Absorb",
-    "nature": "Calm", "evs": {"HP": 252, "SpA": 4, "SpD": 252},
-    "moves": ["Surf", "Ice Beam", "Rest", "Sleep Talk"],
-    "level": 100, "types": ["Water", "Flying"]
+    "species": "Mantine",
+    "item": "Leftovers",
+    "ability": "Water Absorb",
+    "nature": "Calm",
+    "evs": {
+      "HP": 252,
+      "SpA": 4,
+      "SpD": 252
+    },
+    "moves": [
+      "Surf",
+      "Ice Beam",
+      "Rest",
+      "Sleep Talk"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Flying"
+    ]
   },
   "electrode": {
-    "species": "Electrode", "item": "Lum Berry", "ability": "Static",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Thunderbolt", "Thunder Wave", "Taunt", "Explosion"],
-    "level": 100, "types": ["Electric"]
+    "species": "Electrode",
+    "item": "Lum Berry",
+    "ability": "Static",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Thunderbolt",
+      "Thunder Wave",
+      "Taunt",
+      "Explosion"
+    ],
+    "level": 100,
+    "types": [
+      "Electric"
+    ]
   },
   "granbull": {
-    "species": "Granbull", "item": "Choice Band", "ability": "Intimidate",
-    "nature": "Adamant", "evs": {"Atk": 252, "Def": 4, "Spe": 252},
-    "moves": ["Return", "Earthquake", "Shadow Ball", "Brick Break"],
-    "level": 100, "types": ["Normal"]
+    "species": "Granbull",
+    "item": "Choice Band",
+    "ability": "Intimidate",
+    "nature": "Adamant",
+    "evs": {
+      "Atk": 252,
+      "Def": 4,
+      "Spe": 252
+    },
+    "moves": [
+      "Return",
+      "Earthquake",
+      "Shadow Ball",
+      "Brick Break"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "nidoqueen": {
-    "species": "Nidoqueen", "item": "Leftovers", "ability": "Poison Point",
-    "nature": "Modest", "evs": {"HP": 252, "SpA": 128, "Spe": 128},
-    "moves": ["Ice Beam", "Thunderbolt", "Earthquake", "Flamethrower"],
-    "level": 100, "types": ["Poison", "Ground"]
+    "species": "Nidoqueen",
+    "item": "Leftovers",
+    "ability": "Poison Point",
+    "nature": "Modest",
+    "evs": {
+      "HP": 252,
+      "SpA": 128,
+      "Spe": 128
+    },
+    "moves": [
+      "Ice Beam",
+      "Thunderbolt",
+      "Earthquake",
+      "Flamethrower"
+    ],
+    "level": 100,
+    "types": [
+      "Poison",
+      "Ground"
+    ]
   },
   "poliwrath": {
-    "species": "Poliwrath", "item": "Leftovers", "ability": "Water Absorb",
-    "nature": "Adamant", "evs": {"HP": 252, "Atk": 128, "Spe": 128},
-    "moves": ["Waterfall", "Brick Break", "Earthquake", "Bulk Up"],
-    "level": 100, "types": ["Water", "Fighting"]
+    "species": "Poliwrath",
+    "item": "Leftovers",
+    "ability": "Water Absorb",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 252,
+      "Atk": 128,
+      "Spe": 128
+    },
+    "moves": [
+      "Waterfall",
+      "Brick Break",
+      "Earthquake",
+      "Bulk Up"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Fighting"
+    ]
   },
   "misdreavus": {
-    "species": "Misdreavus", "item": "Lum Berry", "ability": "Levitate",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Shadow Ball", "Thunderbolt", "Perish Song", "Spite"],
-    "level": 100, "types": ["Ghost"]
+    "species": "Misdreavus",
+    "item": "Lum Berry",
+    "ability": "Levitate",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Shadow Ball",
+      "Thunderbolt",
+      "Perish Song",
+      "Spite"
+    ],
+    "level": 100,
+    "types": [
+      "Ghost"
+    ]
   },
   "ursaring": {
-    "species": "Ursaring", "item": "Lum Berry", "ability": "Guts",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Return", "Earthquake", "Rock Slide", "Swords Dance"],
-    "level": 100, "types": ["Normal"]
+    "species": "Ursaring",
+    "item": "Lum Berry",
+    "ability": "Guts",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Return",
+      "Earthquake",
+      "Rock Slide",
+      "Swords Dance"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "scizor": {
-    "species": "Scizor", "item": "Choice Band", "ability": "Swarm",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Silver Wind", "Rock Slide", "Brick Break", "Swords Dance"],
-    "level": 100, "types": ["Bug", "Steel"]
+    "species": "Scizor",
+    "item": "Choice Band",
+    "ability": "Swarm",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Silver Wind",
+      "Rock Slide",
+      "Brick Break",
+      "Swords Dance"
+    ],
+    "level": 100,
+    "types": [
+      "Bug",
+      "Steel"
+    ]
   },
   "ampharos": {
-    "species": "Ampharos", "item": "Leftovers", "ability": "Static",
-    "nature": "Modest", "evs": {"HP": 252, "SpA": 128, "SpD": 128},
-    "moves": ["Thunderbolt", "Fire Punch", "Thunder Wave", "Protect"],
-    "level": 100, "types": ["Electric"]
+    "species": "Ampharos",
+    "item": "Leftovers",
+    "ability": "Static",
+    "nature": "Modest",
+    "evs": {
+      "HP": 252,
+      "SpA": 128,
+      "SpD": 128
+    },
+    "moves": [
+      "Thunderbolt",
+      "Fire Punch",
+      "Thunder Wave",
+      "Protect"
+    ],
+    "level": 100,
+    "types": [
+      "Electric"
+    ]
   },
   "rhydon": {
-    "species": "Rhydon", "item": "Leftovers", "ability": "Rock Head",
-    "nature": "Adamant", "evs": {"HP": 252, "Atk": 252, "Spe": 4},
-    "moves": ["Rock Blast", "Earthquake", "Swords Dance", "Megahorn"],
-    "level": 100, "types": ["Ground", "Rock"]
+    "species": "Rhydon",
+    "item": "Leftovers",
+    "ability": "Rock Head",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 252,
+      "Atk": 252,
+      "Spe": 4
+    },
+    "moves": [
+      "Rock Blast",
+      "Earthquake",
+      "Swords Dance",
+      "Megahorn"
+    ],
+    "level": 100,
+    "types": [
+      "Ground",
+      "Rock"
+    ]
   },
   "absol": {
-    "species": "Absol", "item": "Choice Band", "ability": "Pressure",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Shadow Ball", "Double-Edge", "Bite", "Swords Dance"],
-    "level": 100, "types": ["Dark"]
+    "species": "Absol",
+    "item": "Choice Band",
+    "ability": "Pressure",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Shadow Ball",
+      "Double-Edge",
+      "Bite",
+      "Swords Dance"
+    ],
+    "level": 100,
+    "types": [
+      "Dark"
+    ]
   },
   "crawdaunt": {
-    "species": "Crawdaunt", "item": "Lum Berry", "ability": "Shell Armor",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Crabhammer", "Rock Slide", "Shadow Ball", "Brick Break"],
-    "level": 100, "types": ["Water", "Dark"]
+    "species": "Crawdaunt",
+    "item": "Lum Berry",
+    "ability": "Shell Armor",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Crabhammer",
+      "Rock Slide",
+      "Shadow Ball",
+      "Brick Break"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Dark"
+    ]
   },
   "lanturn": {
-    "species": "Lanturn", "item": "Leftovers", "ability": "Volt Absorb",
-    "nature": "Calm", "evs": {"HP": 252, "SpA": 4, "SpD": 252},
-    "moves": ["Surf", "Thunderbolt", "Ice Beam", "Thunder Wave"],
-    "level": 100, "types": ["Water", "Electric"]
+    "species": "Lanturn",
+    "item": "Leftovers",
+    "ability": "Volt Absorb",
+    "nature": "Calm",
+    "evs": {
+      "HP": 252,
+      "SpA": 4,
+      "SpD": 252
+    },
+    "moves": [
+      "Surf",
+      "Thunderbolt",
+      "Ice Beam",
+      "Thunder Wave"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Electric"
+    ]
   },
   "chimecho": {
-    "species": "Chimecho", "item": "Leftovers", "ability": "Levitate",
-    "nature": "Calm", "evs": {"HP": 252, "SpA": 4, "SpD": 252},
-    "moves": ["Psychic", "Shadow Ball", "Recover", "Heal Bell"],
-    "level": 100, "types": ["Psychic"]
+    "species": "Chimecho",
+    "item": "Leftovers",
+    "ability": "Levitate",
+    "nature": "Calm",
+    "evs": {
+      "HP": 252,
+      "SpA": 4,
+      "SpD": 252
+    },
+    "moves": [
+      "Psychic",
+      "Shadow Ball",
+      "Recover",
+      "Heal Bell"
+    ],
+    "level": 100,
+    "types": [
+      "Psychic"
+    ]
   },
   "linoone": {
-    "species": "Linoone", "item": "Salac Berry", "ability": "Pickup",
-    "nature": "Jolly", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Belly Drum", "Extremespeed", "Shadow Ball", "Brick Break"],
-    "level": 100, "types": ["Normal"]
+    "species": "Linoone",
+    "item": "Salac Berry",
+    "ability": "Pickup",
+    "nature": "Jolly",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Belly Drum",
+      "Extremespeed",
+      "Shadow Ball",
+      "Brick Break"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "furret": {
-    "species": "Furret", "item": "Salac Berry", "ability": "Keen Eye",
-    "nature": "Jolly", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Encore", "Return", "Brick Break", "Shadow Ball"],
-    "level": 100, "types": ["Normal"]
+    "species": "Furret",
+    "item": "Salac Berry",
+    "ability": "Keen Eye",
+    "nature": "Jolly",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Encore",
+      "Return",
+      "Brick Break",
+      "Shadow Ball"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "glalie": {
-    "species": "Glalie", "item": "Lum Berry", "ability": "Inner Focus",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Ice Beam", "Crunch", "Spikes", "Explosion"],
-    "level": 100, "types": ["Ice"]
+    "species": "Glalie",
+    "item": "Lum Berry",
+    "ability": "Inner Focus",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Ice Beam",
+      "Crunch",
+      "Spikes",
+      "Explosion"
+    ],
+    "level": 100,
+    "types": [
+      "Ice"
+    ]
   },
   "wigglytuff": {
-    "species": "Wigglytuff", "item": "Leftovers", "ability": "Cute Charm",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 252, "SpA": 4},
-    "moves": ["Sing", "Psychic", "Ice Beam", "Seismic Toss"],
-    "level": 100, "types": ["Normal"]
+    "species": "Wigglytuff",
+    "item": "Leftovers",
+    "ability": "Cute Charm",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 252,
+      "SpA": 4
+    },
+    "moves": [
+      "Sing",
+      "Psychic",
+      "Ice Beam",
+      "Seismic Toss"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "raticate": {
-    "species": "Raticate", "item": "Choice Band", "ability": "Guts",
-    "nature": "Jolly", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Return", "Shadow Ball", "Iron Tail", "Brick Break"],
-    "level": 100, "types": ["Normal"]
+    "species": "Raticate",
+    "item": "Choice Band",
+    "ability": "Guts",
+    "nature": "Jolly",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Return",
+      "Shadow Ball",
+      "Iron Tail",
+      "Brick Break"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "elekid": {
-    "species": "Elekid", "item": "Oran Berry", "ability": "Static",
-    "nature": "Hasty", "evs": {"Atk": 196, "SpA": 60, "Spe": 252},
-    "moves": ["Thunderbolt", "Hidden Power [Ice]", "Cross Chop", "Brick Break"],
-    "level": 5, "types": ["Electric"]
+    "species": "Elekid",
+    "item": "Oran Berry",
+    "ability": "Static",
+    "nature": "Hasty",
+    "evs": {
+      "Atk": 196,
+      "SpA": 60,
+      "Spe": 252
+    },
+    "moves": [
+      "Thunderbolt",
+      "Hidden Power [Ice]",
+      "Cross Chop",
+      "Brick Break"
+    ],
+    "level": 5,
+    "types": [
+      "Electric"
+    ],
+    "ivs": {
+      "Spe": 30
+    }
   },
   "magby": {
-    "species": "Magby", "item": "Oran Berry", "ability": "Flame Body",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Fire Blast", "Cross Chop", "Hidden Power [Grass]", "Thunderbolt"],
-    "level": 5, "types": ["Fire"]
+    "species": "Magby",
+    "item": "Oran Berry",
+    "ability": "Flame Body",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Fire Blast",
+      "Cross Chop",
+      "Hidden Power [Grass]",
+      "Thunderbolt"
+    ],
+    "level": 5,
+    "types": [
+      "Fire"
+    ],
+    "ivs": {
+      "HP": 30,
+      "Def": 30,
+      "SpA": 30
+    }
   },
   "dratini": {
-    "species": "Dratini", "item": "Oran Berry", "ability": "Shed Skin",
-    "nature": "Adamant", "evs": {"Atk": 196, "SpD": 60, "Spe": 252},
-    "moves": ["Dragon Rage", "Extremespeed", "Thunderbolt", "Flamethrower"],
-    "level": 5, "types": ["Dragon"]
+    "species": "Dratini",
+    "item": "Oran Berry",
+    "ability": "Shed Skin",
+    "nature": "Adamant",
+    "evs": {
+      "Atk": 196,
+      "SpD": 60,
+      "Spe": 252
+    },
+    "moves": [
+      "Dragon Rage",
+      "Extremespeed",
+      "Thunderbolt",
+      "Flamethrower"
+    ],
+    "level": 5,
+    "types": [
+      "Dragon"
+    ]
   },
   "trapinch": {
-    "species": "Trapinch", "item": "Oran Berry", "ability": "Arena Trap",
-    "nature": "Adamant", "evs": {"Atk": 196, "Def": 60, "Spe": 252},
-    "moves": ["Earthquake", "Sand Tomb", "Rock Slide", "Hidden Power [Bug]"],
-    "level": 5, "types": ["Ground"]
+    "species": "Trapinch",
+    "item": "Oran Berry",
+    "ability": "Arena Trap",
+    "nature": "Adamant",
+    "evs": {
+      "Atk": 196,
+      "Def": 60,
+      "Spe": 252
+    },
+    "moves": [
+      "Earthquake",
+      "Sand Tomb",
+      "Rock Slide",
+      "Hidden Power [Bug]"
+    ],
+    "level": 5,
+    "types": [
+      "Ground"
+    ],
+    "ivs": {
+      "Atk": 30,
+      "Spe": 30,
+      "SpD": 30
+    }
   },
   "machop": {
-    "species": "Machop", "item": "Oran Berry", "ability": "Guts",
-    "nature": "Adamant", "evs": {"Atk": 196, "Def": 60, "Spe": 252},
-    "moves": ["Cross Chop", "Rock Slide", "Earthquake", "Bulk Up"],
-    "level": 5, "types": ["Fighting"]
+    "species": "Machop",
+    "item": "Oran Berry",
+    "ability": "Guts",
+    "nature": "Adamant",
+    "evs": {
+      "Atk": 196,
+      "Def": 60,
+      "Spe": 252
+    },
+    "moves": [
+      "Cross Chop",
+      "Rock Slide",
+      "Earthquake",
+      "Bulk Up"
+    ],
+    "level": 5,
+    "types": [
+      "Fighting"
+    ]
   },
   "gastly": {
-    "species": "Gastly", "item": "Oran Berry", "ability": "Levitate",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Shadow Ball", "Hypnosis", "Thunderbolt", "Psychic"],
-    "level": 5, "types": ["Ghost", "Poison"]
+    "species": "Gastly",
+    "item": "Oran Berry",
+    "ability": "Levitate",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Shadow Ball",
+      "Hypnosis",
+      "Thunderbolt",
+      "Psychic"
+    ],
+    "level": 5,
+    "types": [
+      "Ghost",
+      "Poison"
+    ]
   },
   "larvitar": {
-    "species": "Larvitar", "item": "Oran Berry", "ability": "Guts",
-    "nature": "Adamant", "evs": {"Atk": 196, "SpD": 60, "Spe": 252},
-    "moves": ["Rock Slide", "Earthquake", "Crunch", "Dragon Dance"],
-    "level": 5, "types": ["Rock", "Ground"]
+    "species": "Larvitar",
+    "item": "Oran Berry",
+    "ability": "Guts",
+    "nature": "Adamant",
+    "evs": {
+      "Atk": 196,
+      "SpD": 60,
+      "Spe": 252
+    },
+    "moves": [
+      "Rock Slide",
+      "Earthquake",
+      "Crunch",
+      "Dragon Dance"
+    ],
+    "level": 5,
+    "types": [
+      "Rock",
+      "Ground"
+    ]
   },
   "abra": {
-    "species": "Abra", "item": "Oran Berry", "ability": "Synchronize",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Psychic", "Hidden Power [Fire]", "Fire Punch", "Thunderpunch"],
-    "level": 5, "types": ["Psychic"]
+    "species": "Abra",
+    "item": "Oran Berry",
+    "ability": "Synchronize",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Psychic",
+      "Hidden Power [Fire]",
+      "Fire Punch",
+      "Thunderpunch"
+    ],
+    "level": 5,
+    "types": [
+      "Psychic"
+    ],
+    "ivs": {
+      "HP": 30,
+      "Def": 30,
+      "Spe": 30,
+      "SpA": 30
+    }
   },
   "snorunt": {
-    "species": "Snorunt", "item": "Oran Berry", "ability": "Inner Focus",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Ice Beam", "Spikes", "Crunch", "Shadow Ball"],
-    "level": 5, "types": ["Ice"]
+    "species": "Snorunt",
+    "item": "Oran Berry",
+    "ability": "Inner Focus",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Ice Beam",
+      "Spikes",
+      "Crunch",
+      "Shadow Ball"
+    ],
+    "level": 5,
+    "types": [
+      "Ice"
+    ]
   },
   "carvanha": {
-    "species": "Carvanha", "item": "Oran Berry", "ability": "Rough Skin",
-    "nature": "Adamant", "evs": {"Atk": 196, "SpA": 60, "Spe": 252},
-    "moves": ["Crunch", "Hidden Power [Grass]", "Flail", "Surf"],
-    "level": 5, "types": ["Water", "Dark"]
+    "species": "Carvanha",
+    "item": "Oran Berry",
+    "ability": "Rough Skin",
+    "nature": "Adamant",
+    "evs": {
+      "Atk": 196,
+      "SpA": 60,
+      "Spe": 252
+    },
+    "moves": [
+      "Crunch",
+      "Hidden Power [Grass]",
+      "Flail",
+      "Surf"
+    ],
+    "level": 5,
+    "types": [
+      "Water",
+      "Dark"
+    ],
+    "ivs": {
+      "HP": 30,
+      "Def": 30,
+      "SpA": 30
+    }
   },
-
   "blaziken": {
-    "species": "Blaziken", "item": "Salac Berry", "ability": "Blaze",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Sky Uppercut", "Blaze Kick", "Rock Slide", "Swords Dance"],
-    "level": 100, "types": ["Fire", "Fighting"]
+    "species": "Blaziken",
+    "item": "Salac Berry",
+    "ability": "Blaze",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Sky Uppercut",
+      "Blaze Kick",
+      "Rock Slide",
+      "Swords Dance"
+    ],
+    "level": 100,
+    "types": [
+      "Fire",
+      "Fighting"
+    ]
   },
   "charizard": {
-    "species": "Charizard", "item": "Salac Berry", "ability": "Blaze",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Fire Blast", "Earthquake", "Dragon Claw", "Hidden Power [Grass]"],
-    "level": 100, "types": ["Fire", "Flying"]
+    "species": "Charizard",
+    "item": "Salac Berry",
+    "ability": "Blaze",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Fire Blast",
+      "Earthquake",
+      "Dragon Claw",
+      "Hidden Power [Grass]"
+    ],
+    "level": 100,
+    "types": [
+      "Fire",
+      "Flying"
+    ],
+    "ivs": {
+      "HP": 30,
+      "Def": 30,
+      "SpA": 30
+    }
   },
   "venusaur": {
-    "species": "Venusaur", "item": "Leftovers", "ability": "Overgrow",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 120, "SpA": 136},
-    "moves": ["Sleep Powder", "Leech Seed", "Sludge Bomb", "Synthesis"],
-    "level": 100, "types": ["Grass", "Poison"]
+    "species": "Venusaur",
+    "item": "Leftovers",
+    "ability": "Overgrow",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 120,
+      "SpA": 136
+    },
+    "moves": [
+      "Sleep Powder",
+      "Leech Seed",
+      "Sludge Bomb",
+      "Synthesis"
+    ],
+    "level": 100,
+    "types": [
+      "Grass",
+      "Poison"
+    ]
   },
   "blastoise": {
-    "species": "Blastoise", "item": "Leftovers", "ability": "Torrent",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 176, "SpA": 80},
-    "moves": ["Surf", "Ice Beam", "Rapid Spin", "Earthquake"],
-    "level": 100, "types": ["Water"]
+    "species": "Blastoise",
+    "item": "Leftovers",
+    "ability": "Torrent",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 176,
+      "SpA": 80
+    },
+    "moves": [
+      "Surf",
+      "Ice Beam",
+      "Rapid Spin",
+      "Earthquake"
+    ],
+    "level": 100,
+    "types": [
+      "Water"
+    ]
   },
   "dragonite": {
-    "species": "Dragonite", "item": "Lum Berry", "ability": "Inner Focus",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Dragon Claw", "Earthquake", "Thunderbolt", "Fire Blast"],
-    "level": 100, "types": ["Dragon", "Flying"]
+    "species": "Dragonite",
+    "item": "Lum Berry",
+    "ability": "Inner Focus",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Dragon Claw",
+      "Earthquake",
+      "Thunderbolt",
+      "Fire Blast"
+    ],
+    "level": 100,
+    "types": [
+      "Dragon",
+      "Flying"
+    ]
   },
   "steelix": {
-    "species": "Steelix", "item": "Leftovers", "ability": "Rock Head",
-    "nature": "Impish", "evs": {"HP": 252, "Atk": 48, "Def": 208},
-    "moves": ["Earthquake", "Rock Slide", "Iron Tail", "Explosion"],
-    "level": 100, "types": ["Steel", "Ground"]
+    "species": "Steelix",
+    "item": "Leftovers",
+    "ability": "Rock Head",
+    "nature": "Impish",
+    "evs": {
+      "HP": 252,
+      "Atk": 48,
+      "Def": 208
+    },
+    "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Iron Tail",
+      "Explosion"
+    ],
+    "level": 100,
+    "types": [
+      "Steel",
+      "Ground"
+    ]
   },
   "kingdra": {
-    "species": "Kingdra", "item": "Lum Berry", "ability": "Swift Swim",
-    "nature": "Modest", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Hydro Pump", "Ice Beam", "Dragon Dance", "Surf"],
-    "level": 100, "types": ["Water", "Dragon"]
+    "species": "Kingdra",
+    "item": "Lum Berry",
+    "ability": "Swift Swim",
+    "nature": "Modest",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Hydro Pump",
+      "Ice Beam",
+      "Dragon Dance",
+      "Surf"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Dragon"
+    ]
   },
   "houndoom": {
-    "species": "Houndoom", "item": "Salac Berry", "ability": "Flash Fire",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Fire Blast", "Crunch", "Pursuit", "Hidden Power [Grass]"],
-    "level": 100, "types": ["Dark", "Fire"]
+    "species": "Houndoom",
+    "item": "Salac Berry",
+    "ability": "Flash Fire",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Fire Blast",
+      "Crunch",
+      "Pursuit",
+      "Hidden Power [Grass]"
+    ],
+    "level": 100,
+    "types": [
+      "Dark",
+      "Fire"
+    ],
+    "ivs": {
+      "HP": 30,
+      "Def": 30,
+      "SpA": 30
+    }
   },
   "azumarill": {
-    "species": "Azumarill", "item": "Salac Berry", "ability": "Huge Power",
-    "nature": "Adamant", "evs": {"HP": 252, "Atk": 252, "Spe": 4},
-    "moves": ["Belly Drum", "Waterfall", "Surf", "Return"],
-    "level": 100, "types": ["Water"]
+    "species": "Azumarill",
+    "item": "Salac Berry",
+    "ability": "Huge Power",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 252,
+      "Atk": 252,
+      "Spe": 4
+    },
+    "moves": [
+      "Belly Drum",
+      "Waterfall",
+      "Surf",
+      "Return"
+    ],
+    "level": 100,
+    "types": [
+      "Water"
+    ]
   },
   "raikou": {
-    "species": "Raikou", "item": "Leftovers", "ability": "Pressure",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Thunderbolt", "Hidden Power [Ice]", "Shadow Ball", "Calm Mind"],
-    "level": 100, "types": ["Electric"]
+    "species": "Raikou",
+    "item": "Leftovers",
+    "ability": "Pressure",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Thunderbolt",
+      "Hidden Power [Ice]",
+      "Shadow Ball",
+      "Calm Mind"
+    ],
+    "level": 100,
+    "types": [
+      "Electric"
+    ],
+    "ivs": {
+      "Spe": 30
+    }
   },
   "entei": {
-    "species": "Entei", "item": "Choice Band", "ability": "Pressure",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Fire Blast", "Return", "Shadow Ball", "Extremespeed"],
-    "level": 100, "types": ["Fire"]
+    "species": "Entei",
+    "item": "Choice Band",
+    "ability": "Pressure",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Fire Blast",
+      "Return",
+      "Shadow Ball",
+      "Extremespeed"
+    ],
+    "level": 100,
+    "types": [
+      "Fire"
+    ]
   },
   "regirock": {
-    "species": "Regirock", "item": "Leftovers", "ability": "Clear Body",
-    "nature": "Careful", "evs": {"HP": 252, "SpD": 252, "Spe": 4},
-    "moves": ["Rock Slide", "Earthquake", "Rest", "Sleep Talk"],
-    "level": 100, "types": ["Rock"]
+    "species": "Regirock",
+    "item": "Leftovers",
+    "ability": "Clear Body",
+    "nature": "Careful",
+    "evs": {
+      "HP": 252,
+      "SpD": 252,
+      "Spe": 4
+    },
+    "moves": [
+      "Rock Slide",
+      "Earthquake",
+      "Rest",
+      "Sleep Talk"
+    ],
+    "level": 100,
+    "types": [
+      "Rock"
+    ]
   },
   "registeel": {
-    "species": "Registeel", "item": "Leftovers", "ability": "Clear Body",
-    "nature": "Calm", "evs": {"HP": 252, "Def": 4, "SpD": 252},
-    "moves": ["Seismic Toss", "Ice Punch", "Thunder Wave", "Amnesia"],
-    "level": 100, "types": ["Steel"]
+    "species": "Registeel",
+    "item": "Leftovers",
+    "ability": "Clear Body",
+    "nature": "Calm",
+    "evs": {
+      "HP": 252,
+      "Def": 4,
+      "SpD": 252
+    },
+    "moves": [
+      "Seismic Toss",
+      "Ice Punch",
+      "Thunder Wave",
+      "Amnesia"
+    ],
+    "level": 100,
+    "types": [
+      "Steel"
+    ]
   },
   "swellow": {
-    "species": "Swellow", "item": "Choice Band", "ability": "Guts",
-    "nature": "Jolly", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Aerial Ace", "Return", "Facade", "Steel Wing"],
-    "level": 100, "types": ["Normal", "Flying"]
+    "species": "Swellow",
+    "item": "Choice Band",
+    "ability": "Guts",
+    "nature": "Jolly",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Aerial Ace",
+      "Return",
+      "Facade",
+      "Steel Wing"
+    ],
+    "level": 100,
+    "types": [
+      "Normal",
+      "Flying"
+    ]
   },
   "pelipper": {
-    "species": "Pelipper", "item": "Leftovers", "ability": "Keen Eye",
-    "nature": "Modest", "evs": {"HP": 252, "SpA": 252, "SpD": 4},
-    "moves": ["Surf", "Ice Beam", "Toxic", "Protect"],
-    "level": 100, "types": ["Water", "Flying"]
+    "species": "Pelipper",
+    "item": "Leftovers",
+    "ability": "Keen Eye",
+    "nature": "Modest",
+    "evs": {
+      "HP": 252,
+      "SpA": 252,
+      "SpD": 4
+    },
+    "moves": [
+      "Surf",
+      "Ice Beam",
+      "Toxic",
+      "Protect"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Flying"
+    ]
   },
   "hariyama": {
-    "species": "Hariyama", "item": "Choice Band", "ability": "Thick Fat",
-    "nature": "Adamant", "evs": {"HP": 252, "Atk": 252, "Def": 4},
-    "moves": ["Cross Chop", "Fake Out", "Rock Slide", "Earthquake"],
-    "level": 100, "types": ["Fighting"]
+    "species": "Hariyama",
+    "item": "Choice Band",
+    "ability": "Thick Fat",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 252,
+      "Atk": 252,
+      "Def": 4
+    },
+    "moves": [
+      "Cross Chop",
+      "Fake Out",
+      "Rock Slide",
+      "Earthquake"
+    ],
+    "level": 100,
+    "types": [
+      "Fighting"
+    ]
   },
   "aggron": {
-    "species": "Aggron", "item": "Choice Band", "ability": "Rock Head",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Double-Edge", "Iron Tail", "Rock Slide", "Earthquake"],
-    "level": 100, "types": ["Steel", "Rock"]
+    "species": "Aggron",
+    "item": "Choice Band",
+    "ability": "Rock Head",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Double-Edge",
+      "Iron Tail",
+      "Rock Slide",
+      "Earthquake"
+    ],
+    "level": 100,
+    "types": [
+      "Steel",
+      "Rock"
+    ]
   },
   "medicham": {
-    "species": "Medicham", "item": "Choice Band", "ability": "Pure Power",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Hi Jump Kick", "Psychic", "Rock Slide", "Shadow Ball"],
-    "level": 100, "types": ["Fighting", "Psychic"]
+    "species": "Medicham",
+    "item": "Choice Band",
+    "ability": "Pure Power",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Hi Jump Kick",
+      "Psychic",
+      "Rock Slide",
+      "Shadow Ball"
+    ],
+    "level": 100,
+    "types": [
+      "Fighting",
+      "Psychic"
+    ]
   },
   "roselia": {
-    "species": "Roselia", "item": "Leftovers", "ability": "Natural Cure",
-    "nature": "Timid", "evs": {"HP": 252, "SpA": 4, "Spe": 252},
-    "moves": ["Leech Seed", "Synthesis", "Sludge Bomb", "Magical Leaf"],
-    "level": 100, "types": ["Grass", "Poison"]
+    "species": "Roselia",
+    "item": "Leftovers",
+    "ability": "Natural Cure",
+    "nature": "Timid",
+    "evs": {
+      "HP": 252,
+      "SpA": 4,
+      "Spe": 252
+    },
+    "moves": [
+      "Leech Seed",
+      "Synthesis",
+      "Sludge Bomb",
+      "Magical Leaf"
+    ],
+    "level": 100,
+    "types": [
+      "Grass",
+      "Poison"
+    ]
   },
   "sharpedo": {
-    "species": "Sharpedo", "item": "Salac Berry", "ability": "Rough Skin",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Crunch", "Waterfall", "Ice Beam", "Earthquake"],
-    "level": 100, "types": ["Water", "Dark"]
+    "species": "Sharpedo",
+    "item": "Salac Berry",
+    "ability": "Rough Skin",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Crunch",
+      "Waterfall",
+      "Ice Beam",
+      "Earthquake"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Dark"
+    ]
   },
   "cacturne": {
-    "species": "Cacturne", "item": "Leftovers", "ability": "Sand Veil",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Needle Arm", "Crunch", "Leech Seed", "Destiny Bond"],
-    "level": 100, "types": ["Grass", "Dark"]
+    "species": "Cacturne",
+    "item": "Leftovers",
+    "ability": "Sand Veil",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Needle Arm",
+      "Crunch",
+      "Leech Seed",
+      "Destiny Bond"
+    ],
+    "level": 100,
+    "types": [
+      "Grass",
+      "Dark"
+    ]
   },
   "altaria": {
-    "species": "Altaria", "item": "Lum Berry", "ability": "Natural Cure",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Dragon Dance", "Aerial Ace", "Earthquake", "Fire Blast"],
-    "level": 100, "types": ["Dragon", "Flying"]
+    "species": "Altaria",
+    "item": "Lum Berry",
+    "ability": "Natural Cure",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Dragon Dance",
+      "Aerial Ace",
+      "Earthquake",
+      "Fire Blast"
+    ],
+    "level": 100,
+    "types": [
+      "Dragon",
+      "Flying"
+    ]
   },
   "zangoose": {
-    "species": "Zangoose", "item": "Salac Berry", "ability": "Immunity",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Return", "Shadow Ball", "Swords Dance", "Aerial Ace"],
-    "level": 100, "types": ["Normal"]
+    "species": "Zangoose",
+    "item": "Salac Berry",
+    "ability": "Immunity",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Return",
+      "Shadow Ball",
+      "Swords Dance",
+      "Aerial Ace"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "walrein": {
-    "species": "Walrein", "item": "Leftovers", "ability": "Thick Fat",
-    "nature": "Calm", "evs": {"HP": 252, "SpA": 4, "SpD": 252},
-    "moves": ["Surf", "Blizzard", "Toxic", "Protect"],
-    "level": 100, "types": ["Ice", "Water"]
+    "species": "Walrein",
+    "item": "Leftovers",
+    "ability": "Thick Fat",
+    "nature": "Calm",
+    "evs": {
+      "HP": 252,
+      "SpA": 4,
+      "SpD": 252
+    },
+    "moves": [
+      "Surf",
+      "Blizzard",
+      "Toxic",
+      "Protect"
+    ],
+    "level": 100,
+    "types": [
+      "Ice",
+      "Water"
+    ]
   },
   "armaldo": {
-    "species": "Armaldo", "item": "Choice Band", "ability": "Battle Armor",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Rock Blast", "Slash", "Earthquake", "Rapid Spin"],
-    "level": 100, "types": ["Rock", "Bug"]
+    "species": "Armaldo",
+    "item": "Choice Band",
+    "ability": "Battle Armor",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Rock Blast",
+      "Slash",
+      "Earthquake",
+      "Rapid Spin"
+    ],
+    "level": 100,
+    "types": [
+      "Rock",
+      "Bug"
+    ]
   },
   "banette": {
-    "species": "Banette", "item": "Lum Berry", "ability": "Frisk",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Shadow Ball", "Thunderbolt", "Will-O-Wisp", "Destiny Bond"],
-    "level": 100, "types": ["Ghost"]
+    "species": "Banette",
+    "item": "Lum Berry",
+    "ability": "Frisk",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Shadow Ball",
+      "Thunderbolt",
+      "Will-O-Wisp",
+      "Destiny Bond"
+    ],
+    "level": 100,
+    "types": [
+      "Ghost"
+    ]
   },
   "dusclops": {
-    "species": "Dusclops", "item": "Leftovers", "ability": "Pressure",
-    "nature": "Careful", "evs": {"HP": 252, "Def": 80, "SpD": 176},
-    "moves": ["Shadow Ball", "Will-O-Wisp", "Pain Split", "Seismic Toss"],
-    "level": 100, "types": ["Ghost"]
+    "species": "Dusclops",
+    "item": "Leftovers",
+    "ability": "Pressure",
+    "nature": "Careful",
+    "evs": {
+      "HP": 252,
+      "Def": 80,
+      "SpD": 176
+    },
+    "moves": [
+      "Shadow Ball",
+      "Will-O-Wisp",
+      "Pain Split",
+      "Seismic Toss"
+    ],
+    "level": 100,
+    "types": [
+      "Ghost"
+    ]
   },
   "shedinja": {
-    "species": "Shedinja", "item": "Lum Berry", "ability": "Wonder Guard",
-    "nature": "Adamant", "evs": {"Atk": 252, "Spe": 252},
-    "moves": ["Shadow Ball", "Silver Wind", "Aerial Ace", "Swords Dance"],
-    "level": 100, "types": ["Bug", "Ghost"]
+    "species": "Shedinja",
+    "item": "Lum Berry",
+    "ability": "Wonder Guard",
+    "nature": "Adamant",
+    "evs": {
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Shadow Ball",
+      "Silver Wind",
+      "Aerial Ace",
+      "Swords Dance"
+    ],
+    "level": 100,
+    "types": [
+      "Bug",
+      "Ghost"
+    ]
   },
   "ninjask": {
-    "species": "Ninjask", "item": "Salac Berry", "ability": "Speed Boost",
-    "nature": "Jolly", "evs": {"HP": 56, "Atk": 252, "Spe": 200},
-    "moves": ["Protect", "Swords Dance", "Silver Wind", "Shadow Ball"],
-    "level": 100, "types": ["Bug", "Flying"]
+    "species": "Ninjask",
+    "item": "Salac Berry",
+    "ability": "Speed Boost",
+    "nature": "Jolly",
+    "evs": {
+      "HP": 56,
+      "Atk": 252,
+      "Spe": 200
+    },
+    "moves": [
+      "Protect",
+      "Swords Dance",
+      "Silver Wind",
+      "Shadow Ball"
+    ],
+    "level": 100,
+    "types": [
+      "Bug",
+      "Flying"
+    ]
   },
   "mawile": {
-    "species": "Mawile", "item": "Salac Berry", "ability": "Intimidate",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Swords Dance", "Return", "Iron Head", "Crunch"],
-    "level": 100, "types": ["Steel"]
+    "species": "Mawile",
+    "item": "Salac Berry",
+    "ability": "Intimidate",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Swords Dance",
+      "Return",
+      "Rock Slide",
+      "Crunch"
+    ],
+    "level": 100,
+    "types": [
+      "Steel"
+    ]
   },
   "sableye": {
-    "species": "Sableye", "item": "Leftovers", "ability": "Stall",
-    "nature": "Calm", "evs": {"HP": 252, "Def": 128, "SpD": 128},
-    "moves": ["Recover", "Will-O-Wisp", "Seismic Toss", "Faint Attack"],
-    "level": 100, "types": ["Dark", "Ghost"]
+    "species": "Sableye",
+    "item": "Leftovers",
+    "ability": "Stall",
+    "nature": "Calm",
+    "evs": {
+      "HP": 252,
+      "Def": 128,
+      "SpD": 128
+    },
+    "moves": [
+      "Recover",
+      "Will-O-Wisp",
+      "Seismic Toss",
+      "Faint Attack"
+    ],
+    "level": 100,
+    "types": [
+      "Dark",
+      "Ghost"
+    ]
   },
   "crobat": {
-    "species": "Crobat", "item": "Leftovers", "ability": "Inner Focus",
-    "nature": "Jolly", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Sludge Bomb", "Toxic", "Confuse Ray", "Steel Wing"],
-    "level": 100, "types": ["Poison", "Flying"]
+    "species": "Crobat",
+    "item": "Leftovers",
+    "ability": "Inner Focus",
+    "nature": "Jolly",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Sludge Bomb",
+      "Toxic",
+      "Confuse Ray",
+      "Steel Wing"
+    ],
+    "level": 100,
+    "types": [
+      "Poison",
+      "Flying"
+    ]
   },
   "miltank": {
-    "species": "Miltank", "item": "Leftovers", "ability": "Scrappy",
-    "nature": "Jolly", "evs": {"HP": 252, "Def": 200, "Spe": 56},
-    "moves": ["Milk Drink", "Seismic Toss", "Thunderbolt", "Heal Bell"],
-    "level": 100, "types": ["Normal"]
+    "species": "Miltank",
+    "item": "Leftovers",
+    "ability": "Scrappy",
+    "nature": "Jolly",
+    "evs": {
+      "HP": 252,
+      "Def": 200,
+      "Spe": 56
+    },
+    "moves": [
+      "Milk Drink",
+      "Seismic Toss",
+      "Thunderbolt",
+      "Heal Bell"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "smeargle": {
-    "species": "Smeargle", "item": "Salac Berry", "ability": "Own Tempo",
-    "nature": "Jolly", "evs": {"HP": 4, "Atk": 4, "Spe": 252},
-    "moves": ["Spore", "Encore", "Substitute", "Swords Dance"],
-    "level": 100, "types": ["Normal"]
+    "species": "Smeargle",
+    "item": "Salac Berry",
+    "ability": "Own Tempo",
+    "nature": "Jolly",
+    "evs": {
+      "HP": 4,
+      "Atk": 4,
+      "Spe": 252
+    },
+    "moves": [
+      "Spore",
+      "Encore",
+      "Substitute",
+      "Swords Dance"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "tropius": {
-    "species": "Tropius", "item": "Leftovers", "ability": "Chlorophyll",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 136, "SpA": 120},
-    "moves": ["Leech Seed", "Sunny Day", "Solar Beam", "Synthesis"],
-    "level": 100, "types": ["Grass", "Flying"]
+    "species": "Tropius",
+    "item": "Leftovers",
+    "ability": "Chlorophyll",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 136,
+      "SpA": 120
+    },
+    "moves": [
+      "Leech Seed",
+      "Sunny Day",
+      "Solar Beam",
+      "Synthesis"
+    ],
+    "level": 100,
+    "types": [
+      "Grass",
+      "Flying"
+    ]
   },
   "marowak": {
-    "species": "Marowak", "item": "Thick Club", "ability": "Rock Head",
-    "nature": "Adamant", "evs": {"HP": 252, "Atk": 252, "Spe": 4},
-    "moves": ["Earthquake", "Rock Slide", "Shadow Ball", "Ancient Power"],
-    "level": 100, "types": ["Ground"]
+    "species": "Marowak",
+    "item": "Thick Club",
+    "ability": "Rock Head",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 252,
+      "Atk": 252,
+      "Spe": 4
+    },
+    "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Shadow Ball",
+      "Ancient Power"
+    ],
+    "level": 100,
+    "types": [
+      "Ground"
+    ]
   },
   "exeggutor": {
-    "species": "Exeggutor", "item": "Leftovers", "ability": "Chlorophyll",
-    "nature": "Modest", "evs": {"HP": 176, "SpA": 252, "Spe": 80},
-    "moves": ["Psychic", "Giga Drain", "Sleep Powder", "Explosion"],
-    "level": 100, "types": ["Grass", "Psychic"]
+    "species": "Exeggutor",
+    "item": "Leftovers",
+    "ability": "Chlorophyll",
+    "nature": "Modest",
+    "evs": {
+      "HP": 176,
+      "SpA": 252,
+      "Spe": 80
+    },
+    "moves": [
+      "Psychic",
+      "Giga Drain",
+      "Sleep Powder",
+      "Explosion"
+    ],
+    "level": 100,
+    "types": [
+      "Grass",
+      "Psychic"
+    ]
   },
   "lapras": {
-    "species": "Lapras", "item": "Leftovers", "ability": "Water Absorb",
-    "nature": "Modest", "evs": {"HP": 252, "SpA": 200, "SpD": 56},
-    "moves": ["Surf", "Blizzard", "Thunderbolt", "Psychic"],
-    "level": 100, "types": ["Water", "Ice"]
+    "species": "Lapras",
+    "item": "Leftovers",
+    "ability": "Water Absorb",
+    "nature": "Modest",
+    "evs": {
+      "HP": 252,
+      "SpA": 200,
+      "SpD": 56
+    },
+    "moves": [
+      "Surf",
+      "Blizzard",
+      "Thunderbolt",
+      "Psychic"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Ice"
+    ]
   },
   "clefable": {
-    "species": "Clefable", "item": "Leftovers", "ability": "Magic Guard",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 252, "SpD": 4},
-    "moves": ["Moonlight", "Seismic Toss", "Thunder Wave", "Ice Beam"],
-    "level": 100, "types": ["Normal"]
+    "species": "Clefable",
+    "item": "Leftovers",
+    "ability": "Magic Guard",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 252,
+      "SpD": 4
+    },
+    "moves": [
+      "Moonlight",
+      "Seismic Toss",
+      "Thunder Wave",
+      "Ice Beam"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "muk": {
-    "species": "Muk", "item": "Leftovers", "ability": "Sticky Hold",
-    "nature": "Careful", "evs": {"HP": 252, "Atk": 68, "SpD": 188},
-    "moves": ["Sludge Bomb", "Fire Blast", "Explosion", "Shadow Ball"],
-    "level": 100, "types": ["Poison"]
+    "species": "Muk",
+    "item": "Leftovers",
+    "ability": "Sticky Hold",
+    "nature": "Careful",
+    "evs": {
+      "HP": 252,
+      "Atk": 68,
+      "SpD": 188
+    },
+    "moves": [
+      "Sludge Bomb",
+      "Fire Blast",
+      "Explosion",
+      "Shadow Ball"
+    ],
+    "level": 100,
+    "types": [
+      "Poison"
+    ]
   },
   "golem": {
-    "species": "Golem", "item": "Choice Band", "ability": "Rock Head",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Rock Blast", "Earthquake", "Explosion", "Fire Punch"],
-    "level": 100, "types": ["Rock", "Ground"]
+    "species": "Golem",
+    "item": "Choice Band",
+    "ability": "Rock Head",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Rock Blast",
+      "Earthquake",
+      "Explosion",
+      "Fire Punch"
+    ],
+    "level": 100,
+    "types": [
+      "Rock",
+      "Ground"
+    ]
   },
   "slowking": {
-    "species": "Slowking", "item": "Leftovers", "ability": "Own Tempo",
-    "nature": "Modest", "evs": {"HP": 252, "SpA": 200, "SpD": 56},
-    "moves": ["Surf", "Ice Beam", "Psychic", "Fire Blast"],
-    "level": 100, "types": ["Water", "Psychic"]
+    "species": "Slowking",
+    "item": "Leftovers",
+    "ability": "Own Tempo",
+    "nature": "Modest",
+    "evs": {
+      "HP": 252,
+      "SpA": 200,
+      "SpD": 56
+    },
+    "moves": [
+      "Surf",
+      "Ice Beam",
+      "Psychic",
+      "Fire Blast"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Psychic"
+    ]
   },
   "grumpig": {
-    "species": "Grumpig", "item": "Leftovers", "ability": "Thick Fat",
-    "nature": "Modest", "evs": {"HP": 252, "SpA": 128, "SpD": 128},
-    "moves": ["Psychic", "Thunderbolt", "Calm Mind", "Shadow Ball"],
-    "level": 100, "types": ["Psychic"]
+    "species": "Grumpig",
+    "item": "Leftovers",
+    "ability": "Thick Fat",
+    "nature": "Modest",
+    "evs": {
+      "HP": 252,
+      "SpA": 128,
+      "SpD": 128
+    },
+    "moves": [
+      "Psychic",
+      "Thunderbolt",
+      "Calm Mind",
+      "Shadow Ball"
+    ],
+    "level": 100,
+    "types": [
+      "Psychic"
+    ]
   },
   "wailord": {
-    "species": "Wailord", "item": "Leftovers", "ability": "Oblivious",
-    "nature": "Modest", "evs": {"HP": 176, "SpA": 252, "Spe": 80},
-    "moves": ["Water Spout", "Surf", "Blizzard", "Amnesia"],
-    "level": 100, "types": ["Water"]
+    "species": "Wailord",
+    "item": "Leftovers",
+    "ability": "Oblivious",
+    "nature": "Modest",
+    "evs": {
+      "HP": 176,
+      "SpA": 252,
+      "Spe": 80
+    },
+    "moves": [
+      "Water Spout",
+      "Surf",
+      "Blizzard",
+      "Amnesia"
+    ],
+    "level": 100,
+    "types": [
+      "Water"
+    ]
   },
   "camerupt": {
-    "species": "Camerupt", "item": "Leftovers", "ability": "Magma Armor",
-    "nature": "Modest", "evs": {"HP": 252, "SpA": 200, "SpD": 56},
-    "moves": ["Eruption", "Flamethrower", "Earthquake", "Rock Slide"],
-    "level": 100, "types": ["Fire", "Ground"]
+    "species": "Camerupt",
+    "item": "Leftovers",
+    "ability": "Magma Armor",
+    "nature": "Modest",
+    "evs": {
+      "HP": 252,
+      "SpA": 200,
+      "SpD": 56
+    },
+    "moves": [
+      "Eruption",
+      "Flamethrower",
+      "Earthquake",
+      "Rock Slide"
+    ],
+    "level": 100,
+    "types": [
+      "Fire",
+      "Ground"
+    ]
   },
   "torkoal": {
-    "species": "Torkoal", "item": "Leftovers", "ability": "White Smoke",
-    "nature": "Modest", "evs": {"HP": 252, "SpA": 200, "Def": 56},
-    "moves": ["Overheat", "Flamethrower", "Sunny Day", "Amnesia"],
-    "level": 100, "types": ["Fire"]
+    "species": "Torkoal",
+    "item": "Leftovers",
+    "ability": "White Smoke",
+    "nature": "Modest",
+    "evs": {
+      "HP": 252,
+      "SpA": 200,
+      "Def": 56
+    },
+    "moves": [
+      "Overheat",
+      "Flamethrower",
+      "Sunny Day",
+      "Amnesia"
+    ],
+    "level": 100,
+    "types": [
+      "Fire"
+    ]
   },
   "solrock": {
-    "species": "Solrock", "item": "Leftovers", "ability": "Levitate",
-    "nature": "Impish", "evs": {"HP": 252, "Atk": 176, "Def": 80},
-    "moves": ["Rock Slide", "Earthquake", "Cosmic Power", "Explosion"],
-    "level": 100, "types": ["Rock", "Psychic"]
+    "species": "Solrock",
+    "item": "Leftovers",
+    "ability": "Levitate",
+    "nature": "Impish",
+    "evs": {
+      "HP": 252,
+      "Atk": 176,
+      "Def": 80
+    },
+    "moves": [
+      "Rock Slide",
+      "Earthquake",
+      "Cosmic Power",
+      "Explosion"
+    ],
+    "level": 100,
+    "types": [
+      "Rock",
+      "Psychic"
+    ]
   },
   "lunatone": {
-    "species": "Lunatone", "item": "Leftovers", "ability": "Levitate",
-    "nature": "Modest", "evs": {"HP": 252, "SpA": 200, "SpD": 56},
-    "moves": ["Ice Beam", "Psychic", "Calm Mind", "Hypnosis"],
-    "level": 100, "types": ["Rock", "Psychic"]
+    "species": "Lunatone",
+    "item": "Leftovers",
+    "ability": "Levitate",
+    "nature": "Modest",
+    "evs": {
+      "HP": 252,
+      "SpA": 200,
+      "SpD": 56
+    },
+    "moves": [
+      "Ice Beam",
+      "Psychic",
+      "Calm Mind",
+      "Hypnosis"
+    ],
+    "level": 100,
+    "types": [
+      "Rock",
+      "Psychic"
+    ]
   },
   "seviper": {
-    "species": "Seviper", "item": "Lum Berry", "ability": "Shed Skin",
-    "nature": "Mild", "evs": {"Atk": 128, "SpA": 128, "Spe": 252},
-    "moves": ["Sludge Bomb", "Flamethrower", "Crunch", "Earthquake"],
-    "level": 100, "types": ["Poison"]
+    "species": "Seviper",
+    "item": "Lum Berry",
+    "ability": "Shed Skin",
+    "nature": "Mild",
+    "evs": {
+      "Atk": 128,
+      "SpA": 128,
+      "Spe": 252
+    },
+    "moves": [
+      "Sludge Bomb",
+      "Flamethrower",
+      "Crunch",
+      "Earthquake"
+    ],
+    "level": 100,
+    "types": [
+      "Poison"
+    ]
   },
   "vibrava": {
-    "species": "Vibrava", "item": "Choice Band", "ability": "Levitate",
-    "nature": "Jolly", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Earthquake", "Rock Slide", "Dragon Breath", "Crunch"],
-    "level": 100, "types": ["Ground", "Dragon"]
+    "species": "Vibrava",
+    "item": "Choice Band",
+    "ability": "Levitate",
+    "nature": "Jolly",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Dragon Breath",
+      "Crunch"
+    ],
+    "level": 100,
+    "types": [
+      "Ground",
+      "Dragon"
+    ]
   },
   "houndour": {
-    "species": "Houndour", "item": "Salac Berry", "ability": "Flash Fire",
-    "nature": "Timid", "evs": {"HP": 4, "SpA": 252, "Spe": 252},
-    "moves": ["Flamethrower", "Crunch", "Pursuit", "Will-O-Wisp"],
-    "level": 100, "types": ["Dark", "Fire"]
+    "species": "Houndour",
+    "item": "Salac Berry",
+    "ability": "Flash Fire",
+    "nature": "Timid",
+    "evs": {
+      "HP": 4,
+      "SpA": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Flamethrower",
+      "Crunch",
+      "Pursuit",
+      "Will-O-Wisp"
+    ],
+    "level": 100,
+    "types": [
+      "Dark",
+      "Fire"
+    ]
   },
   "golbat": {
-    "species": "Golbat", "item": "Leftovers", "ability": "Inner Focus",
-    "nature": "Jolly", "evs": {"HP": 252, "Atk": 160, "Spe": 96},
-    "moves": ["Sludge Bomb", "Toxic", "Confuse Ray", "Aerial Ace"],
-    "level": 100, "types": ["Poison", "Flying"]
+    "species": "Golbat",
+    "item": "Leftovers",
+    "ability": "Inner Focus",
+    "nature": "Jolly",
+    "evs": {
+      "HP": 252,
+      "Atk": 160,
+      "Spe": 96
+    },
+    "moves": [
+      "Sludge Bomb",
+      "Toxic",
+      "Confuse Ray",
+      "Aerial Ace"
+    ],
+    "level": 100,
+    "types": [
+      "Poison",
+      "Flying"
+    ]
   },
   "scyther": {
-    "species": "Scyther", "item": "Choice Band", "ability": "Technician",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Aerial Ace", "Silver Wind", "Steel Wing", "Return"],
-    "level": 100, "types": ["Bug", "Flying"]
-  },
-  "lapras": {
-    "species": "Lapras", "item": "Leftovers", "ability": "Water Absorb",
-    "nature": "Modest", "evs": {"HP": 252, "SpA": 200, "SpD": 56},
-    "moves": ["Surf", "Blizzard", "Thunderbolt", "Psychic"],
-    "level": 100, "types": ["Water", "Ice"]
+    "species": "Scyther",
+    "item": "Choice Band",
+    "ability": "Technician",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Aerial Ace",
+      "Silver Wind",
+      "Steel Wing",
+      "Return"
+    ],
+    "level": 100,
+    "types": [
+      "Bug",
+      "Flying"
+    ]
   },
   "delibird": {
-    "species": "Delibird", "item": "Salac Berry", "ability": "Hustle",
-    "nature": "Jolly", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Ice Beam", "Aerial Ace", "Blizzard", "Future Sight"],
-    "level": 100, "types": ["Ice", "Flying"]
+    "species": "Delibird",
+    "item": "Salac Berry",
+    "ability": "Hustle",
+    "nature": "Jolly",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Ice Beam",
+      "Aerial Ace",
+      "Blizzard",
+      "Future Sight"
+    ],
+    "level": 100,
+    "types": [
+      "Ice",
+      "Flying"
+    ]
   },
   "togetic": {
-    "species": "Togetic", "item": "Leftovers", "ability": "Serene Grace",
-    "nature": "Modest", "evs": {"HP": 252, "SpA": 200, "SpD": 56},
-    "moves": ["Magical Leaf", "Soft-Boiled", "Thunder Wave", "Metronome"],
-    "level": 100, "types": ["Normal", "Flying"]
+    "species": "Togetic",
+    "item": "Leftovers",
+    "ability": "Serene Grace",
+    "nature": "Modest",
+    "evs": {
+      "HP": 252,
+      "SpA": 200,
+      "SpD": 56
+    },
+    "moves": [
+      "Magical Leaf",
+      "Soft-Boiled",
+      "Thunder Wave",
+      "Metronome"
+    ],
+    "level": 100,
+    "types": [
+      "Normal",
+      "Flying"
+    ]
   },
   "qwilfish": {
-    "species": "Qwilfish", "item": "Leftovers", "ability": "Swift Swim",
-    "nature": "Jolly", "evs": {"HP": 252, "Atk": 252, "Spe": 4},
-    "moves": ["Spikes", "Swords Dance", "Shadow Ball", "Explosion"],
-    "level": 100, "types": ["Water", "Poison"]
+    "species": "Qwilfish",
+    "item": "Leftovers",
+    "ability": "Swift Swim",
+    "nature": "Jolly",
+    "evs": {
+      "HP": 252,
+      "Atk": 252,
+      "Spe": 4
+    },
+    "moves": [
+      "Spikes",
+      "Swords Dance",
+      "Shadow Ball",
+      "Explosion"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Poison"
+    ]
   },
   "slowpoke": {
-    "species": "Slowpoke", "item": "Leftovers", "ability": "Oblivious",
-    "nature": "Bold", "evs": {"HP": 252, "Def": 200, "SpA": 56},
-    "moves": ["Surf", "Psychic", "Fire Blast", "Amnesia"],
-    "level": 100, "types": ["Water", "Psychic"]
+    "species": "Slowpoke",
+    "item": "Leftovers",
+    "ability": "Oblivious",
+    "nature": "Bold",
+    "evs": {
+      "HP": 252,
+      "Def": 200,
+      "SpA": 56
+    },
+    "moves": [
+      "Surf",
+      "Psychic",
+      "Fire Blast",
+      "Amnesia"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Psychic"
+    ]
   },
   "stantler": {
-    "species": "Stantler", "item": "Choice Band", "ability": "Intimidate",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Return", "Shadow Ball", "Earthquake", "Hypnosis"],
-    "level": 100, "types": ["Normal"]
+    "species": "Stantler",
+    "item": "Choice Band",
+    "ability": "Intimidate",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Return",
+      "Shadow Ball",
+      "Earthquake",
+      "Hypnosis"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "kecleon": {
-    "species": "Kecleon", "item": "Salac Berry", "ability": "Color Change",
-    "nature": "Adamant", "evs": {"HP": 4, "Atk": 252, "Spe": 252},
-    "moves": ["Return", "Shadow Ball", "Trick", "Thunderbolt"],
-    "level": 100, "types": ["Normal"]
+    "species": "Kecleon",
+    "item": "Salac Berry",
+    "ability": "Color Change",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 4,
+      "Atk": 252,
+      "Spe": 252
+    },
+    "moves": [
+      "Return",
+      "Shadow Ball",
+      "Trick",
+      "Thunderbolt"
+    ],
+    "level": 100,
+    "types": [
+      "Normal"
+    ]
   },
   "relicanth": {
-    "species": "Relicanth", "item": "Leftovers", "ability": "Rock Head",
-    "nature": "Adamant", "evs": {"HP": 252, "Atk": 176, "Def": 80},
-    "moves": ["Rock Blast", "Earthquake", "Double-Edge", "Yawn"],
-    "level": 100, "types": ["Water", "Rock"]
+    "species": "Relicanth",
+    "item": "Leftovers",
+    "ability": "Rock Head",
+    "nature": "Adamant",
+    "evs": {
+      "HP": 252,
+      "Atk": 176,
+      "Def": 80
+    },
+    "moves": [
+      "Rock Blast",
+      "Earthquake",
+      "Double-Edge",
+      "Yawn"
+    ],
+    "level": 100,
+    "types": [
+      "Water",
+      "Rock"
+    ]
   }
 }
