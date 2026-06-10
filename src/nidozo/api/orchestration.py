@@ -13,6 +13,22 @@ from nidozo.api.models import StartBattleRequest, StartSeasonRequest, StartTourn
 logger = logging.getLogger(__name__)
 
 
+def _bracket_advance_slot(
+    winner: int | None, p1_seed: int, p2_seed: int
+) -> int:
+    """Choose which slot advances in a bracket match.
+
+    A bracket must always advance one side, but a battle can legitimately tie
+    (Explosion, Destiny Bond, Struggle, etc.).  When there is a real winner we
+    use it; on a tie we apply a deterministic tiebreak — the better seed (the
+    lower seed number) advances.  The recorded battle result stays honest
+    (``winner=None`` for a tie); this only governs bracket routing.
+    """
+    if winner is not None:
+        return winner
+    return 1 if p1_seed < p2_seed else 2
+
+
 def _random_preset_team(tier: str) -> str:
     """Build a random 6-Pokémon team string from the tier's preset pool.
 
@@ -724,25 +740,39 @@ async def run_bracket_tournament(
 
                     await p1.battle_against(p2, n_battles=1)
 
-                    winner_slot = 1 if p1.n_won_battles > 0 else 2
+                    # Honest battle outcome (None = tie — possible via Explosion,
+                    # Destiny Bond, Struggle, etc.).  This is what gets persisted
+                    # and reported, so ELO treats a tie as a genuine draw.
+                    winner = 1 if p1.n_won_battles > 0 else (2 if p2.n_won_battles > 0 else None)
                     real_tag = next(iter(p1.battles), f"battle-{battle_id}")
                     battle_obj = p1.battles.get(real_tag)
                     total_turns = battle_obj.turn if battle_obj else 0
 
                     store.update_battle_tag(battle_id, real_tag)
-                    store.finish_battle(battle_id, winner_slot, total_turns)
+                    store.finish_battle(battle_id, winner, total_turns)
 
                     await bus.publish({
                         "type": "battle_end",
                         "battle_id": battle_id,
                         "tournament_id": tournament_id,
-                        "winner": winner_slot,
+                        "winner": winner,
                         "total_turns": total_turns,
                         "match_id": match_id,
                     })
 
+                    # A bracket must advance someone even on a tie; this stays
+                    # honest in the recorded result above and only governs routing.
+                    advance_slot = _bracket_advance_slot(winner, p1_seed, p2_seed)
+                    if winner is None:
+                        logger.warning(
+                            "Bracket %d match %s ended in a tie; advancing better "
+                            "seed (slot %d, seed %d) by tiebreak",
+                            tournament_id, match_id, advance_slot,
+                            p1_seed if advance_slot == 1 else p2_seed,
+                        )
+
                     # Advance bracket
-                    record_result(bracket_state, match_id, winner_slot, battle_id)
+                    record_result(bracket_state, match_id, advance_slot, battle_id)
                     store.update_bracket_state(tournament_id, bracket_state)
 
                     await bus.publish({
@@ -754,7 +784,7 @@ async def run_bracket_tournament(
                     turns = store.get_turns_basic(battle_id)
                     _t: asyncio.Task[None] = asyncio.create_task(
                         generate_and_store_lessons(
-                            store, battle_id, winner_slot, total_turns, turns,
+                            store, battle_id, winner, total_turns, turns,
                             p1_provider=p1_prov, p1_model=p1_model,
                             p1_id=t_p1_id, p1_opponent=p2_label,
                             p2_provider=p2_prov, p2_model=p2_model,
@@ -763,7 +793,7 @@ async def run_bracket_tournament(
                     )
                     _nt3: asyncio.Task[None] = asyncio.create_task(
                         generate_and_store_narrative(
-                            store, battle_id, winner_slot, total_turns,
+                            store, battle_id, winner, total_turns,
                             p1_label=p1_label, p2_label=p2_label,
                             p1_provider=p1_prov, p1_model=p1_model,
                             p2_provider=p2_prov, p2_model=p2_model,
