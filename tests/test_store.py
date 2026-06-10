@@ -1254,3 +1254,117 @@ def test_abort_stale_records_marks_running_tournament_cancelled(store) -> None:
 def test_abort_stale_records_noop_on_clean_db(store) -> None:
     result = store.abort_stale_records()
     assert result == {"battles": 0, "tournaments": 0, "seasons": 0}
+
+
+# ---------------------------------------------------------------------------
+# Regression: cancelled battles must not corrupt W/L/T counts (issue #129)
+# ---------------------------------------------------------------------------
+
+def _setup_cancelled_battle(store):
+    """Helper: one finished battle (p1 wins) and one cancelled battle (no winner).
+
+    Returns (p1_id, p2_id, finished_bid, cancelled_bid).
+    """
+    p1 = store.get_or_create_model("random", "p1-model", "v5")
+    p2 = store.get_or_create_model("random", "p2-model", "v5")
+    finished_bid = store.create_battle("tag-finished", "gen9randombattle", p1, p2)
+    store.finish_battle(finished_bid, winner=1, total_turns=20)
+    cancelled_bid = store.create_battle("tag-cancelled", "gen9randombattle", p1, p2)
+    store.cancel_battle(cancelled_bid)
+    return p1, p2, finished_bid, cancelled_bid
+
+
+def test_cancelled_battle_excluded_from_leaderboard(store) -> None:
+    p1, p2, _fb, _cb = _setup_cancelled_battle(store)
+    rows = store.leaderboard(grouped=True)
+    p1_row = next(r for r in rows if r["model_name"] == "p1-model")
+    p2_row = next(r for r in rows if r["model_name"] == "p2-model")
+    # p1 should show exactly 1 win, 0 ties; p2 should show 0 ties
+    assert p1_row["wins"] == 1
+    assert p1_row["ties"] == 0
+    assert p2_row["losses"] == 1
+    assert p2_row["ties"] == 0
+
+
+def test_cancelled_battle_excluded_from_leaderboard_per_version(store) -> None:
+    p1, p2, _fb, _cb = _setup_cancelled_battle(store)
+    rows = store.leaderboard(grouped=False)
+    p1_row = next(r for r in rows if r["model_name"] == "p1-model")
+    assert p1_row["wins"] == 1
+    assert p1_row["ties"] == 0
+
+
+def test_cancelled_battle_excluded_from_matchup_matrix(store) -> None:
+    p1, p2, _fb, _cb = _setup_cancelled_battle(store)
+    matrix = store.matchup_matrix()
+    # Find the p1→p2 cell
+    cell = next(
+        (r for r in matrix if r["row_model"] == "p1-model" and r["col_model"] == "p2-model"),
+        None,
+    )
+    assert cell is not None
+    assert cell["games"] == 1   # only the completed battle
+    assert cell["wins"] == 1
+    assert cell["ties"] == 0
+
+
+def test_cancelled_battle_excluded_from_model_stats_wlt(store) -> None:
+    p1, p2, _fb, _cb = _setup_cancelled_battle(store)
+    stats = store.get_model_stats(p1)
+    assert stats is not None
+    assert stats["model"]["wins"] == 1
+    assert stats["model"]["ties"] == 0
+
+
+def test_cancelled_battle_excluded_from_model_battle_history(store) -> None:
+    p1, p2, _fb, _cb = _setup_cancelled_battle(store)
+    stats = store.get_model_stats(p1)
+    assert stats is not None
+    assert len(stats["battle_history"]) == 1
+    assert stats["battle_history"][0]["result"] == "win"
+
+
+def test_cancelled_battle_excluded_from_win_rate_by_tier(store) -> None:
+    p1, p2, _fb, _cb = _setup_cancelled_battle(store)
+    usage = store.get_model_usage_stats(p1)
+    assert len(usage["win_rate_by_tier"]) == 1
+    row = usage["win_rate_by_tier"][0]
+    assert row["total"] == 1   # only the completed battle
+    assert row["wins"] == 1
+
+
+def test_cancelled_battle_excluded_from_season_standings(store) -> None:
+    p1, p2, _fb, _cb = _setup_cancelled_battle(store)
+    # Create a season and wire both battles to it
+    sid = store.create_season(
+        name="test-season",
+        tier="random",
+        fmt="gen9randombattle",
+        participants=[
+            {"provider": "random", "model_name": "p1-model"},
+            {"provider": "random", "model_name": "p2-model"},
+        ],
+        rounds=1,
+        prompt_version="v5",
+        total_battles=2,
+    )
+    store._conn.execute("UPDATE battles SET season_id=? WHERE id=?", (sid, _fb))
+    store._conn.execute("UPDATE battles SET season_id=? WHERE id=?", (sid, _cb))
+    store._conn.commit()
+
+    standings = store.get_season_standings(sid)
+    p1_row = next(s for s in standings if s["model_name"] == "p1-model")
+    p2_row = next(s for s in standings if s["model_name"] == "p2-model")
+    assert p1_row["wins"] == 1
+    assert p1_row["ties"] == 0
+    assert p2_row["ties"] == 0
+    # ELO should reflect only the one real result, not a phantom draw
+    assert p1_row["elo"] > 1000
+    assert p2_row["elo"] < 1000
+
+
+def test_cancelled_battle_excluded_from_global_stats_summary(store) -> None:
+    _setup_cancelled_battle(store)
+    gs = store.get_global_stats()
+    # Only the 1 completed battle counts
+    assert gs["summary"]["total_battles"] == 1
