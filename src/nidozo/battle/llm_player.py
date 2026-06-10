@@ -72,13 +72,23 @@ class LLMPlayer(Player):
         self._recent_events: list[dict[str, Any]] = []  # rolling event log
         self._last_action_display: str | None = None    # human-readable last action
 
-    async def choose_move(self, battle: AbstractBattle) -> BattleOrder:
+    async def choose_move(
+        self, battle: AbstractBattle, *, state: dict[str, Any] | None = None
+    ) -> BattleOrder:
         # Recharge turn (e.g. after Hyper Beam): only one forced pseudo-move, skip LLM
         moves = battle.available_moves
         if len(moves) == 1 and moves[0].id == "recharge":
             return self.create_order(moves[0])
 
-        state = serialize_battle(battle)
+        # serialize_battle runs the full heuristic engine (damage formulas, type
+        # chart, switch scoring). The streaming subclass already computes one
+        # snapshot for its WS events and passes it in, so we reuse it rather than
+        # paying that cost twice per turn. Copy before mutating so the caller's
+        # snapshot (used for the render-only state events) stays untouched.
+        if state is None:
+            state = serialize_battle(battle)
+        else:
+            state = dict(state)
 
         # Inject battle history (HP deltas since last turn) for prompt v4.
         # This is stateful and can't be derived from a single snapshot, so we

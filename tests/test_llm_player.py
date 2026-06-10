@@ -112,6 +112,44 @@ async def test_choose_move_logs_success_to_store(mock_backend, mock_battle, fake
 
 
 # ---------------------------------------------------------------------------
+# choose_move — shared serialization (issue #136)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_choose_move_reuses_passed_state_no_reserialize(
+    mock_backend, mock_battle, fake_order
+) -> None:
+    """When a pre-serialized snapshot is passed in, choose_move must not call
+    serialize_battle again (the streaming subclass already paid that cost)."""
+    player = _make_player(mock_backend)
+    passed = {"my_active": {"species": "pikachu"}}
+
+    with patch("nidozo.battle.llm_player.serialize_battle") as mock_ser, \
+         patch("nidozo.battle.llm_player.parse_action", return_value=fake_order):
+        result = await player.choose_move(mock_battle, state=passed)
+
+    assert result is fake_order
+    mock_ser.assert_not_called()
+    # The caller's snapshot is left pristine — recent_events is added to a copy.
+    assert "recent_events" not in passed
+
+
+@pytest.mark.asyncio
+async def test_choose_move_serializes_once_when_no_state(
+    mock_backend, mock_battle, fake_order
+) -> None:
+    """Without a passed snapshot (non-streaming path), choose_move serializes
+    exactly once."""
+    player = _make_player(mock_backend)
+
+    with patch("nidozo.battle.llm_player.serialize_battle", return_value={}) as mock_ser, \
+         patch("nidozo.battle.llm_player.parse_action", return_value=fake_order):
+        await player.choose_move(mock_battle)
+
+    mock_ser.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # choose_move — recharge short-circuit
 # ---------------------------------------------------------------------------
 
