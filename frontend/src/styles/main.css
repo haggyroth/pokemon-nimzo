@@ -5655,11 +5655,27 @@ body::after {
 .sbs-cockpit-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end; /* Phase 2: labels go on the left (space-between) */
+  justify-content: space-between;
   gap: var(--space-md);
   padding: var(--space-xs) var(--space-md);
   border-bottom: 1px solid var(--border);
   min-height: 1.75rem;
+}
+
+.sbs-header-side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0; /* let the player-label ellipsis truncate instead of overflowing */
+}
+.sbs-header-side--right { justify-content: flex-end; }
+.sbs-header-side--won .player-label-name { font-weight: 700; }
+
+.sbs-won-tag {
+  font-family: var(--font-pixel);
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.06em;
+  color: var(--accent-green);
 }
 
 .sbs-status-chip {
@@ -5667,10 +5683,18 @@ body::after {
   font-size: var(--fs-2xs);
   letter-spacing: 0.08em;
   color: var(--text-dim);
+  flex-shrink: 0;
 }
 .sbs-status-chip--live  { color: var(--accent-green); }
 .sbs-status-chip--ended { color: var(--accent-amber); }
 .sbs-status-chip--error { color: var(--accent-red); }
+
+/* Win-probability panel — sits between the stage and the log. */
+.sbs-winprob {
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--border);
+}
+.sbs-winprob:empty { display: none; }
 
 /* The PS Battle class draws an absolutely-positioned 640×360 .battle scene into
    $frame (battle.css owns the scene styling). The stage centres that fixed

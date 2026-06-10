@@ -21,6 +21,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useShowdownBundle } from '../hooks/useShowdownBundle'
+import { WinProbBar, PlayerLabel } from './battleShared'
 
 /** Strip the room-prefix line and proxy keepalive; return bare |...| lines. */
 function protocolLinesFromFrame(frame) {
@@ -29,7 +30,7 @@ function protocolLinesFromFrame(frame) {
     .filter(line => line && !line.startsWith('>') && line !== '|ping')
 }
 
-export default function ShowdownBattleScene({ room }) {
+export default function ShowdownBattleScene({ room, p1State, p2State, battleInfo, battleResult }) {
   const { ready: bundleReady, error: bundleError } = useShowdownBundle()
   const frameRef  = useRef(null)
   const logRef    = useRef(null)
@@ -119,10 +120,25 @@ export default function ShowdownBattleScene({ room }) {
   // The header and the space around the stage are the slots Phase 2 fills with
   // labels, heuristics, and win-probability — data lives *around* the frame, not
   // overlaid on it.
+  // Only surface the winner once the stream has actually ended — guards against
+  // a stale battleResult from a previous battle showing "WIN" mid-fight.
+  const ended = status === 'ended'
+  const p1Won = ended && battleResult?.winner === 1
+  const p2Won = ended && battleResult?.winner === 2
+
   return (
     <div className="showdown-battle-scene sbs-cockpit">
+      {/* Header: model labels per side with a centered status chip. */}
       <div className="sbs-cockpit-header">
+        <div className={`sbs-header-side${p1Won ? ' sbs-header-side--won' : ''}`}>
+          <PlayerLabel label={battleInfo?.p1} side="p1" />
+          {p1Won && <span className="sbs-won-tag">WIN</span>}
+        </div>
         <span className={`sbs-status-chip sbs-status-chip--${status}`}>{statusLabel}</span>
+        <div className={`sbs-header-side sbs-header-side--right${p2Won ? ' sbs-header-side--won' : ''}`}>
+          {p2Won && <span className="sbs-won-tag">WIN</span>}
+          <PlayerLabel label={battleInfo?.p2} side="p2" />
+        </div>
       </div>
 
       <div className="sbs-stage">
@@ -137,6 +153,16 @@ export default function ShowdownBattleScene({ room }) {
             {status === 'error'      && 'Connection error — try refreshing.'}
           </div>
         )}
+      </div>
+
+      {/* Win-probability panel (HP-ratio based) — hidden until state arrives. */}
+      <div className="sbs-winprob">
+        <WinProbBar
+          p1State={p1State}
+          p2State={p2State}
+          p1Label={battleInfo?.p1}
+          p2Label={battleInfo?.p2}
+        />
       </div>
 
       <div ref={logRef} className="sbs-log" />
