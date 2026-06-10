@@ -237,6 +237,22 @@ async def run_tournament(
     }
 
     for battle_num, battle_id in enumerate(battle_ids, start=1):
+        # A cancel via the API only flips the DB status row; the runner must
+        # notice and stop here, between battles, rather than playing on.
+        t_row = store.get_tournament(tournament_id)
+        if t_row and t_row["status"] != "running":
+            logger.info(
+                "Tournament %d no longer running (status=%s) — stopping runner "
+                "before battle %d",
+                tournament_id, t_row["status"], battle_num,
+            )
+            await bus.publish({
+                "type": "tournament_cancelled",
+                "tournament_id": tournament_id,
+                "battles_completed": battle_num - 1,
+            })
+            return
+
         battle_row = store.get_battle(battle_id)
         if not battle_row or battle_row["status"] == "cancelled":
             continue
@@ -415,6 +431,12 @@ async def run_tournament(
         finally:
             active_tasks.pop(battle_id, None)
 
+    # Only finalize as completed if the tournament wasn't cancelled (or otherwise
+    # moved to a terminal status) while the loop was running — otherwise we'd
+    # silently overwrite the user's cancel with 'completed'.
+    final = store.get_tournament(tournament_id)
+    if final and final["status"] != "running":
+        return
     store.finish_tournament(tournament_id, status="completed")
     leaderboard = store.leaderboard()
     await bus.publish({
@@ -644,6 +666,18 @@ async def run_bracket_tournament(
 
     try:
         while True:
+            # A cancel via the API only flips the DB status row; stop the runner
+            # here, between matches, rather than playing out the bracket.
+            t_row = store.get_tournament(tournament_id)
+            if t_row and t_row["status"] != "running":
+                logger.info(
+                    "Bracket tournament %d no longer running (status=%s) — "
+                    "stopping runner at battle %d",
+                    tournament_id, t_row["status"], battle_num,
+                )
+                cancelled = True
+                break
+
             pending = get_pending_matches(bracket_state)
             if not pending:
                 break
@@ -841,27 +875,35 @@ async def run_bracket_tournament(
         cancelled = True
         raise
 
-    if not cancelled:
-        if match_failed:
-            store.finish_tournament(tournament_id, status="failed")
-            await bus.publish({
-                "type": "tournament_failed",
-                "tournament_id": tournament_id,
-                "battles_completed": battle_num,
-                "bracket": bracket_state,
-            })
-        else:
-            store.finish_tournament(tournament_id, status="completed")
-            champion_seed = bracket_state.get("champion_seed")
-            champion_info = resolve_seed(bracket_state, champion_seed) if champion_seed else None
-            leaderboard = store.leaderboard()
-            await bus.publish({
-                "type": "tournament_end",
-                "tournament_id": tournament_id,
-                "leaderboard": leaderboard,
-                "bracket": bracket_state,
-                "champion": champion_info,
-            })
+    if cancelled:
+        # Reached here (rather than via the re-raising CancelledError handler)
+        # only when the runner saw the tournament was cancelled out from under
+        # it. The DB status is already 'cancelled'; just notify clients.
+        await bus.publish({
+            "type": "tournament_cancelled",
+            "tournament_id": tournament_id,
+            "battles_completed": battle_num,
+        })
+    elif match_failed:
+        store.finish_tournament(tournament_id, status="failed")
+        await bus.publish({
+            "type": "tournament_failed",
+            "tournament_id": tournament_id,
+            "battles_completed": battle_num,
+            "bracket": bracket_state,
+        })
+    else:
+        store.finish_tournament(tournament_id, status="completed")
+        champion_seed = bracket_state.get("champion_seed")
+        champion_info = resolve_seed(bracket_state, champion_seed) if champion_seed else None
+        leaderboard = store.leaderboard()
+        await bus.publish({
+            "type": "tournament_end",
+            "tournament_id": tournament_id,
+            "leaderboard": leaderboard,
+            "bracket": bracket_state,
+            "champion": champion_info,
+        })
 
 
 async def run_season(
@@ -906,6 +948,22 @@ async def run_season(
     }
 
     for battle_num, battle_id in enumerate(battle_ids, start=1):
+        # A cancel via the API only flips the DB status row; the runner must
+        # notice and stop here, between battles, rather than playing on.
+        s_row = store.get_season(season_id)
+        if s_row and s_row["status"] != "running":
+            logger.info(
+                "Season %d no longer running (status=%s) — stopping runner "
+                "before battle %d",
+                season_id, s_row["status"], battle_num,
+            )
+            await bus.publish({
+                "type": "season_cancelled",
+                "season_id": season_id,
+                "battles_completed": battle_num - 1,
+            })
+            return
+
         battle_row = store.get_battle(battle_id)
         if not battle_row or battle_row["status"] == "cancelled":
             continue
@@ -1077,6 +1135,12 @@ async def run_season(
         finally:
             active_tasks.pop(battle_id, None)
 
+    # Only finalize as completed if the season wasn't cancelled (or otherwise
+    # moved to a terminal status) while the loop was running — otherwise we'd
+    # silently overwrite the user's cancel with 'completed'.
+    final = store.get_season(season_id)
+    if final and final["status"] != "running":
+        return
     store.finish_season(season_id, status="completed")
     final_standings = store.get_season_standings(season_id)
     await bus.publish({

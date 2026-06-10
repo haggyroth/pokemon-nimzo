@@ -563,7 +563,7 @@ def create_router(
         return store.get_season_battles(season_id)
 
     @router.post("/api/seasons/{season_id}/cancel")
-    def cancel_season(season_id: int) -> dict[str, Any]:
+    async def cancel_season(season_id: int) -> dict[str, Any]:
         if store.get_season(season_id) is None:
             raise HTTPException(status_code=404, detail="Season not found")
         cancelled = store.cancel_season(season_id)
@@ -571,6 +571,11 @@ def create_router(
             raise HTTPException(
                 status_code=409, detail="Season is already finished or cannot be cancelled"
             )
+        await bus.publish({
+            "type": "season_cancelled",
+            "season_id": season_id,
+            "battles_completed": None,
+        })
         return {"ok": True, "season_id": season_id}
 
     return router
