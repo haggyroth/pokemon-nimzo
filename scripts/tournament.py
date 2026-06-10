@@ -74,14 +74,14 @@ def _build_player(provider: str, model: str, role: str, store: BattleStore,
     elif provider == "openai":
         backend = OpenAIBackend(
             model=model, api_key=os.environ.get("OPENAI_API_KEY"),
-            json_mode=use_json_mode, use_json_object=False,
+            json_mode=use_json_mode,
         )
-    else:  # lmstudio — use simple json_object (strict json_schema fails on many local models)
+    else:  # lmstudio — same json_schema response_format (LM Studio rejects json_object)
         backend = OpenAIBackend(
             model=model,
             api_key="lm-studio",
             base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
-            json_mode=use_json_mode, use_json_object=True,
+            json_mode=use_json_mode,
         )
 
     return StreamingLLMPlayer(

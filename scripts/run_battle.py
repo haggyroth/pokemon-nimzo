@@ -68,14 +68,14 @@ def _build_player(
         backend = OpenAIBackend(
             model=model or "gpt-4o",
             api_key=os.environ.get("OPENAI_API_KEY"),
-            json_mode=use_json_mode, use_json_object=False,
+            json_mode=use_json_mode,
         )
     elif provider == "lmstudio":
         backend = OpenAIBackend(
             model=model or os.environ.get("LM_STUDIO_MODEL", "local-model"),
             base_url=os.environ.get("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
             api_key="lm-studio",
-            json_mode=use_json_mode, use_json_object=True,
+            json_mode=use_json_mode,
         )
     else:
         raise ValueError(
