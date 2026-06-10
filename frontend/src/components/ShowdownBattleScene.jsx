@@ -110,22 +110,36 @@ export default function ShowdownBattleScene({ room }) {
 
   // ── Live scene ───────────────────────────────────────────────────────────
 
+  const statusLabel = status === 'live' ? '● LIVE'
+    : status === 'ended' ? 'ENDED'
+    : status === 'error' ? 'ERROR'
+    : 'CONNECTING'
+
+  // Cockpit layout: a header strip, the centered PS stage, and the log panel.
+  // The header and the space around the stage are the slots Phase 2 fills with
+  // labels, heuristics, and win-probability — data lives *around* the frame, not
+  // overlaid on it.
   return (
-    <div className="showdown-battle-scene">
-      <div className="sbs-scene">
-        {/* PS Battle class draws the animated scene into these two divs. */}
-        <div ref={frameRef} className="sbs-frame" />
-        <div ref={logRef}   className="sbs-log"   />
+    <div className="showdown-battle-scene sbs-cockpit">
+      <div className="sbs-cockpit-header">
+        <span className={`sbs-status-chip sbs-status-chip--${status}`}>{statusLabel}</span>
       </div>
 
-      {/* Overlay: only visible when not yet live or after the battle ends. */}
-      {status !== 'live' && (
-        <div className={`sbs-status-overlay sbs-status-overlay--${status}`}>
-          {status === 'connecting' && 'Connecting to battle room…'}
-          {status === 'ended'      && 'Battle ended.'}
-          {status === 'error'      && 'Connection error — try refreshing.'}
-        </div>
-      )}
+      <div className="sbs-stage">
+        {/* PS Battle class draws the animated scene into this div. */}
+        <div ref={frameRef} className="sbs-frame" />
+
+        {/* Overlay: only visible when not yet live or after the battle ends. */}
+        {status !== 'live' && (
+          <div className={`sbs-status-overlay sbs-status-overlay--${status}`}>
+            {status === 'connecting' && 'Connecting to battle room…'}
+            {status === 'ended'      && 'Battle ended.'}
+            {status === 'error'      && 'Connection error — try refreshing.'}
+          </div>
+        )}
+      </div>
+
+      <div ref={logRef} className="sbs-log" />
     </div>
   )
 }

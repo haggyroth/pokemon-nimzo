@@ -24,6 +24,17 @@ import { useEffect, useState, useRef } from 'react'
 
 const CDN = 'https://play.pokemonshowdown.com'
 
+// Showdown's own battle stylesheet. The renderer builds DOM (`.statbar`,
+// `.hpbar`, sprite/scene divs) that is positioned and styled entirely by this
+// file — without it HP bars vanish and the scene collapses into document flow
+// (the original "no healthbars / mashed in" jank). It is 16.8 KB, has zero
+// global/reset selectors, and every rule is scoped to PS-specific class names,
+// so it cannot conflict with the app's own styles. Loaded via <link> so the
+// `url(../fx/…)` background refs resolve against the CDN automatically.
+const STYLES = [
+  `${CDN}/style/battle.css`,
+]
+
 // Showdown's battledata.js sets Dex.resourcePrefix = '//' + Config.routes.client,
 // so routes.client must be the bare host (no protocol prefix) — e.g.
 // 'play.pokemonshowdown.com/' not 'https://play.pokemonshowdown.com/'.
@@ -76,6 +87,24 @@ function loadScript(src) {
   })
 }
 
+/** Inject a <link rel="stylesheet">, idempotent by href; resolves on load. */
+function loadStyle(href) {
+  return new Promise((resolve) => {
+    if (document.querySelector(`link[href="${href}"]`)) {
+      resolve()
+      return
+    }
+    const el = document.createElement('link')
+    el.rel = 'stylesheet'
+    el.href = href
+    // Don't block bundle readiness on a stylesheet — resolve on load OR error
+    // so a CDN hiccup degrades gracefully (unstyled scene) rather than hanging.
+    el.onload = resolve
+    el.onerror = resolve
+    document.head.appendChild(el)
+  })
+}
+
 /** Inject a <script> tag containing inline JS, idempotent by id. */
 function inlineScript(id, code) {
   if (document.getElementById(id)) return
@@ -90,11 +119,15 @@ let _loadPromise = null   // singleton — only one load sequence at a time
 function loadBundle() {
   if (_loadPromise) return _loadPromise
   _loadPromise = (async () => {
+    // Stylesheet has no ordering dependency on the scripts — kick it off in
+    // parallel so the scene is styled the moment the renderer paints.
+    const stylesReady = Promise.all(STYLES.map(loadStyle))
     // Config stub must precede battledata.js.
     inlineScript('ps-config-stub', CONFIG_STUB)
     for (const src of SCRIPTS) {
       await loadScript(src)
     }
+    await stylesReady
     if (typeof window.Battle !== 'function') {
       throw new Error('window.Battle not defined after bundle load — check CDN availability')
     }
