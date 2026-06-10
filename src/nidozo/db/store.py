@@ -550,13 +550,13 @@ class BattleStore:
                               CASE WHEN winner=1 THEN 'win'
                                    WHEN winner=2 THEN 'loss'
                                    ELSE 'tie' END AS result
-                       FROM battles b WHERE finished_at IS NOT NULL {tier_filter}
+                       FROM battles b WHERE finished_at IS NOT NULL AND b.status='completed' {tier_filter}
                        UNION ALL
                        SELECT p2_model_id,
                               CASE WHEN winner=2 THEN 'win'
                                    WHEN winner=1 THEN 'loss'
                                    ELSE 'tie' END
-                       FROM battles b WHERE finished_at IS NOT NULL {tier_filter}
+                       FROM battles b WHERE finished_at IS NOT NULL AND b.status='completed' {tier_filter}
                    ) GROUP BY model_id
                ) wld ON wld.model_id = m.id
                GROUP BY m.provider, m.model_name
@@ -631,13 +631,13 @@ class BattleStore:
                               CASE WHEN winner=1 THEN 'win'
                                    WHEN winner=2 THEN 'loss'
                                    ELSE 'tie' END AS result
-                       FROM battles WHERE finished_at IS NOT NULL
+                       FROM battles WHERE finished_at IS NOT NULL AND status='completed'
                        UNION ALL
                        SELECT p2_model_id,
                               CASE WHEN winner=2 THEN 'win'
                                    WHEN winner=1 THEN 'loss'
                                    ELSE 'tie' END
-                       FROM battles WHERE finished_at IS NOT NULL
+                       FROM battles WHERE finished_at IS NOT NULL AND status='completed'
                    ) GROUP BY model_id
                ) wld ON wld.model_id = m.id
                ORDER BY e.rating DESC""",
@@ -669,7 +669,7 @@ class BattleStore:
                     FROM battles b
                     JOIN models mr ON mr.id = b.p1_model_id
                     JOIN models mc ON mc.id = b.p2_model_id
-                    WHERE b.finished_at IS NOT NULL {tier_filter}
+                    WHERE b.finished_at IS NOT NULL AND b.status='completed' {tier_filter}
                     UNION ALL
                     -- A is p2, B is p1
                     SELECT mr.provider, mr.model_name,
@@ -681,7 +681,7 @@ class BattleStore:
                     FROM battles b
                     JOIN models mr ON mr.id = b.p2_model_id
                     JOIN models mc ON mc.id = b.p1_model_id
-                    WHERE b.finished_at IS NOT NULL {tier_filter}
+                    WHERE b.finished_at IS NOT NULL AND b.status='completed' {tier_filter}
                 )
                 SELECT row_provider, row_model, col_provider, col_model,
                        SUM(is_win)  AS wins,
@@ -764,11 +764,11 @@ class BattleStore:
                    FROM (
                        SELECT p1_model_id AS model_id,
                               CASE WHEN winner=1 THEN 'win' WHEN winner=2 THEN 'loss' ELSE 'tie' END AS result
-                       FROM battles WHERE finished_at IS NOT NULL
+                       FROM battles WHERE finished_at IS NOT NULL AND status='completed'
                        UNION ALL
                        SELECT p2_model_id,
                               CASE WHEN winner=2 THEN 'win' WHEN winner=1 THEN 'loss' ELSE 'tie' END AS result
-                       FROM battles WHERE finished_at IS NOT NULL
+                       FROM battles WHERE finished_at IS NOT NULL AND status='completed'
                    ) GROUP BY model_id
                ) wld ON wld.model_id = m.id
                WHERE m.id = ?""",
@@ -805,6 +805,7 @@ class BattleStore:
                JOIN models p2 ON p2.id = b.p2_model_id
                WHERE (b.p1_model_id = ? OR b.p2_model_id = ?)
                  AND b.finished_at IS NOT NULL
+                 AND b.status = 'completed'
                ORDER BY b.finished_at DESC
                LIMIT 20""",
             (model_id, model_id, model_id, model_id, model_id, model_id),
@@ -908,6 +909,7 @@ class BattleStore:
                FROM battles b
                WHERE (b.p1_model_id = ? OR b.p2_model_id = ?)
                  AND b.finished_at IS NOT NULL
+                 AND b.status = 'completed'
                GROUP BY tier
                ORDER BY total DESC""",
             (model_id, model_id, model_id, model_id),
@@ -927,7 +929,7 @@ class BattleStore:
             """SELECT COUNT(*)                                    AS total_battles,
                       ROUND(AVG(total_turns), 1)                 AS avg_turns,
                       SUM(CASE WHEN winner IS NOT NULL THEN 1 ELSE 0 END) AS decided_battles
-               FROM battles WHERE finished_at IS NOT NULL"""
+               FROM battles WHERE finished_at IS NOT NULL AND status='completed'"""
         ).fetchone()
         model_count = self._conn.execute(
             "SELECT COUNT(*) AS cnt FROM models"
@@ -936,7 +938,7 @@ class BattleStore:
         # Battles by tier.
         tier_rows = self._conn.execute(
             """SELECT COALESCE(tier, 'random') AS tier, COUNT(*) AS cnt
-               FROM battles WHERE finished_at IS NOT NULL
+               FROM battles WHERE finished_at IS NOT NULL AND status='completed'
                GROUP BY tier ORDER BY cnt DESC"""
         ).fetchall()
 
@@ -970,7 +972,7 @@ class BattleStore:
                FROM battles b
                JOIN models p1 ON p1.id = b.p1_model_id
                JOIN models p2 ON p2.id = b.p2_model_id
-               WHERE b.finished_at IS NOT NULL
+               WHERE b.finished_at IS NOT NULL AND b.status = 'completed'
                ORDER BY b.finished_at DESC LIMIT 10"""
         ).fetchall()
 
@@ -1223,7 +1225,7 @@ class BattleStore:
                FROM battles b
                JOIN models p1 ON p1.id = b.p1_model_id
                JOIN models p2 ON p2.id = b.p2_model_id
-               WHERE b.season_id = ? AND b.finished_at IS NOT NULL
+               WHERE b.season_id = ? AND b.finished_at IS NOT NULL AND b.status = 'completed'
                ORDER BY b.finished_at""",
             (season_id,),
         ).fetchall()
