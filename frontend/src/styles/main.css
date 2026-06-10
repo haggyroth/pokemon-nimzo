@@ -5644,42 +5644,50 @@ body::after {
   margin: 0 auto;
 }
 
-.sbs-scene {
-  background: #1a1a2e;
+/* ---- Cockpit shell: header strip · centered stage · log panel ---- */
+.sbs-cockpit {
+  background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
-/* The PS Battle class sizes itself inside $frame; we just constrain the host. */
+.sbs-cockpit-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* Phase 2: labels go on the left (space-between) */
+  gap: var(--space-md);
+  padding: var(--space-xs) var(--space-md);
+  border-bottom: 1px solid var(--border);
+  min-height: 1.75rem;
+}
+
+.sbs-status-chip {
+  font-family: var(--font-pixel);
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.sbs-status-chip--live  { color: var(--accent-green); }
+.sbs-status-chip--ended { color: var(--accent-amber); }
+.sbs-status-chip--error { color: var(--accent-red); }
+
+/* The PS Battle class draws an absolutely-positioned 640×360 .battle scene into
+   $frame (battle.css owns the scene styling). The stage centres that fixed
+   stage and reserves the surrounding space the cockpit panels fill in Phase 2. */
+.sbs-stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  background: #1a1a2e;
+  min-height: 400px;
+}
+
 .sbs-frame {
   width: 640px;
-  max-width: 100%;
-  min-height: 400px;
+  height: 400px;
   position: relative;
   overflow: hidden;
-}
-
-/*
- * Showdown renderer CSS — the Pokémon Showdown client stylesheet is NOT loaded
- * from the CDN (too large, too many conflicts).  These rules replicate the
- * minimum needed for the bench icon strip that sits below each trainer.
- *
- * .picon   — individual Pokémon icon (sprite-sheet background-image, set by JS)
- * .teamicons — row container for up to 6 icons per player
- */
-.sbs-frame .picon {
-  display: inline-block;
-  width: 40px;
-  height: 30px;
-  background-repeat: no-repeat;
-  cursor: default;
-  vertical-align: middle;
-}
-.sbs-frame .teamicons {
-  display: block;
-  text-align: center;
-  line-height: 30px;
 }
 
 .sbs-log {
