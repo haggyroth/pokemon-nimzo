@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import BattleAnalysis from './BattleAnalysis'
+import EmptyState from './EmptyState'
 
 // ---------------------------------------------------------------------------
 // Head-to-head matchup matrix
@@ -970,11 +971,17 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onSe
                   r.model_name?.toLowerCase().includes(q) ||
                   r.provider?.toLowerCase().includes(q))
               : rows
-            if (filtered.length === 0) return (
-              <div className="empty-state">
-                {q ? 'No matching models' : lbTier === 'all' ? 'No battles recorded yet' : `No ${lbTier.toUpperCase()} battles recorded yet`}
-              </div>
-            )
+            if (filtered.length === 0) {
+              if (q) return (
+                <EmptyState compact icon="🔍" title="No matching models"
+                  hint="Try a different name or provider." />
+              )
+              return (
+                <EmptyState icon="🏆"
+                  title={lbTier === 'all' ? 'No battles yet' : `No ${lbTier.toUpperCase()} battles yet`}
+                  hint="Start a battle below to put models on the leaderboard." />
+              )
+            }
             return (
               <table className="leaderboard-table">
                 <thead>
@@ -1049,7 +1056,8 @@ export default function Leaderboard({ onBattleStarted, onTournamentStarted, onSe
         <div className="panel">
           <div className="panel-title">RECENT BATTLES</div>
           {battles.length === 0 ? (
-            <div className="empty-state">No battles yet</div>
+            <EmptyState compact icon="⚔" title="No battles yet"
+              hint="Completed battles will appear here." />
           ) : (
             battles.map((b, i) => {
               const winnerCls   = b.winner === 1 ? 'winner-p1' : b.winner === 2 ? 'winner-p2' : 'winner-tie'

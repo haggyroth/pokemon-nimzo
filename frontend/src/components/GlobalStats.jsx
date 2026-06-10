@@ -1,4 +1,5 @@
 import { useEffect, useReducer } from 'react'
+import EmptyState from './EmptyState'
 
 // ---------------------------------------------------------------------------
 // Sprite helper (same CDN as PokemonCard)
@@ -63,7 +64,7 @@ function SummaryKpis({ summary }) {
 // ---------------------------------------------------------------------------
 
 function TierBreakdown({ battles_by_tier }) {
-  if (!battles_by_tier?.length) return <div className="gs-empty">No battles recorded yet.</div>
+  if (!battles_by_tier?.length) return <EmptyState compact icon="📊" title="No battles yet" hint="Run battles to see tier breakdown." />
   const max = Math.max(...battles_by_tier.map(r => r.cnt))
   return (
     <div className="gs-tier-chart">
@@ -89,7 +90,7 @@ function TierBreakdown({ battles_by_tier }) {
 // ---------------------------------------------------------------------------
 
 function TopPokemon({ top_pokemon }) {
-  if (!top_pokemon?.length) return <div className="gs-empty">No turn data recorded yet.</div>
+  if (!top_pokemon?.length) return <EmptyState compact icon="◓" title="No turn data yet" hint="Top Pokémon appear once battles are played." />
   const max = top_pokemon[0]?.cnt ?? 1
   return (
     <div className="gs-pokemon-grid">
@@ -125,7 +126,7 @@ function TopPokemon({ top_pokemon }) {
 // ---------------------------------------------------------------------------
 
 function TopMoves({ top_moves }) {
-  if (!top_moves?.length) return <div className="gs-empty">No move data recorded yet.</div>
+  if (!top_moves?.length) return <EmptyState compact icon="⚔" title="No move data yet" hint="Most-used moves appear once battles are played." />
   const max = top_moves[0]?.cnt ?? 1
   return (
     <div className="gs-move-list">
@@ -151,7 +152,7 @@ function TopMoves({ top_moves }) {
 // ---------------------------------------------------------------------------
 
 function RecentBattles({ recent_battles, onReplaySelected }) {
-  if (!recent_battles?.length) return <div className="gs-empty">No battles recorded yet.</div>
+  if (!recent_battles?.length) return <EmptyState compact icon="🕒" title="No battles yet" hint="Recent battles will appear here." />
   return (
     <div className="gs-recent-list">
       {recent_battles.map(b => {
