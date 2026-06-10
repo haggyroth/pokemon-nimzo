@@ -7,7 +7,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.25.0] — 2026-06-10
+
 ### Fixed
+- **Cancelled battles corrupted W/L/T stats** — `cancel_battle` sets
+  `finished_at`, but leaderboard, matchup matrix, model stats, season standings,
+  and global stats filtered only on `finished_at IS NOT NULL`, counting every
+  cancelled battle as a tie (and applying a phantom ELO draw in season replay).
+  All ten aggregation sites now also require `status='completed'`. (#138, closes #129)
+- **Bracket ties credited to p2** — `run_bracket_tournament` computed
+  `winner = 1 if p1 won else 2`, silently recording a tied battle (Explosion,
+  Destiny Bond, Struggle, …) as a p2 win with a real ELO gain. Ties are now
+  recorded honestly (ELO draw); bracket advancement uses a deterministic
+  better-seed tiebreak for routing only. (#139, closes #131)
+- **Tournament/season cancel was a no-op** — the cancel endpoints only flipped
+  the DB status; the runners kept playing and then overwrote `cancelled` with
+  `completed` at the end of the loop. Runners now re-check status between
+  battles and stop, and finalization only writes `completed` when still
+  running. `cancel_season` also publishes `season_cancelled` immediately. (#140, closes #130)
+- **Model ELO chart froze after 30 battles** — `get_model_stats` ordered the
+  ELO history `ASC LIMIT 30`, pinning the chart to a model's *earliest* 30
+  battles. Now takes the most recent 30, re-sorted chronologically. (#141, closes #132)
+- **Cancelling a multi-battle run stranded the rest** — the `CancelledError`
+  handler only marked the current battle cancelled; later battles stayed
+  `pending` until the next restart. All still-queued battles are now cancelled
+  with events. (#142, closes #134)
+- **Post-battle tasks could be garbage-collected** — lesson/narrative
+  generators were fire-and-forget with no strong reference, so the event loop's
+  weak reference let the GC drop them mid-flight. A module-level set now holds
+  them until completion. (#143, closes #135)
+- **Season battles never got narratives** — every other runner scheduled a
+  post-battle narrative; `run_season` only scheduled lessons. Season battles now
+  get narratives too, for consistent BattleAnalysis output. (#144, closes #137)
+- **Analyzer used Gen 3 data against Gen 9 battles** — the draft critique used a
+  hardcoded Gen 3 type chart (no Fairy) and loaded `gen3_movesets.json`, so
+  modern species silently went missing and Fairy interactions were ignored. Now
+  derives the chart from poke-env's `GenData.from_gen(9)` and loads
+  `natdex_movesets.json`. (#145, closes #133)
 - **Qwen / LM Studio 0% JSON parse rate** — `v5` was missing from
   `_JSON_OUTPUT_PROMPT_VERSIONS`, so json_mode was never activated for the
   current default prompt. LM Studio now uses the simpler `json_object` grammar
@@ -42,6 +80,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `TIER_TO_FORMAT.get` corrected to `"gen9nationaldexag"`. (#125)
 - **`build_natdex_sets.py` lint** — removed unused `import sys`, dead `name_re`
   regex, and a spurious f-string prefix flagged by ruff. (#127)
+
+### Performance
+- **Each streaming turn serialized the battle twice** — `StreamingLLMPlayer`
+  ran the full heuristic engine once for its WS events and again in the base
+  player for the prompt/DB state. The base now reuses the snapshot the streaming
+  subclass already computed, halving per-turn serialization cost. (#146, closes #136)
 
 ### Changed
 - Leaderboard script now reads `NIDOZO_DB` env var (was `NIMZO_DB`; old name

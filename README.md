@@ -163,7 +163,7 @@ nidozo/
 │   ├── run_battle.py         Single-battle CLI
 │   ├── build_natdex_sets.py  Regenerate natdex_movesets.json from Showdown data
 │   └── start_showdown.sh
-├── tests/              792 unit tests + 1 integration test (pytest.mark.integration)
+├── tests/              833 unit tests + 1 integration test (pytest.mark.integration)
 └── showdown/           Cloned Showdown server (gitignored)
 ```
 
