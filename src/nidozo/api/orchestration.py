@@ -1144,6 +1144,12 @@ async def run_season(
                 p2_provider=s_p2_prov, p2_model=battle_info["p2_model"],
                 p2_id=s_p2_id, p2_opponent=p1_label,
             ))
+            _spawn_background(generate_and_store_narrative(
+                store, battle_id, winner, total_turns,
+                p1_label=p1_label, p2_label=p2_label,
+                p1_provider=s_p1_prov, p1_model=battle_info["p1_model"],
+                p2_provider=s_p2_prov, p2_model=battle_info["p2_model"],
+            ))
 
         except asyncio.CancelledError:
             logger.info("Season %d cancelled at battle %d", season_id, battle_id)
