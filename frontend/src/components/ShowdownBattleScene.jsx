@@ -21,7 +21,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useShowdownBundle } from '../hooks/useShowdownBundle'
-import { WinProbBar, PlayerLabel } from './battleShared'
+import { WinProbBar, PlayerLabel, HeuristicDrawer, ThinkingBadge } from './battleShared'
 
 /** Strip the room-prefix line and proxy keepalive; return bare |...| lines. */
 function protocolLinesFromFrame(frame) {
@@ -30,7 +30,7 @@ function protocolLinesFromFrame(frame) {
     .filter(line => line && !line.startsWith('>') && line !== '|ping')
 }
 
-export default function ShowdownBattleScene({ room, p1State, p2State, battleInfo, battleResult }) {
+export default function ShowdownBattleScene({ room, p1State, p2State, battleInfo, battleResult, thinking, coachThinking }) {
   const { ready: bundleReady, error: bundleError } = useShowdownBundle()
   const frameRef  = useRef(null)
   const logRef    = useRef(null)
@@ -116,10 +116,12 @@ export default function ShowdownBattleScene({ room, p1State, p2State, battleInfo
     : status === 'error' ? 'ERROR'
     : 'CONNECTING'
 
-  // Cockpit layout: a header strip, the centered PS stage, and the log panel.
-  // The header and the space around the stage are the slots Phase 2 fills with
-  // labels, heuristics, and win-probability — data lives *around* the frame, not
-  // overlaid on it.
+  // Use the more-recent player's state for the heuristic advisory, same
+  // logic as Classic BattleField's lastState derivation.
+  const lastState = (p1State?.turn ?? 0) >= (p2State?.turn ?? 0)
+    ? p1State?.state
+    : p2State?.state
+
   // Only surface the winner once the stream has actually ended — guards against
   // a stale battleResult from a previous battle showing "WIN" mid-fight.
   const ended = status === 'ended'
@@ -128,13 +130,16 @@ export default function ShowdownBattleScene({ room, p1State, p2State, battleInfo
 
   return (
     <div className="showdown-battle-scene sbs-cockpit">
-      {/* Header: model labels per side with a centered status chip. */}
+      {/* Header: model labels per side, centered status chip, thinking badge. */}
       <div className="sbs-cockpit-header">
         <div className={`sbs-header-side${p1Won ? ' sbs-header-side--won' : ''}`}>
           <PlayerLabel label={battleInfo?.p1} side="p1" />
           {p1Won && <span className="sbs-won-tag">WIN</span>}
         </div>
-        <span className={`sbs-status-chip sbs-status-chip--${status}`}>{statusLabel}</span>
+        <div className="sbs-header-center">
+          <span className={`sbs-status-chip sbs-status-chip--${status}`}>{statusLabel}</span>
+          <ThinkingBadge role={coachThinking || thinking} isCoach={!!coachThinking} />
+        </div>
         <div className={`sbs-header-side sbs-header-side--right${p2Won ? ' sbs-header-side--won' : ''}`}>
           {p2Won && <span className="sbs-won-tag">WIN</span>}
           <PlayerLabel label={battleInfo?.p2} side="p2" />
@@ -162,6 +167,14 @@ export default function ShowdownBattleScene({ room, p1State, p2State, battleInfo
           p2State={p2State}
           p1Label={battleInfo?.p1}
           p2Label={battleInfo?.p2}
+        />
+      </div>
+
+      {/* Heuristic advisory drawer — move scores + type badges for last actor. */}
+      <div className="sbs-heuristic">
+        <HeuristicDrawer
+          heuristics={lastState?.heuristics}
+          moves={lastState?.available_moves}
         />
       </div>
 

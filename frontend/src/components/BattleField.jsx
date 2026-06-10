@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import PokemonCard from './PokemonCard'
-import { TypeBadge } from './PokemonCard'
 import BattleLog from './BattleLog'
-import { WinProbBar, PlayerLabel } from './battleShared'
+import { WinProbBar, PlayerLabel, HeuristicDrawer, ThinkingBadge } from './battleShared'
 
 const TIER_LABELS = {
   random:     'RANDOM',
@@ -20,85 +19,6 @@ function TierBadge({ tier, className = '' }) {
     <span className={`tier-badge tier-badge--${tier} ${className}`}>
       {TIER_LABELS[tier] ?? tier.toUpperCase()}
     </span>
-  )
-}
-
-function HeuristicDrawer({ heuristics, moves }) {
-  const [open, setOpen] = useState(false)
-  if (!heuristics?.move_scores?.length) return null
-
-  // Build a lookup from move_id → {type, pp, max_pp} using available_moves
-  const moveInfo = {}
-  ;(moves ?? []).forEach(m => {
-    if (m.id) moveInfo[m.id] = { type: m.type, pp: m.pp, max_pp: m.max_pp }
-  })
-
-  return (
-    <div className="heuristic-drawer">
-      <button className="heuristic-toggle" onClick={() => setOpen(o => !o)}>
-        <span>⚙ HEURISTIC ADVISORY</span>
-        <span className={`drawer-chevron ${open ? 'open' : ''}`}>▼</span>
-      </button>
-      {open && (
-        <div className="heuristic-content">
-          {heuristics.move_scores.map((ms, i) => {
-            const isSuper  = ms.effectiveness_label?.includes('super')
-            const isImmune = ms.effectiveness_label?.includes('immune')
-            const info = moveInfo[ms.move_id] ?? {}
-            const ppLow = info.pp != null && info.max_pp > 0 && (info.pp / info.max_pp) <= 0.25
-            const ppEmpty = info.pp === 0
-            return (
-              <div key={i} className="heuristic-move">
-                <div className="hmove-header">
-                  <span className="hmove-name">
-                    {`move ${i + 1}`} — {ms.move_id.replace(/_/g, ' ')}
-                  </span>
-                  <div className="hmove-badges">
-                    {info.type && <TypeBadge type={info.type.toUpperCase()} />}
-                    {info.pp != null && (
-                      <span className={`hmove-pp${ppLow ? ' hmove-pp--low' : ''}${ppEmpty ? ' hmove-pp--empty' : ''}`}>
-                        {info.pp}/{info.max_pp} PP
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <span className={`hmove-effectiveness ${isSuper ? 'super' : isImmune ? 'immune' : ''}`}>
-                  {ms.effectiveness_label}
-                  {ms.estimated_damage_pct && ` · ${ms.estimated_damage_pct}`}
-                </span>
-                <span className="hmove-notes">
-                  {(ms.notes || []).join(' · ')}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ThinkingBadge({ role, isCoach }) {
-  if (!role) return null
-  if (isCoach) {
-    return (
-      <div className="thinking-badge thinking-badge--coach">
-        <span className="thinking-badge-icon">🎓</span>
-        <span style={{ marginLeft: '0.35rem', fontSize: '0.65rem', opacity: 0.85, letterSpacing: '0.04em' }}>
-          {role.toUpperCase()} COACH ANALYZING
-        </span>
-      </div>
-    )
-  }
-  return (
-    <div className="thinking-badge">
-      <span className="thinking-badge-dot" />
-      <span className="thinking-badge-dot" />
-      <span className="thinking-badge-dot" />
-      <span style={{ marginLeft: '0.4rem', fontSize: '0.65rem', opacity: 0.7 }}>
-        {role.toUpperCase()} THINKING
-      </span>
-    </div>
   )
 }
 
