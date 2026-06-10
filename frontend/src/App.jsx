@@ -224,7 +224,13 @@ function App() {
                   >SHOWDOWN</button>
                 </div>
                 {battleView === 'showdown' && showdownRoom
-                  ? <ShowdownBattleScene room={showdownRoom} />
+                  ? <ShowdownBattleScene
+                      room={showdownRoom}
+                      p1State={p1State}
+                      p2State={p2State}
+                      battleInfo={battleInfo}
+                      battleResult={battleResult}
+                    />
                   : (
                     <BattleField
                       p1State={p1State}
