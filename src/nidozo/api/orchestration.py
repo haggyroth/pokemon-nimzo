@@ -187,6 +187,18 @@ async def run_battles(
         except asyncio.CancelledError:
             logger.info("Battle %d cancelled", battle_id)
             store.cancel_battle(battle_id)
+            # Every battle in this request shares one task, so cancelling the
+            # current one tears down the whole run. Mark each still-queued battle
+            # cancelled too — sync DB writes first so they land even if the
+            # notifications below are interrupted — instead of stranding them as
+            # 'pending' until the next restart. (The current battle's
+            # battle_cancelled event is published by the cancel endpoint.)
+            idx = battle_ids.index(battle_id)
+            stranded = [
+                bid for bid in battle_ids[idx + 1:] if store.cancel_battle(bid)
+            ]
+            for bid in stranded:
+                await bus.publish({"type": "battle_cancelled", "battle_id": bid})
             raise
         except Exception as exc:
             logger.error("Battle %d failed: %s", battle_id, exc)
