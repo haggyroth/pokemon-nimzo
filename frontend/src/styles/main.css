@@ -5741,6 +5741,24 @@ body::after {
   line-height: 1.5;
 }
 
+/* PS battle.css renders turn headers as h2.battle-history with a light grey
+   bar + near-white text — fine on PS's light theme, invisible on ours.
+   Override both so the turn label is legible in the dark cockpit. */
+.sbs-log h2.battle-history {
+  background: var(--border);
+  color: var(--text-primary);
+  border-radius: 2px;
+  padding: 0.1rem 0.4rem;
+}
+
+/* The rest of the PS log text is also near-white (rgb(212,238,255)) — readable
+   on a dark background, but pin it to our theme token so it stays consistent. */
+.sbs-log .inner.message-log,
+.sbs-log .inner.message-log > div,
+.sbs-log .chat {
+  color: var(--text-secondary);
+}
+
 .sbs-placeholder {
   padding: 2rem;
   text-align: center;
