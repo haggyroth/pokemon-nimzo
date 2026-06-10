@@ -734,3 +734,52 @@ def test_advance_winner_single_next_match_none_guard() -> None:
     }
     # Should return early without raising (next_m is None)
     _advance_winner_single(match_index, completed)  # no error = test passes
+
+
+# ---------------------------------------------------------------------------
+# Bracket tie tiebreak (issue #131)
+# ---------------------------------------------------------------------------
+
+class TestBracketAdvanceSlot:
+    """_bracket_advance_slot picks who advances; a tie must not silently
+    credit p2 (the pre-fix bug)."""
+
+    def test_p1_win_advances_slot_1(self) -> None:
+        from nidozo.api.orchestration import _bracket_advance_slot
+        assert _bracket_advance_slot(1, p1_seed=1, p2_seed=2) == 1
+
+    def test_p2_win_advances_slot_2(self) -> None:
+        from nidozo.api.orchestration import _bracket_advance_slot
+        assert _bracket_advance_slot(2, p1_seed=1, p2_seed=2) == 2
+
+    def test_tie_advances_better_seed_when_p1_better(self) -> None:
+        from nidozo.api.orchestration import _bracket_advance_slot
+        # Lower seed number = better seed; p1 is seed 1
+        assert _bracket_advance_slot(None, p1_seed=1, p2_seed=4) == 1
+
+    def test_tie_advances_better_seed_when_p2_better(self) -> None:
+        from nidozo.api.orchestration import _bracket_advance_slot
+        # p2 holds the better (lower) seed → it advances, NOT a default p2 win
+        assert _bracket_advance_slot(None, p1_seed=6, p2_seed=2) == 2
+
+    def test_tie_is_deterministic(self) -> None:
+        from nidozo.api.orchestration import _bracket_advance_slot
+        a = _bracket_advance_slot(None, p1_seed=3, p2_seed=5)
+        b = _bracket_advance_slot(None, p1_seed=3, p2_seed=5)
+        assert a == b == 1
+
+
+def test_tie_advances_better_seed_through_record_result() -> None:
+    """End-to-end on the bracket: a tied final advances the better seed as
+    champion, instead of always crediting p2."""
+    state = build_single_elim(_players(2))
+    pending = get_pending_matches(state)
+    match = pending[0]
+    from nidozo.api.orchestration import _bracket_advance_slot
+
+    # Simulate a tie (winner=None) and route via the tiebreak helper
+    advance_slot = _bracket_advance_slot(None, match["p1_seed"], match["p2_seed"])
+    record_result(state, match["match_id"], advance_slot, battle_id=1)
+
+    better_seed = min(match["p1_seed"], match["p2_seed"])
+    assert state["champion_seed"] == better_seed
