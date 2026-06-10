@@ -274,17 +274,23 @@ class StreamingLLMPlayer(_StreamingMixin, LLMPlayer):
     async def _emit_thinking(self, event: dict[str, Any]) -> None:
         await self._bus.publish(event)
 
-    async def choose_move(self, battle: AbstractBattle) -> BattleOrder:
+    async def choose_move(
+        self, battle: AbstractBattle, *, state: dict[str, Any] | None = None
+    ) -> BattleOrder:
         # The request has just been parsed, so available_moves / heuristics are
-        # fresh here — emit a FULL snapshot the UI can use for the advisory.
-        state = serialize_battle(battle)
+        # fresh here — emit a FULL snapshot the UI can use for the advisory. This
+        # one serialization is shared with the base player below.
+        if state is None:
+            state = serialize_battle(battle)
 
         # Emit immediately so the UI refreshes before LLM think-time, and flag
         # that this frame produced a choose_move so the post-parse hook skips.
         await self._bus.publish(_state_event(battle, self._player_role, state))
         self._chose_during_frame = True
 
-        order = await super().choose_move(battle)
+        # Hand the already-computed snapshot to the base player so it doesn't
+        # re-run the full serialization + heuristics for the prompt/DB state.
+        order = await super().choose_move(battle, state=state)
         action_label = getattr(order, "message", str(order))
         await self._bus.publish(_turn_event(battle, action_label, self._player_role, state))
         return order
