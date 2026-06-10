@@ -231,6 +231,42 @@ def test_get_model_stats_elo_history(store) -> None:
     assert "delta" in row
 
 
+def test_get_model_stats_elo_history_shows_most_recent_not_first(store) -> None:
+    """With >30 battles the ELO chart must show the most recent 30, not the
+    earliest 30 (issue #132). finished_at is second-granularity, so set distinct
+    timestamps explicitly to make ordering deterministic."""
+    mid = store.get_or_create_model("anthropic", "claude-test", "v2")
+    opp = store.get_or_create_model("random", "random", "v2")
+
+    battle_ids = []
+    for i in range(1, 36):  # 35 battles, cap is 30
+        bid = store.create_battle(f"eh{i}", "gen9randombattle", mid, opp)
+        store.finish_battle(bid, winner=1, total_turns=10)
+        # Distinct, increasing timestamp so DESC ordering is unambiguous.
+        store._conn.execute(
+            "UPDATE battles SET finished_at=? WHERE id=?",
+            (f"2026-01-01T00:00:{i:02d}Z", bid),
+        )
+        battle_ids.append(bid)
+    store._conn.commit()
+
+    stats = store.get_model_stats(mid)
+    assert stats is not None
+    history = stats["elo_history"]
+    assert len(history) == 30  # capped
+
+    returned_ids = {row["battle_id"] for row in history}
+    # Newest battle is present; oldest five are dropped.
+    assert battle_ids[-1] in returned_ids
+    assert battle_ids[0] not in returned_ids
+    assert battle_ids[4] not in returned_ids
+    assert battle_ids[5] in returned_ids  # first of the kept window
+
+    # Returned rows are in ascending chronological order for the chart.
+    finished = [row["finished_at"] for row in history]
+    assert finished == sorted(finished)
+
+
 def test_get_model_stats_battle_history(store) -> None:
     mid = store.get_or_create_model("anthropic", "claude-test", "v2")
     opp = store.get_or_create_model("random", "random", "v2")

@@ -777,15 +777,22 @@ class BattleStore:
         if not info_row:
             return None
 
-        # ELO history (chronological, capped to last 30 battles)
+        # ELO history (chronological, capped to the *most recent* 30 battles).
+        # Take the latest 30 by finished_at DESC, then re-sort ASC so the chart
+        # reads left-to-right in time.  A plain "ORDER BY ASC LIMIT 30" would pin
+        # the chart to the model's earliest 30 battles forever.
         elo_rows = self._conn.execute(
-            """SELECT eh.battle_id, eh.rating_before, eh.rating_after, eh.delta,
-                      b.finished_at
-               FROM elo_history eh
-               JOIN battles b ON b.id = eh.battle_id
-               WHERE eh.model_id = ?
-               ORDER BY b.finished_at ASC
-               LIMIT 30""",
+            """SELECT battle_id, rating_before, rating_after, delta, finished_at
+               FROM (
+                   SELECT eh.battle_id, eh.rating_before, eh.rating_after,
+                          eh.delta, b.finished_at
+                   FROM elo_history eh
+                   JOIN battles b ON b.id = eh.battle_id
+                   WHERE eh.model_id = ?
+                   ORDER BY b.finished_at DESC
+                   LIMIT 30
+               )
+               ORDER BY finished_at ASC""",
             (model_id,),
         ).fetchall()
 
