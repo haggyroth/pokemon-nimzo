@@ -230,6 +230,8 @@ function App() {
                       p2State={p2State}
                       battleInfo={battleInfo}
                       battleResult={battleResult}
+                      thinking={thinking}
+                      coachThinking={coachThinking}
                     />
                   : (
                     <BattleField

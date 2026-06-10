@@ -5678,6 +5678,15 @@ body::after {
   color: var(--accent-green);
 }
 
+/* Center slot in the cockpit header — status chip stacked above thinking badge. */
+.sbs-header-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2xs);
+  flex-shrink: 0;
+}
+
 .sbs-status-chip {
   font-family: var(--font-pixel);
   font-size: var(--fs-2xs);
@@ -5695,6 +5704,12 @@ body::after {
   border-top: 1px solid var(--border);
 }
 .sbs-winprob:empty { display: none; }
+
+/* Heuristic advisory — collapsible drawer, sits between win-prob and log. */
+.sbs-heuristic {
+  border-top: 1px solid var(--border);
+}
+.sbs-heuristic:empty { display: none; }
 
 /* The PS Battle class draws an absolutely-positioned 640×360 .battle scene into
    $frame (battle.css owns the scene styling). The stage centres that fixed
