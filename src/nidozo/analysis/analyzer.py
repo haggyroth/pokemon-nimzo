@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from functools import lru_cache
 from typing import Any
 
 _ORDER_RE = re.compile(r"(move|switch)\s+(\S+)", re.IGNORECASE)
@@ -52,43 +53,26 @@ CRIT_MULTIPLIER_THRESHOLD = 1.45
 # Draft critique — type chart + species data
 # ---------------------------------------------------------------------------
 
-# Gen 3 type chart: defending type → attacking types that deal 2× damage.
-# Fairy type does not exist in Gen 3.
-_TYPE_WEAKNESSES: dict[str, list[str]] = {
-    "FIRE":     ["WATER", "GROUND", "ROCK"],
-    "WATER":    ["ELECTRIC", "GRASS"],
-    "GRASS":    ["FIRE", "ICE", "POISON", "FLYING", "BUG"],
-    "ELECTRIC": ["GROUND"],
-    "ICE":      ["FIRE", "FIGHTING", "ROCK", "STEEL"],
-    "FIGHTING": ["FLYING", "PSYCHIC"],
-    "POISON":   ["GROUND", "PSYCHIC"],
-    "GROUND":   ["WATER", "GRASS", "ICE"],
-    "FLYING":   ["ELECTRIC", "ICE", "ROCK"],
-    "PSYCHIC":  ["BUG", "GHOST", "DARK"],
-    "BUG":      ["FIRE", "FLYING", "ROCK"],
-    "ROCK":     ["WATER", "GRASS", "FIGHTING", "GROUND", "STEEL"],
-    "GHOST":    ["GHOST", "DARK"],
-    "DRAGON":   ["ICE", "DRAGON"],
-    "DARK":     ["FIGHTING", "BUG"],
-    "STEEL":    ["FIRE", "FIGHTING", "GROUND"],
-    "NORMAL":   ["FIGHTING"],
-}
+@lru_cache(maxsize=1)
+def _type_chart() -> dict[str, dict[str, float]]:
+    """Gen 9 type chart from poke-env, keyed {defending: {attacking: mult}}.
 
-# Attacking types that deal 0× to a defending type (immunities).
-_TYPE_IMMUNITIES: dict[str, list[str]] = {
-    "NORMAL":   ["GHOST"],
-    "GHOST":    ["NORMAL", "FIGHTING"],
-    "STEEL":    ["POISON"],
-    "GROUND":   ["ELECTRIC"],
-    "DARK":     ["PSYCHIC"],
-    "FLYING":   ["GROUND"],
-}
+    The battle pipeline is Gen 9 National Dex, so analysis must use the modern
+    chart (Fairy included). Cached because GenData parsing is non-trivial.
+    """
+    from poke_env.data.gen_data import GenData
+
+    return GenData.from_gen(9).type_chart
 
 
 def _load_species_data() -> dict[str, dict[str, Any]]:
-    """Load gen3_movesets.json keyed by species ID, returning {} on error."""
+    """Load natdex_movesets.json keyed by species ID, returning {} on error.
+
+    Matches the data the battle pipeline drafts from, so modern species
+    (fluttermane, chiyu, kingambit, …) resolve instead of silently missing.
+    """
     data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data")
-    path = os.path.join(data_dir, "gen3_movesets.json")
+    path = os.path.join(data_dir, "natdex_movesets.json")
     try:
         with open(path) as f:
             data: dict[str, dict[str, Any]] = json.load(f)
@@ -98,19 +82,20 @@ def _load_species_data() -> dict[str, dict[str, Any]]:
 
 
 def _mon_weaknesses(types: list[str]) -> set[str]:
-    """Return attacking types that hit this Pokémon for ≥2× damage.
+    """Return attacking types that hit this Pokémon for ≥2× damage (Gen 9).
 
-    Handles dual-typing and immunities correctly for Gen 3.
+    Computes the full type-effectiveness product across the mon's types, so
+    dual-typing stacks and any 0× immunity zeroes the product (excluding it).
     """
+    chart = _type_chart()
     mult: dict[str, float] = {}
-    immunities: set[str] = set()
     for t in types:
-        t_up = t.upper()
-        for imm in _TYPE_IMMUNITIES.get(t_up, []):
-            immunities.add(imm)
-        for atk in _TYPE_WEAKNESSES.get(t_up, []):
-            mult[atk] = mult.get(atk, 1.0) * 2.0
-    return {atk for atk, m in mult.items() if m >= 2.0 and atk not in immunities}
+        row = chart.get(t.upper())
+        if not row:
+            continue
+        for atk, m in row.items():
+            mult[atk] = mult.get(atk, 1.0) * m
+    return {atk for atk, m in mult.items() if m >= 2.0}
 
 
 # ---------------------------------------------------------------------------
@@ -640,8 +625,8 @@ def critique_draft(
 
     shared_weaknesses = sorted(t for t, cnt in weakness_counts.items() if cnt >= 2)
 
-    # Coverage gaps: Gen 3 types with no STAB on the team
-    all_types = set(_TYPE_WEAKNESSES.keys())
+    # Coverage gaps: types (Gen 9, Fairy included) with no STAB on the team
+    all_types = set(_type_chart().keys())
     coverage_gaps = sorted(all_types - offensive_types)
 
     # Execution analysis — filter to this player's annotated turns

@@ -664,6 +664,24 @@ def test_mon_weaknesses_pure_fire():
     assert "ROCK" in w
 
 
+def test_mon_weaknesses_includes_fairy_gen9():
+    """Gen 9 Fairy interactions the old Gen 3 chart could not represent (#133).
+
+    Dragon, Dark, and Fighting are all Fairy-weak in modern gens.
+    """
+    assert "FAIRY" in _mon_weaknesses(["DRAGON"])
+    assert "FAIRY" in _mon_weaknesses(["DARK"])
+    assert "FAIRY" in _mon_weaknesses(["FIGHTING"])
+
+
+def test_mon_weaknesses_fairy_type_defense():
+    """A Fairy-type mon is weak to Poison and Steel (Gen 9)."""
+    w = _mon_weaknesses(["FAIRY"])
+    assert "POISON" in w
+    assert "STEEL" in w
+    assert "DRAGON" not in w  # Fairy is immune to Dragon, not weak
+
+
 # ---------------------------------------------------------------------------
 # _build_variance_report
 # ---------------------------------------------------------------------------
@@ -831,14 +849,14 @@ def test_load_species_data_bad_json(tmp_path):
     from nidozo.analysis.analyzer import _load_species_data
 
     # Write a bad JSON file and point the function at it via monkeypatching os.path
-    bad_file = tmp_path / "gen3_movesets.json"
+    bad_file = tmp_path / "natdex_movesets.json"
     bad_file.write_text("{not valid json")
 
     original_join = os.path.join
     def fake_join(*args):
         # When constructing the data path, return our temp file
         result = original_join(*args)
-        if result.endswith("gen3_movesets.json"):
+        if result.endswith("natdex_movesets.json"):
             return str(bad_file)
         return result
 
@@ -855,13 +873,13 @@ def test_load_species_data_happy_path(tmp_path):
     from nidozo.analysis.analyzer import _load_species_data
 
     payload = {"pikachu": {"species": "Pikachu", "types": ["Electric"]}}
-    good_file = tmp_path / "gen3_movesets.json"
+    good_file = tmp_path / "natdex_movesets.json"
     good_file.write_text(json.dumps(payload))
 
     original_join = os.path.join
     def fake_join(*args):
         result = original_join(*args)
-        if result.endswith("gen3_movesets.json"):
+        if result.endswith("natdex_movesets.json"):
             return str(good_file)
         return result
 
