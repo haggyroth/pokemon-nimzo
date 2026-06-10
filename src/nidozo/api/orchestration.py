@@ -12,6 +12,21 @@ from nidozo.api.models import StartBattleRequest, StartSeasonRequest, StartTourn
 
 logger = logging.getLogger(__name__)
 
+# Strong references to fire-and-forget post-battle tasks (lesson/narrative
+# generation). The event loop keeps only a weak reference to a task, so without
+# this a task can be garbage-collected before it finishes — silently dropping a
+# multi-second LLM write. See the asyncio.create_task docs.
+_background_tasks: set[asyncio.Task[None]] = set()
+
+
+def _spawn_background(coro: Any) -> asyncio.Task[None]:
+    """Schedule a fire-and-forget coroutine, holding a strong reference until it
+    completes so it can't be GC'd mid-flight."""
+    task: asyncio.Task[None] = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
 
 def _bracket_advance_slot(
     winner: int | None, p1_seed: int, p2_seed: int
@@ -172,12 +187,12 @@ async def run_battles(
             turns = store.get_turns_basic(battle_id)
             p2_label = f"{req.p2_provider}/{_model_name(req.p2_provider, p2_model)}"
             p1_label = f"{req.p1_provider}/{_model_name(req.p1_provider, p1_model)}"
-            _: asyncio.Task[None] = asyncio.create_task(generate_and_store_lessons(
+            _spawn_background(generate_and_store_lessons(
                 store, battle_id, winner, total_turns, turns,
                 p1_provider=req.p1_provider, p1_model=p1_model, p1_id=p1_id, p1_opponent=p2_label,
                 p2_provider=req.p2_provider, p2_model=p2_model, p2_id=p2_id, p2_opponent=p1_label,
             ))
-            _nt: asyncio.Task[None] = asyncio.create_task(generate_and_store_narrative(
+            _spawn_background(generate_and_store_narrative(
                 store, battle_id, winner, total_turns,
                 p1_label=p1_label, p2_label=p2_label,
                 p1_provider=req.p1_provider, p1_model=p1_model,
@@ -412,14 +427,14 @@ async def run_tournament(
             })
 
             turns = store.get_turns_basic(battle_id)
-            _t: asyncio.Task[None] = asyncio.create_task(generate_and_store_lessons(
+            _spawn_background(generate_and_store_lessons(
                 store, battle_id, winner, total_turns, turns,
                 p1_provider=t_p1_prov, p1_model=battle_info["p1_model"],
                 p1_id=t_p1_id, p1_opponent=p2_label,
                 p2_provider=t_p2_prov, p2_model=battle_info["p2_model"],
                 p2_id=t_p2_id, p2_opponent=p1_label,
             ))
-            _nt2: asyncio.Task[None] = asyncio.create_task(generate_and_store_narrative(
+            _spawn_background(generate_and_store_narrative(
                 store, battle_id, winner, total_turns,
                 p1_label=p1_label, p2_label=p2_label,
                 p1_provider=t_p1_prov, p1_model=battle_info["p1_model"],
@@ -828,7 +843,7 @@ async def run_bracket_tournament(
                     })
 
                     turns = store.get_turns_basic(battle_id)
-                    _t: asyncio.Task[None] = asyncio.create_task(
+                    _spawn_background(
                         generate_and_store_lessons(
                             store, battle_id, winner, total_turns, turns,
                             p1_provider=p1_prov, p1_model=p1_model,
@@ -837,7 +852,7 @@ async def run_bracket_tournament(
                             p2_id=t_p2_id, p2_opponent=p1_label,
                         )
                     )
-                    _nt3: asyncio.Task[None] = asyncio.create_task(
+                    _spawn_background(
                         generate_and_store_narrative(
                             store, battle_id, winner, total_turns,
                             p1_label=p1_label, p2_label=p2_label,
@@ -1122,7 +1137,7 @@ async def run_season(
             })
 
             turns = store.get_turns_basic(battle_id)
-            asyncio.create_task(generate_and_store_lessons(
+            _spawn_background(generate_and_store_lessons(
                 store, battle_id, winner, total_turns, turns,
                 p1_provider=s_p1_prov, p1_model=battle_info["p1_model"],
                 p1_id=s_p1_id, p1_opponent=p2_label,
