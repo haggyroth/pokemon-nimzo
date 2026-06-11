@@ -22,6 +22,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useShowdownBundle } from '../hooks/useShowdownBundle'
 import { WinProbBar, PlayerLabel, HeuristicDrawer, ThinkingBadge } from './battleShared'
+import { BattleBadges, CancelBattleButton } from './battleChrome'
 
 /** Strip the room-prefix line and proxy keepalive; return bare |...| lines. */
 function protocolLinesFromFrame(frame) {
@@ -128,6 +129,9 @@ export default function ShowdownBattleScene({ room, p1State, p2State, battleInfo
   const p1Won = ended && battleResult?.winner === 1
   const p2Won = ended && battleResult?.winner === 2
 
+  const isLive = battleInfo && !battleResult
+  const currentBattleId = battleInfo?.battle_id
+
   return (
     <div className="showdown-battle-scene sbs-cockpit">
       {/* Header: model labels per side, centered status chip, thinking badge. */}
@@ -137,8 +141,10 @@ export default function ShowdownBattleScene({ room, p1State, p2State, battleInfo
           {p1Won && <span className="sbs-won-tag">WIN</span>}
         </div>
         <div className="sbs-header-center">
+          <BattleBadges tier={battleInfo?.tier} drafted={battleInfo?.drafted} />
           <span className={`sbs-status-chip sbs-status-chip--${status}`}>{statusLabel}</span>
           <ThinkingBadge role={coachThinking || thinking} isCoach={!!coachThinking} />
+          {isLive && <CancelBattleButton battleId={currentBattleId} />}
         </div>
         <div className={`sbs-header-side sbs-header-side--right${p2Won ? ' sbs-header-side--won' : ''}`}>
           {p2Won && <span className="sbs-won-tag">WIN</span>}
