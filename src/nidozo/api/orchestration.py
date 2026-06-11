@@ -28,6 +28,34 @@ def _spawn_background(coro: Any) -> asyncio.Task[None]:
     return task
 
 
+async def _terminate_players(*players: Any) -> None:
+    """Tear down each player's PS websocket, swallowing individual failures so
+    one player's teardown error can't block the other's."""
+    for player in players:
+        if player is None:
+            continue
+        try:
+            await player.terminate()
+        except Exception:
+            logger.debug("Error tearing down player %r", player, exc_info=True)
+
+
+async def _battle_and_teardown(p1: Any, p2: Any) -> None:
+    """Run one battle, then tear both players down — on success, error, OR
+    cancellation.
+
+    poke-env keeps each player's ``ps_client.listen()`` task running after
+    ``battle_against`` is awaited; cancelling the runner raises here but leaves
+    those loops alive, so the Showdown sim plays on (issue #155). Tearing the
+    players down in a ``finally`` guarantees the sim stops when a battle is
+    cancelled, and reclaims connections after a normal finish.
+    """
+    try:
+        await p1.battle_against(p2, n_battles=1)
+    finally:
+        await _terminate_players(p1, p2)
+
+
 def _bracket_advance_slot(
     winner: int | None, p1_seed: int, p2_seed: int
 ) -> int:
@@ -166,7 +194,7 @@ async def run_battles(
                 "drafted": do_draft,
             })
 
-            await p1.battle_against(p2, n_battles=1)
+            await _battle_and_teardown(p1, p2)
 
             winner = 1 if p1.n_won_battles > 0 else (2 if p2.n_won_battles > 0 else None)
             real_tag = next(iter(p1.battles), f"battle-{battle_id}")
@@ -399,7 +427,7 @@ async def run_tournament(
                 "drafted": do_draft,
             })
 
-            await p1.battle_against(p2, n_battles=1)
+            await _battle_and_teardown(p1, p2)
 
             winner = 1 if p1.n_won_battles > 0 else (2 if p2.n_won_battles > 0 else None)
             real_tag = next(iter(p1.battles), f"battle-{battle_id}")
@@ -799,7 +827,7 @@ async def run_bracket_tournament(
                         "match_id": match_id,
                     })
 
-                    await p1.battle_against(p2, n_battles=1)
+                    await _battle_and_teardown(p1, p2)
 
                     # Honest battle outcome (None = tie — possible via Explosion,
                     # Destiny Bond, Struggle, etc.).  This is what gets persisted
@@ -1109,7 +1137,7 @@ async def run_season(
                 "drafted": do_draft,
             })
 
-            await p1.battle_against(p2, n_battles=1)
+            await _battle_and_teardown(p1, p2)
 
             winner = 1 if p1.n_won_battles > 0 else (2 if p2.n_won_battles > 0 else None)
             real_tag = next(iter(p1.battles), f"battle-{battle_id}")
