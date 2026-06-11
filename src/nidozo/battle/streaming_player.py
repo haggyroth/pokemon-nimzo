@@ -145,6 +145,29 @@ class _StreamingMixin:
         # Battle tags for which we've already emitted showdown_room (OP-02).
         self._announced_rooms: set[str] = set()
 
+    async def terminate(self) -> None:
+        """Close this player's Showdown websocket so its listen loop ends.
+
+        poke-env drives each battle on the player's own ``ps_client.listen()``
+        task, which is independent of the orchestration coroutine that awaits
+        ``battle_against``. Cancelling the runner therefore leaves that listen
+        loop alive: the player keeps answering ``|request|`` messages and the
+        Showdown sim plays on, advancing turns and emitting events long after a
+        cancel (issue #155).
+
+        ``stop_listening`` bridges to poke-env's own loop and closes the socket,
+        ending that task — so the sim halts (the next decision never happens).
+        It also reclaims the connection after a battle finishes normally (no
+        leak across sequential battles). Safe to call when already closed.
+
+        Closing mid-battle can race a ``|request|`` poke-env's listen loop is
+        already handling, so it may log a benign ``ConnectionClosed`` for the
+        unsent move; the battle is stopped regardless. (Forfeiting first was
+        tried — it doesn't preempt that already-queued request, so it removes
+        no noise while widening the window for one extra turn.)
+        """
+        await self.ps_client.stop_listening()  # type: ignore[no-untyped-call]
+
     async def _emit_state_update(self, battle: AbstractBattle) -> None:
         """Publish a render-only snapshot of the current battle state."""
         await self._bus.publish(
