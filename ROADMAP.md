@@ -174,6 +174,14 @@
 - **Illegal Gen3 moves removed**: Signal Beam (espeon → Baton Pass) and Iron Head (mawile → Rock Slide) are Gen 4+ and were rejected by Showdown's legality checker
 - **Hidden Power IV spreads**: all 22 HP users now carry explicit `ivs` in `gen3_movesets.json`; without them Showdown defaulted to all-31 (= HP Dark); all 7 types now emit at max power (70 BP); `build_pokemon_block` extended with `IVs:` line support; 5 new tests verify type/power correctness
 
+### v0.26 — Showdown Cockpit (rehab + made primary, #148)
+- **Token foundation** (#149): spacing + type scales in `:root`; reusable `<EmptyState>` on leaderboard / recent battles / global stats
+- **Rehab baseline** (#150): PS `battle.css` loaded via `<link>` in `useShowdownBundle` (root cause of "no HP bars / janky scene" — it was never loaded); fixed 640×400 centred stage; cockpit shell (header strip + stage + log)
+- **Data parity** (#151, #153): model labels per side, win-probability bar, heuristic advisory (move scores + type badges + PP), thinking badge — all extracted into shared `battleShared.jsx` so Classic and the cockpit can't drift
+- **Log contrast fix** (#153): override PS's light-on-light `h2.battle-history` turn headers so they're legible on the dark cockpit
+- **Lifecycle chrome shared** (`battleChrome.jsx`): cancel control, winner banner, tournament progress bar, tournament-end overlay, and tier/draft badges lifted out of `BattleField` to wrap *both* stages — App.jsx owns the overlays; each stage renders the inline controls
+- **Showdown is now the default view**; Classic remains available behind the toggle as a zero-cost fallback (`nidozo-battle-view` localStorage default flipped to `showdown`)
+
 ---
 
 ## Upcoming

@@ -25,8 +25,8 @@ Sibling project to [Nimzo](https://github.com/haggyroth/nimzo) (the LLM chess ar
 - **Tournament runner** — UI or CLI round-robin; live progress, standings overlay, battle cancel; full history page
 - **Battle Replay** — step through any completed battle turn by turn; HP timeline; scrub/keyboard nav; auto-play
 - **Post-game analysis** — decision quality (optimal/good/suboptimal/fallback), blunder detection, win-probability timeline, turning-point detection, RNG inference; key moments list (clickable, seeks replay); variance report (crit/miss tally with per-player benefit counts); draft critique (STAB coverage, shared weaknesses, execution quality)
-- **Live visualizer** — React frontend with type-themed card backgrounds, animated HP bars, hit/faint animations, thinking indicators, bench display, and a real-time battle log
-- **Showdown renderer** — toggle to the built-in Pokémon Showdown battle scene (sprites, animations, log) for any live battle; preference is persisted across sessions
+- **Live visualizer (Showdown cockpit)** — the default battle view: the built-in Pokémon Showdown battle scene (sprites, animations, HP bars, scene background) centred in a cockpit, with our analytical panels around it — model labels, win-probability bar, heuristic advisory (move scores + type badges + PP), thinking indicators, cancel control, and the full battle log
+- **Classic card view** — an alternate toggle: type-themed Pokémon cards with animated HP bars, hit/faint animations, bench display, and per-mon move lists; the view preference is persisted across sessions
 
 ---
 
@@ -101,15 +101,15 @@ cd frontend && npm run dev
 
 Open `http://localhost:5173`, select models, and click **▶ START BATTLE**. Switch to **LIVE** to watch turn by turn — the UI shows type-themed card backgrounds, animated HP bars, a thinking indicator while the model reasons, and the full bench. Use **⚔ TOURNAMENT** to run a round-robin across multiple models. Completed battles show **▶ REPLAY** and **▼ ANALYZE** buttons in the Recent Battles panel.
 
-#### Showdown renderer (optional)
+#### Battle views — Showdown cockpit (default) / Classic
 
-While watching a live battle, a **CLASSIC / SHOWDOWN** toggle appears at the top of the battle view. **SHOWDOWN** switches to the built-in Pokémon Showdown battle scene — the same animated renderer used on [play.pokemonshowdown.com](https://play.pokemonshowdown.com).
+While watching a live battle, a **CLASSIC / SHOWDOWN** toggle appears at the top of the battle view. **SHOWDOWN** is the default — the built-in Pokémon Showdown battle scene (the same animated renderer used on [play.pokemonshowdown.com](https://play.pokemonshowdown.com)) centred in a cockpit, with Nidozo's analytical panels around it. **CLASSIC** switches to the alternate type-themed card view. Both views share the same chrome (cancel control, win-probability bar, heuristic advisory, winner banner, tournament progress).
 
-Requirements:
+Requirements for the Showdown cockpit:
 - The Showdown server must be started with `--no-security` (the default in `start_showdown.sh`) so the spectator proxy can connect as a guest.
 - Sprite and sound assets are loaded on demand from `play.pokemonshowdown.com` (~4 MB, CDN). An internet connection is required the first time; subsequent views use the browser cache.
 
-The renderer toggle preference is saved in `localStorage` and restored on reload.
+The view-toggle preference is saved in `localStorage` and restored on reload.
 
 ### Tournament runner (CLI)
 

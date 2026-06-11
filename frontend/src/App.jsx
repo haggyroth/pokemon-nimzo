@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './styles/main.css'
 import Leaderboard from './components/Leaderboard'
 import BattleField from './components/BattleField'
+import { TournamentBar, WinnerBanner, TournamentEndOverlay } from './components/battleChrome'
 import BattleReplay from './components/BattleReplay'
 import ModelStats from './components/ModelStats'
 import GlobalStats from './components/GlobalStats'
@@ -15,7 +16,7 @@ function App() {
   const [view, setView]                       = useState('home')
   const [dismissed, setDismissed]             = useState(false)
   const [battleView, setBattleViewRaw]        = useState(
-    () => localStorage.getItem('nidozo-battle-view') ?? 'classic'
+    () => localStorage.getItem('nidozo-battle-view') ?? 'showdown'
   )
   const [replayBattleId, setReplayBattleId]   = useState(null)
   const [statsModelId, setStatsModelId]       = useState(null)
@@ -127,6 +128,19 @@ function App() {
     localStorage.setItem('nidozo-battle-view', v)
   }
 
+  // Keyboard shortcut: R = watch replay once a battle has a result.
+  // Lives here (not in a stage) so it works under either battle view.
+  const finishedBattleId = result ? battleInfo?.battle_id : null
+  useEffect(() => {
+    if (!finishedBattleId) return
+    function onKey(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      if (e.key === 'r' || e.key === 'R') handleReplaySelected(finishedBattleId)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [finishedBattleId])
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -212,6 +226,19 @@ function App() {
             )}
             {!draft && (
               <>
+                {/* Tournament progress bar — wraps both stages */}
+                {tournament && tournament.status !== 'completed' && (
+                  <TournamentBar
+                    tournament={tournament}
+                    onScoreboard={() => {
+                      if (tournament?.id) {
+                        setTournamentId(tournament.id)
+                        setView('tournament')
+                      }
+                    }}
+                  />
+                )}
+
                 <div className="battle-view-toggle">
                   <button
                     className={`bvt-btn ${battleView === 'classic' ? 'active' : ''}`}
@@ -223,6 +250,7 @@ function App() {
                     title={showdownRoom ? 'Pokémon Showdown renderer' : 'Available once a battle starts'}
                   >SHOWDOWN</button>
                 </div>
+
                 {battleView === 'showdown' && showdownRoom
                   ? <ShowdownBattleScene
                       room={showdownRoom}
@@ -242,18 +270,23 @@ function App() {
                       events={events}
                       thinking={thinking}
                       coachThinking={coachThinking}
-                      tournament={tournament}
-                      onDismiss={() => setDismissed(true)}
-                      onReplaySelected={handleReplaySelected}
-                      onTournamentScoreboard={() => {
-                        if (tournament?.id) {
-                          setTournamentId(tournament.id)
-                          setView('tournament')
-                        }
-                      }}
                     />
                   )
                 }
+
+                {/* Lifecycle overlays — shared by both stages */}
+                <WinnerBanner
+                  battleResult={result}
+                  battleInfo={battleInfo}
+                  battleTier={battleInfo?.tier}
+                  battleDrafted={battleInfo?.drafted}
+                  onDismiss={() => setDismissed(true)}
+                  onReplaySelected={handleReplaySelected}
+                  currentBattleId={battleInfo?.battle_id}
+                />
+                {tournament?.status === 'completed' && (
+                  <TournamentEndOverlay tournament={tournament} />
+                )}
               </>
             )}
           </>
