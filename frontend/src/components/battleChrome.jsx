@@ -11,7 +11,10 @@
 
 import { useState, useEffect } from 'react'
 
-export const TIER_LABELS = {
+// Module-local (not exported): a non-component export would break the
+// react-refresh/only-export-components rule. Each view that needs tier
+// labels elsewhere keeps its own copy.
+const TIER_LABELS = {
   random:     'RANDOM',
   ou:         'OU',
   ubers:      'UBERS',

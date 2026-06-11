@@ -139,6 +139,9 @@ function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+    // handleReplaySelected only calls stable state setters; re-bind solely when
+    // the finished battle changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finishedBattleId])
 
   return (
