@@ -5705,26 +5705,37 @@ body::after {
 }
 .sbs-winprob:empty { display: none; }
 
-/* Heuristic advisory — collapsible drawer, sits between win-prob and log. */
-.sbs-heuristic {
+/* Heuristic advisory — one drawer per player, side by side, between win-prob
+   and log. Each collapses independently. */
+.sbs-heuristics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;                       /* hairline divider between the two drawers */
+  background: var(--border);      /* shows through the gap */
   border-top: 1px solid var(--border);
 }
-.sbs-heuristic:empty { display: none; }
+.sbs-heuristics:empty { display: none; }
+.sbs-heuristics > .heuristic-drawer { background: var(--bg-panel); }
+/* When only one player has heuristics, let it span the full width. */
+.sbs-heuristics > .heuristic-drawer:only-child { grid-column: 1 / -1; }
 
 /* The PS Battle class draws an absolutely-positioned 640×360 .battle scene into
    $frame (battle.css owns the scene styling). The stage centres that fixed
    stage and reserves the surrounding space the cockpit panels fill in Phase 2. */
+/* PS draws its scene as a position:absolute .battle div pinned to left:-1px, so
+   flex/justify-content can't centre it. Instead we size the stage to the PS
+   frame's native 640×360 and centre the *stage* within the cockpit. */
 .sbs-stage {
   position: relative;
-  display: flex;
-  justify-content: center;
+  width: 640px;
+  height: 360px;
+  margin-inline: auto;
   background: #1a1a2e;
-  min-height: 400px;
 }
 
 .sbs-frame {
   width: 640px;
-  height: 400px;
+  height: 360px;
   position: relative;
   overflow: hidden;
 }

@@ -117,11 +117,9 @@ export default function ShowdownBattleScene({ room, p1State, p2State, battleInfo
     : status === 'error' ? 'ERROR'
     : 'CONNECTING'
 
-  // Use the more-recent player's state for the heuristic advisory, same
-  // logic as Classic BattleField's lastState derivation.
-  const lastState = (p1State?.turn ?? 0) >= (p2State?.turn ?? 0)
-    ? p1State?.state
-    : p2State?.state
+  // Per-player short labels for the two heuristic drawers.
+  const p1Short = battleInfo?.p1?.split('/').pop() ?? 'P1'
+  const p2Short = battleInfo?.p2?.split('/').pop() ?? 'P2'
 
   // Only surface the winner once the stream has actually ended — guards against
   // a stale battleResult from a previous battle showing "WIN" mid-fight.
@@ -176,11 +174,17 @@ export default function ShowdownBattleScene({ room, p1State, p2State, battleInfo
         />
       </div>
 
-      {/* Heuristic advisory drawer — move scores + type badges for last actor. */}
-      <div className="sbs-heuristic">
+      {/* Heuristic advisory — one drawer per player, each from its own state. */}
+      <div className="sbs-heuristics">
         <HeuristicDrawer
-          heuristics={lastState?.heuristics}
-          moves={lastState?.available_moves}
+          heuristics={p1State?.state?.heuristics}
+          moves={p1State?.state?.available_moves}
+          label={`${p1Short} HEURISTICS`}
+        />
+        <HeuristicDrawer
+          heuristics={p2State?.state?.heuristics}
+          moves={p2State?.state?.available_moves}
+          label={`${p2Short} HEURISTICS`}
         />
       </div>
 

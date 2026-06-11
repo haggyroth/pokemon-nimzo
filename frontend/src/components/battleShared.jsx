@@ -57,7 +57,7 @@ export function WinProbBar({ p1State, p2State, p1Label, p2Label }) {
 }
 
 /** Collapsible heuristic advisory drawer — move scores, type badges, PP. */
-export function HeuristicDrawer({ heuristics, moves }) {
+export function HeuristicDrawer({ heuristics, moves, label = 'HEURISTIC ADVISORY' }) {
   const [open, setOpen] = useState(false)
   if (!heuristics?.move_scores?.length) return null
 
@@ -69,7 +69,7 @@ export function HeuristicDrawer({ heuristics, moves }) {
   return (
     <div className="heuristic-drawer">
       <button className="heuristic-toggle" onClick={() => setOpen(o => !o)}>
-        <span>⚙ HEURISTIC ADVISORY</span>
+        <span>⚙ {label}</span>
         <span className={`drawer-chevron ${open ? 'open' : ''}`}>▼</span>
       </button>
       {open && (
